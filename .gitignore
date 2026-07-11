@@ -1,0 +1,36 @@
+# ── Environment / secrets ──────────────────────────────────
+.env
+.env.*
+!.env.example
+
+# ── Python ─────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+venv/
+*.egg-info/
+
+# ── Node / Frontend ───────────────────────────────────────
+node_modules/
+dist/
+.output/
+.nitro/
+.vinxi/
+.tanstack/
+.wrangler/
+
+# ── IDE / OS ──────────────────────────────────────────────
+.vscode/
+.idea/
+.DS_Store
+*.swp
+*.swo
+Thumbs.db
+
+# ── Logs ──────────────────────────────────────────────────
+*.log
+npm-debug.log*
+
+# ── Misc ──────────────────────────────────────────────────
+package-lock.json

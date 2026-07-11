@@ -3,6 +3,8 @@
  * All service files consume this so the migration is a one-file change.
  */
 
+import { useAuthStore } from "@/store/auth";
+
 const BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "/api";
 
 export interface RequestOptions {
@@ -37,10 +39,17 @@ export async function request<T>(
     return mockHandler();
   }
 
+  const token = useAuthStore.getState().session?.token;
+  const authHeaders: Record<string, string> = {};
+  if (token) {
+    authHeaders["Authorization"] = `Bearer ${token}`;
+  }
+
   const res = await fetch(`${BASE_URL}${path}`, {
     method: options.method ?? "GET",
     headers: {
       "Content-Type": "application/json",
+      ...authHeaders,
       ...options.headers,
     },
     body: options.body ? JSON.stringify(options.body) : undefined,
@@ -49,7 +58,8 @@ export async function request<T>(
 
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
-    throw new ApiClientError(body.message ?? res.statusText, res.status, body.code);
+    const message = typeof body.detail === "string" ? body.detail : (body.message ?? res.statusText);
+    throw new ApiClientError(message, res.status, body.code);
   }
   return res.json() as Promise<T>;
 }

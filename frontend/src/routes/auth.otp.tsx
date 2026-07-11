@@ -31,9 +31,9 @@ function OtpPage() {
     }
     setSubmitting(true);
     try {
-      await authService.verifyOtp(email ?? "", code);
+      const res = await authService.verifyOtp(email ?? "", code);
       toast.success("Verified");
-      navigate({ to: "/auth/reset-password", search: { role, token: "mock-token" } });
+      navigate({ to: "/auth/reset-password", search: { role, token: res.token } });
     } catch {
       toast.error("Invalid code");
     } finally {

@@ -46,8 +46,8 @@ function LoginPage() {
       } else {
         navigate({ to: dashboardPathForRole(session.user.role) });
       }
-    } catch {
-      toast.error("Invalid credentials");
+    } catch (err: any) {
+      toast.error(err.message || "Invalid credentials");
     } finally {
       setSubmitting(false);
     }

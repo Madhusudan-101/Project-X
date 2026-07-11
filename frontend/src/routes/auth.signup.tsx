@@ -54,8 +54,8 @@ function SignupPage() {
       setSession(session);
       toast.success(`Welcome, ${values.firstName}! Verify your email to continue.`);
       navigate({ to: "/auth/otp", search: { role, email: values.email } });
-    } catch {
-      toast.error("Could not create account");
+    } catch (err: any) {
+      toast.error(err.message || "Could not create account");
     } finally {
       setSubmitting(false);
     }

@@ -58,41 +58,35 @@ function PortalsPage() {
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.4, delay: i * 0.05 }}
             >
-              <Link
-                to="/auth/login"
-                search={{ role: p.role }}
-                className="block h-full"
-              >
-                <Card className="group relative h-full overflow-hidden border-border/60 p-6 transition-all hover:-translate-y-1 hover:border-primary/40 hover:shadow-glow">
-                  <div
-                    className={`absolute inset-x-0 top-0 h-1 bg-gradient-to-r ${p.accent} opacity-80`}
-                  />
-                  <div className="flex items-start gap-4">
-                    <div className={`grid h-14 w-14 place-items-center rounded-2xl bg-gradient-to-br ${p.accent} text-primary-foreground shadow-soft`}>
-                      <p.icon className="h-7 w-7" />
+              <Card className="group relative h-full overflow-hidden border-border/60 p-6 transition-all hover:-translate-y-1 hover:border-primary/40 hover:shadow-glow">
+                <div
+                  className={`absolute inset-x-0 top-0 h-1 bg-gradient-to-r ${p.accent} opacity-80`}
+                />
+                <div className="flex items-start gap-4">
+                  <div className={`grid h-14 w-14 place-items-center rounded-2xl bg-gradient-to-br ${p.accent} text-primary-foreground shadow-soft`}>
+                    <p.icon className="h-7 w-7" />
+                  </div>
+                  <div className="flex-1">
+                    <div className="flex items-center justify-between">
+                      <h3 className="font-display text-xl font-semibold">{p.title}</h3>
+                      <ArrowRight className="h-5 w-5 text-muted-foreground transition-transform group-hover:translate-x-1 group-hover:text-primary" />
                     </div>
-                    <div className="flex-1">
-                      <div className="flex items-center justify-between">
-                        <h3 className="font-display text-xl font-semibold">{p.title}</h3>
-                        <ArrowRight className="h-5 w-5 text-muted-foreground transition-transform group-hover:translate-x-1 group-hover:text-primary" />
-                      </div>
-                      <p className="mt-2 text-sm text-muted-foreground">{p.desc}</p>
-                      <div className="mt-4 flex gap-2">
-                        <Button
-                          asChild
-                          size="sm"
-                          className="bg-gradient-brand text-primary-foreground"
-                        >
-                          <Link to="/auth/login" search={{ role: p.role }}>Login</Link>
-                        </Button>
-                        <Button asChild size="sm" variant="outline">
-                          <Link to="/auth/signup" search={{ role: p.role }}>Sign up</Link>
-                        </Button>
-                      </div>
+                    <p className="mt-2 text-sm text-muted-foreground">{p.desc}</p>
+                    <div className="mt-4 flex gap-2">
+                      <Button
+                        asChild
+                        size="sm"
+                        className="bg-gradient-brand text-primary-foreground"
+                      >
+                        <Link to="/auth/login" search={{ role: p.role }}>Login</Link>
+                      </Button>
+                      <Button asChild size="sm" variant="outline">
+                        <Link to="/auth/signup" search={{ role: p.role }}>Sign up</Link>
+                      </Button>
                     </div>
                   </div>
-                </Card>
-              </Link>
+                </div>
+              </Card>
             </motion.div>
           ))}
         </div>
