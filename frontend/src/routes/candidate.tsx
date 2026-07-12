@@ -46,6 +46,7 @@ import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useAuthStore } from "@/store/auth";
+import { GitHubSyncCard, LeetCodeSyncCard } from "@/components/dashboard/ProfileSyncPanel";
 
 export const Route = createFileRoute("/candidate")({
   component: CandidatePortal,
@@ -296,33 +297,24 @@ function AnalyzerTab() {
         <div>
           <h1 className="font-display text-2xl font-semibold">Analyzer</h1>
           <p className="text-sm text-muted-foreground">
-            Three lenses on your profile. Run any of them independently.
+            Connect your profiles to build your candidate signal.
           </p>
         </div>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-3">
-        <AnalyzerCard
-          icon={FileText}
-          title="Resume Analyzer"
-          body="ATS score, keyword gaps, role-specific rewrites. Drop a PDF."
-          cta="Upload resume"
-          stat="Not analyzed yet"
-        />
-        <AnalyzerCard
-          icon={Github}
-          title="GitHub Analyzer"
-          body="Turns your repos into a recruiter-ready story. Flags stale work."
-          cta="Connect GitHub"
-          stat="Not connected"
-        />
-        <AnalyzerCard
-          icon={Code2}
-          title="LeetCode Analyzer"
-          body="Weak topics, tag heatmap, targeted next-week plan."
-          cta="Sync LeetCode"
-          stat="Not synced"
-        />
+      {/* Resume — stays as a static card for now */}
+      <AnalyzerCard
+        icon={FileText}
+        title="Resume Analyzer"
+        body="ATS score, keyword gaps, role-specific rewrites. Drop a PDF."
+        cta="Upload resume"
+        stat="Not analyzed yet"
+      />
+
+      {/* Live sync panels */}
+      <div className="grid gap-4 md:grid-cols-2">
+        <GitHubSyncCard />
+        <LeetCodeSyncCard />
       </div>
 
       <Card className="p-5">
