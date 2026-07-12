@@ -23,6 +23,8 @@ import { Route as AuthProfileSetupRouteImport } from './routes/auth.profile-setu
 import { Route as AuthOtpRouteImport } from './routes/auth.otp'
 import { Route as AuthLoginRouteImport } from './routes/auth.login'
 import { Route as AuthForgotPasswordRouteImport } from './routes/auth.forgot-password'
+import { Route as AuthCompanySignupRouteImport } from './routes/auth.company-signup'
+import { Route as AuthCompanyOnboardingRouteImport } from './routes/auth.company-onboarding'
 
 const SitemapDotxmlRoute = SitemapDotxmlRouteImport.update({
   id: '/sitemap.xml',
@@ -94,6 +96,16 @@ const AuthForgotPasswordRoute = AuthForgotPasswordRouteImport.update({
   path: '/forgot-password',
   getParentRoute: () => AuthRoute,
 } as any)
+const AuthCompanySignupRoute = AuthCompanySignupRouteImport.update({
+  id: '/company-signup',
+  path: '/company-signup',
+  getParentRoute: () => AuthRoute,
+} as any)
+const AuthCompanyOnboardingRoute = AuthCompanyOnboardingRouteImport.update({
+  id: '/company-onboarding',
+  path: '/company-onboarding',
+  getParentRoute: () => AuthRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -104,6 +116,8 @@ export interface FileRoutesByFullPath {
   '/company': typeof CompanyRoute
   '/portals': typeof PortalsRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
+  '/auth/company-onboarding': typeof AuthCompanyOnboardingRoute
+  '/auth/company-signup': typeof AuthCompanySignupRoute
   '/auth/forgot-password': typeof AuthForgotPasswordRoute
   '/auth/login': typeof AuthLoginRoute
   '/auth/otp': typeof AuthOtpRoute
@@ -120,6 +134,8 @@ export interface FileRoutesByTo {
   '/company': typeof CompanyRoute
   '/portals': typeof PortalsRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
+  '/auth/company-onboarding': typeof AuthCompanyOnboardingRoute
+  '/auth/company-signup': typeof AuthCompanySignupRoute
   '/auth/forgot-password': typeof AuthForgotPasswordRoute
   '/auth/login': typeof AuthLoginRoute
   '/auth/otp': typeof AuthOtpRoute
@@ -137,6 +153,8 @@ export interface FileRoutesById {
   '/company': typeof CompanyRoute
   '/portals': typeof PortalsRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
+  '/auth/company-onboarding': typeof AuthCompanyOnboardingRoute
+  '/auth/company-signup': typeof AuthCompanySignupRoute
   '/auth/forgot-password': typeof AuthForgotPasswordRoute
   '/auth/login': typeof AuthLoginRoute
   '/auth/otp': typeof AuthOtpRoute
@@ -155,6 +173,8 @@ export interface FileRouteTypes {
     | '/company'
     | '/portals'
     | '/sitemap.xml'
+    | '/auth/company-onboarding'
+    | '/auth/company-signup'
     | '/auth/forgot-password'
     | '/auth/login'
     | '/auth/otp'
@@ -171,6 +191,8 @@ export interface FileRouteTypes {
     | '/company'
     | '/portals'
     | '/sitemap.xml'
+    | '/auth/company-onboarding'
+    | '/auth/company-signup'
     | '/auth/forgot-password'
     | '/auth/login'
     | '/auth/otp'
@@ -187,6 +209,8 @@ export interface FileRouteTypes {
     | '/company'
     | '/portals'
     | '/sitemap.xml'
+    | '/auth/company-onboarding'
+    | '/auth/company-signup'
     | '/auth/forgot-password'
     | '/auth/login'
     | '/auth/otp'
@@ -306,10 +330,26 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthForgotPasswordRouteImport
       parentRoute: typeof AuthRoute
     }
+    '/auth/company-signup': {
+      id: '/auth/company-signup'
+      path: '/company-signup'
+      fullPath: '/auth/company-signup'
+      preLoaderRoute: typeof AuthCompanySignupRouteImport
+      parentRoute: typeof AuthRoute
+    }
+    '/auth/company-onboarding': {
+      id: '/auth/company-onboarding'
+      path: '/company-onboarding'
+      fullPath: '/auth/company-onboarding'
+      preLoaderRoute: typeof AuthCompanyOnboardingRouteImport
+      parentRoute: typeof AuthRoute
+    }
   }
 }
 
 interface AuthRouteChildren {
+  AuthCompanyOnboardingRoute: typeof AuthCompanyOnboardingRoute
+  AuthCompanySignupRoute: typeof AuthCompanySignupRoute
   AuthForgotPasswordRoute: typeof AuthForgotPasswordRoute
   AuthLoginRoute: typeof AuthLoginRoute
   AuthOtpRoute: typeof AuthOtpRoute
@@ -319,6 +359,8 @@ interface AuthRouteChildren {
 }
 
 const AuthRouteChildren: AuthRouteChildren = {
+  AuthCompanyOnboardingRoute: AuthCompanyOnboardingRoute,
+  AuthCompanySignupRoute: AuthCompanySignupRoute,
   AuthForgotPasswordRoute: AuthForgotPasswordRoute,
   AuthLoginRoute: AuthLoginRoute,
   AuthOtpRoute: AuthOtpRoute,

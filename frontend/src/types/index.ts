@@ -11,6 +11,8 @@ export interface User {
   role: UserRole;
   avatarUrl?: string;
   onboarded?: boolean;
+  /** Set for company users — the id of their public.companies row */
+  companyId?: string;
 }
 
 export interface Session {
