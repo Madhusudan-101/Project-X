@@ -23,6 +23,7 @@ import { Route as AuthProfileSetupRouteImport } from './routes/auth.profile-setu
 import { Route as AuthOtpRouteImport } from './routes/auth.otp'
 import { Route as AuthLoginRouteImport } from './routes/auth.login'
 import { Route as AuthForgotPasswordRouteImport } from './routes/auth.forgot-password'
+import { Route as AuthConfirmRouteImport } from './routes/auth.confirm'
 import { Route as AuthCompanySignupRouteImport } from './routes/auth.company-signup'
 import { Route as AuthCompanyOnboardingRouteImport } from './routes/auth.company-onboarding'
 
@@ -96,6 +97,11 @@ const AuthForgotPasswordRoute = AuthForgotPasswordRouteImport.update({
   path: '/forgot-password',
   getParentRoute: () => AuthRoute,
 } as any)
+const AuthConfirmRoute = AuthConfirmRouteImport.update({
+  id: '/confirm',
+  path: '/confirm',
+  getParentRoute: () => AuthRoute,
+} as any)
 const AuthCompanySignupRoute = AuthCompanySignupRouteImport.update({
   id: '/company-signup',
   path: '/company-signup',
@@ -118,6 +124,7 @@ export interface FileRoutesByFullPath {
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/auth/company-onboarding': typeof AuthCompanyOnboardingRoute
   '/auth/company-signup': typeof AuthCompanySignupRoute
+  '/auth/confirm': typeof AuthConfirmRoute
   '/auth/forgot-password': typeof AuthForgotPasswordRoute
   '/auth/login': typeof AuthLoginRoute
   '/auth/otp': typeof AuthOtpRoute
@@ -136,6 +143,7 @@ export interface FileRoutesByTo {
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/auth/company-onboarding': typeof AuthCompanyOnboardingRoute
   '/auth/company-signup': typeof AuthCompanySignupRoute
+  '/auth/confirm': typeof AuthConfirmRoute
   '/auth/forgot-password': typeof AuthForgotPasswordRoute
   '/auth/login': typeof AuthLoginRoute
   '/auth/otp': typeof AuthOtpRoute
@@ -155,6 +163,7 @@ export interface FileRoutesById {
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/auth/company-onboarding': typeof AuthCompanyOnboardingRoute
   '/auth/company-signup': typeof AuthCompanySignupRoute
+  '/auth/confirm': typeof AuthConfirmRoute
   '/auth/forgot-password': typeof AuthForgotPasswordRoute
   '/auth/login': typeof AuthLoginRoute
   '/auth/otp': typeof AuthOtpRoute
@@ -175,6 +184,7 @@ export interface FileRouteTypes {
     | '/sitemap.xml'
     | '/auth/company-onboarding'
     | '/auth/company-signup'
+    | '/auth/confirm'
     | '/auth/forgot-password'
     | '/auth/login'
     | '/auth/otp'
@@ -193,6 +203,7 @@ export interface FileRouteTypes {
     | '/sitemap.xml'
     | '/auth/company-onboarding'
     | '/auth/company-signup'
+    | '/auth/confirm'
     | '/auth/forgot-password'
     | '/auth/login'
     | '/auth/otp'
@@ -211,6 +222,7 @@ export interface FileRouteTypes {
     | '/sitemap.xml'
     | '/auth/company-onboarding'
     | '/auth/company-signup'
+    | '/auth/confirm'
     | '/auth/forgot-password'
     | '/auth/login'
     | '/auth/otp'
@@ -330,6 +342,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthForgotPasswordRouteImport
       parentRoute: typeof AuthRoute
     }
+    '/auth/confirm': {
+      id: '/auth/confirm'
+      path: '/confirm'
+      fullPath: '/auth/confirm'
+      preLoaderRoute: typeof AuthConfirmRouteImport
+      parentRoute: typeof AuthRoute
+    }
     '/auth/company-signup': {
       id: '/auth/company-signup'
       path: '/company-signup'
@@ -350,6 +369,7 @@ declare module '@tanstack/react-router' {
 interface AuthRouteChildren {
   AuthCompanyOnboardingRoute: typeof AuthCompanyOnboardingRoute
   AuthCompanySignupRoute: typeof AuthCompanySignupRoute
+  AuthConfirmRoute: typeof AuthConfirmRoute
   AuthForgotPasswordRoute: typeof AuthForgotPasswordRoute
   AuthLoginRoute: typeof AuthLoginRoute
   AuthOtpRoute: typeof AuthOtpRoute
@@ -361,6 +381,7 @@ interface AuthRouteChildren {
 const AuthRouteChildren: AuthRouteChildren = {
   AuthCompanyOnboardingRoute: AuthCompanyOnboardingRoute,
   AuthCompanySignupRoute: AuthCompanySignupRoute,
+  AuthConfirmRoute: AuthConfirmRoute,
   AuthForgotPasswordRoute: AuthForgotPasswordRoute,
   AuthLoginRoute: AuthLoginRoute,
   AuthOtpRoute: AuthOtpRoute,
