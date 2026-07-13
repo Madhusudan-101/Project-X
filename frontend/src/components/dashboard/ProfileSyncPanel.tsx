@@ -99,25 +99,26 @@ function ScoreRing({ score }: { score: number }) {
 
 // ── Rating badge ──────────────────────────────────────────────────────
 
-const ratingStyle: Record<AnalysisResult["consistency_rating"], string> = {
-  Poor:    "border-destructive/30 bg-destructive/10 text-destructive",
-  Average: "border-amber-500/30 bg-amber-500/10 text-amber-600 dark:text-amber-400",
-  Good:    "border-primary/30 bg-primary/10 text-primary",
-  Elite:   "border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400",
+const ratingStyle = {
+  Sustained: "border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400",
+  Fragmented: "border-amber-500/30 bg-amber-500/10 text-amber-600 dark:text-amber-400",
+  Spiky: "border-rose-500/30 bg-rose-500/10 text-rose-600 dark:text-rose-400",
 };
 
 // ── AI Analysis Result Card ───────────────────────────────────────────
 
 function AIAnalysisResultCard({ result }: { result: AnalysisResult }) {
-  const clean = result.authenticity_flags.length === 0;
+  const greenFlags = result.career_alignment?.green_flags ?? [];
+  const redFlags = result.career_alignment?.red_flags ?? [];
+  const recommendedRoles = result.career_alignment?.recommended_roles ?? [];
 
   return (
     <div className="animate-in fade-in slide-in-from-bottom-3 duration-400 space-y-4">
-      {/* Score + rating strip */}
+      {/* 1. Score + Pacing Strip */}
       <Card className="overflow-hidden">
         <div className="flex items-center gap-3 border-b border-border/60 px-5 py-3">
           <Brain className="h-4 w-4 text-primary" />
-          <span className="font-display text-sm font-semibold">AI Analysis Result</span>
+          <span className="font-display text-sm font-semibold">Employability Analysis Summary</span>
           <Badge className="ml-auto border-primary/30 bg-primary/10 text-primary text-[11px]">
             Gemini 3.5 Flash
           </Badge>
@@ -130,60 +131,183 @@ function AIAnalysisResultCard({ result }: { result: AnalysisResult }) {
           {/* Right side */}
           <div className="flex-1 space-y-3">
             <div className="flex flex-wrap items-center gap-2">
-              <span className="font-display text-lg font-semibold">Employability Score</span>
-              <Badge className={`${ratingStyle[result.consistency_rating]} text-xs font-semibold`}>
-                {result.consistency_rating}
+              <span className="font-display text-lg font-semibold">AI Suitability Assessment</span>
+              <Badge className={`${ratingStyle[result.consistency_analysis.rating] ?? "border-border bg-muted text-muted-foreground"} text-xs font-semibold`}>
+                {result.consistency_analysis.rating} Pacing
               </Badge>
             </div>
 
-            {/* Strengths */}
+            {/* Consistency evaluation */}
             <p className="text-sm leading-relaxed text-muted-foreground">
-              {result.strengths_summary}
+              {result.consistency_analysis.evaluation}
             </p>
           </div>
         </div>
       </Card>
 
-      {/* Authenticity flags */}
-      <Card className="p-5">
-        <div className="mb-3 flex items-center gap-2">
-          {clean ? (
-            <ShieldCheck className="h-4 w-4 text-emerald-500" />
-          ) : (
-            <ShieldAlert className="h-4 w-4 text-destructive" />
-          )}
-          <span className="font-display text-sm font-semibold">
-            Authenticity Check
-          </span>
-          {clean ? (
-            <Badge className="ml-auto border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-[11px]">
-              All clear
-            </Badge>
-          ) : (
-            <Badge className="ml-auto border-destructive/30 bg-destructive/10 text-destructive text-[11px]">
-              {result.authenticity_flags.length} flag{result.authenticity_flags.length > 1 ? "s" : ""}
-            </Badge>
-          )}
+      {/* 2. LeetCode Skill & Topic Distribution */}
+      <Card className="p-5 space-y-4">
+        <div className="flex items-center gap-2 text-sm font-semibold text-foreground border-b border-border/40 pb-2">
+          <Trophy className="h-4 w-4 text-primary" />
+          <span>Algorithmic Profile & Topic Distribution</span>
         </div>
 
-        {clean ? (
-          <div className="flex items-center gap-2 rounded-lg bg-emerald-500/8 p-3 text-sm text-emerald-700 dark:text-emerald-400">
-            <CheckCircle2 className="h-4 w-4 shrink-0" />
-            No red flags detected — activity looks genuine and consistent.
+        <div className="grid gap-4 sm:grid-cols-2">
+          <div className="space-y-2">
+            <div className="text-xs font-semibold text-emerald-500 uppercase tracking-wider">Strong Topics</div>
+            <div className="flex flex-wrap gap-1.5">
+              {result.leetcode_skills.strong_topics.map((tag) => (
+                <Badge
+                  key={tag}
+                  className="bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 border-emerald-500/20 text-xs px-2.5 py-1"
+                >
+                  {tag}
+                </Badge>
+              ))}
+            </div>
           </div>
-        ) : (
-          <ul className="space-y-2">
-            {result.authenticity_flags.map((flag, i) => (
-              <li
-                key={i}
-                className="flex items-start gap-2 rounded-lg bg-destructive/8 p-3 text-sm text-destructive"
-              >
-                <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
-                {flag}
-              </li>
-            ))}
-          </ul>
-        )}
+
+          <div className="space-y-2">
+            <div className="text-xs font-semibold text-amber-500 uppercase tracking-wider">Growth Areas</div>
+            <div className="flex flex-wrap gap-1.5">
+              {result.leetcode_skills.growth_areas.map((tag) => (
+                <Badge
+                  key={tag}
+                  className="bg-amber-500/10 hover:bg-amber-500/20 text-amber-600 dark:text-amber-400 border-amber-500/20 text-xs px-2.5 py-1"
+                >
+                  {tag}
+                </Badge>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        <div className="text-sm text-muted-foreground pt-1 bg-surface-2/20 p-3 rounded-lg border border-border/40">
+          <span className="font-semibold block mb-0.5 text-foreground text-xs uppercase tracking-wider">DSA Depth Summary:</span>
+          {result.leetcode_skills.algorithmic_depth_summary}
+        </div>
+      </Card>
+
+      {/* 3. GitHub Project Depth & Implementation Rigor */}
+      <Card className="p-5 space-y-4">
+        <div className="flex items-center gap-2 text-sm font-semibold text-foreground border-b border-border/40 pb-2">
+          <Code2 className="h-4 w-4 text-primary" />
+          <span>Project Rigor & Engineering Complexity</span>
+        </div>
+
+        <div className="grid gap-3">
+          {result.project_rigor.map((repo, i) => {
+            const complexityColors = {
+              Low: "border-muted bg-muted/20 text-muted-foreground",
+              Medium: "border-primary/20 bg-primary/10 text-primary",
+              High: "border-amber-500/20 bg-amber-500/10 text-amber-600 dark:text-amber-400",
+              Advanced: "border-rose-500/20 bg-rose-500/10 text-rose-600 dark:text-rose-400",
+            };
+            return (
+              <div key={i} className="rounded-lg border border-border/60 bg-surface/40 p-3.5 space-y-2">
+                <div className="flex items-start justify-between gap-4">
+                  <div className="min-w-0">
+                    <span className="font-display font-semibold text-sm text-foreground truncate block">
+                      {repo.repo_name}
+                    </span>
+                  </div>
+                  <Badge className={`${complexityColors[repo.inferred_complexity] ?? "border-border text-foreground"} text-[10px] font-semibold px-2 py-0.5 shrink-0`}>
+                    {repo.inferred_complexity} Complexity
+                  </Badge>
+                </div>
+
+                <p className="text-xs text-muted-foreground leading-relaxed">
+                  {repo.analysis}
+                </p>
+
+                <div className="flex flex-wrap gap-1 pt-1">
+                  {repo.skills_developed.map((skill) => (
+                    <Badge key={skill} variant="outline" className="text-[10px] px-1.5 py-0.5 text-muted-foreground border-border/80">
+                      {skill}
+                    </Badge>
+                  ))}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </Card>
+
+      {/* 4. Career Alignment & Flags */}
+      <div className="grid gap-4 md:grid-cols-2">
+        {/* Recommended Roles & Flags */}
+        <Card className="p-5 space-y-4">
+          <div className="flex items-center gap-2 text-sm font-semibold text-foreground border-b border-border/40 pb-2">
+            <Users className="h-4 w-4 text-primary" />
+            <span>Target Roles & Career Alignment</span>
+          </div>
+
+          <div className="space-y-3">
+            <div className="space-y-1.5">
+              <span className="text-xs text-muted-foreground block font-medium uppercase tracking-wider">Recommended Career Tracks:</span>
+              <div className="flex flex-wrap gap-1.5">
+                {recommendedRoles.map((role) => (
+                  <Badge key={role} className="bg-primary/10 text-primary border-primary/20 text-xs px-2.5 py-1">
+                    {role}
+                  </Badge>
+                ))}
+              </div>
+            </div>
+          </div>
+        </Card>
+
+        {/* Signals Verification */}
+        <Card className="p-5 space-y-4">
+          <div className="flex items-center gap-2 text-sm font-semibold text-foreground border-b border-border/40 pb-2">
+            <ShieldCheck className="h-4 w-4 text-primary" />
+            <span>Engineering Signals & Authenticity Checks</span>
+          </div>
+
+          <div className="space-y-3">
+            {greenFlags.length > 0 && (
+              <div className="space-y-1">
+                <span className="text-[11px] font-semibold text-emerald-500 uppercase tracking-wider block">Observed Green Flags:</span>
+                <ul className="space-y-1 text-xs text-muted-foreground">
+                  {greenFlags.map((flag, i) => (
+                    <li key={i} className="flex items-start gap-1.5">
+                      <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500 shrink-0 mt-0.5" />
+                      <span>{flag}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            {redFlags.length > 0 && (
+              <div className="space-y-1">
+                <span className="text-[11px] font-semibold text-rose-500 uppercase tracking-wider block">Risk Factors / Red Flags:</span>
+                <ul className="space-y-1 text-xs text-muted-foreground">
+                  {redFlags.map((flag, i) => (
+                    <li key={i} className="flex items-start gap-1.5">
+                      <AlertCircle className="h-3.5 w-3.5 text-rose-500 shrink-0 mt-0.5" />
+                      <span>{flag}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            {greenFlags.length === 0 && redFlags.length === 0 && (
+              <div className="text-xs text-muted-foreground text-center py-4">No flags analyzed.</div>
+            )}
+          </div>
+        </Card>
+      </div>
+
+      {/* 5. Actionable Engineering Mentorship Feedback */}
+      <Card className="p-5 border-primary/20 bg-primary/5">
+        <div className="flex items-center gap-2 text-sm font-semibold text-foreground border-b border-primary/20 pb-2">
+          <Sparkles className="h-4 w-4 text-primary" />
+          <span>Actionable Engineering Roadmap</span>
+        </div>
+        <p className="mt-3 text-sm leading-relaxed text-foreground/90 font-medium">
+          {result.actionable_feedback}
+        </p>
       </Card>
     </div>
   );

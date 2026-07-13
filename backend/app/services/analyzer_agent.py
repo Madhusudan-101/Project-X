@@ -6,8 +6,8 @@ strict, structured JSON employability & authenticity analysis.
 
 Model  : gemini-3.5-flash  (fast, cheap, structured-output capable)
 SDK    : google-genai  (the new, supported SDK)
-Output : Enforced via ``response_mime_type="application/json"`` +
-         ``response_schema`` so the model *never* returns conversational text.
+Output : Enforced via Pydantic model validation and structured schema response
+         so the model *never* returns conversational text.
 """
 
 from __future__ import annotations
@@ -15,7 +15,8 @@ from __future__ import annotations
 import json
 import logging
 import os
-from typing import Any, Dict, List
+import re
+from typing import Any, Dict, List, Literal
 
 from google import genai
 from google.genai import types
@@ -25,128 +26,239 @@ from .formatter import FormattedMetrics
 
 logger = logging.getLogger(__name__)
 
-# ── Response Schema (what Gemini must return) ─────────────────────────
+# ── Response Schema (Pydantic V2) ─────────────────────────────────────
+
+
+class ConsistencyAnalysis(BaseModel):
+    rating: Literal["Sustained", "Fragmented", "Spiky"] = Field(
+        ...,
+        description="Rating of trailing activity pacing, tracking long-term habits."
+    )
+    evaluation: str = Field(
+        ...,
+        description="Brief structural assessment of their pace over time, looking past broken streaks."
+    )
+
+
+class LeetCodeSkills(BaseModel):
+    strong_topics: List[str] = Field(
+        ...,
+        description="Key algorithmic topic areas where the candidate exhibits solid proficiency."
+    )
+    growth_areas: List[str] = Field(
+        ...,
+        description="Algorithmic areas that need more attention or practice based on their topic counts."
+    )
+    algorithmic_depth_summary: str = Field(
+        ...,
+        description="1-2 sentence summary of their DSA capabilities based on their tag problem counts mapping."
+    )
+
+
+class ProjectRigorEntry(BaseModel):
+    repo_name: str = Field(
+        ...,
+        description="Name of the public candidate repository."
+    )
+    inferred_complexity: Literal["Low", "Medium", "High", "Advanced"] = Field(
+        ...,
+        description="Inferred code complexity based on project scale, architecture, and readme text."
+    )
+    skills_developed: List[str] = Field(
+        ...,
+        description="Key software engineering/architectural skills developed or showcased by this project."
+    )
+    analysis: str = Field(
+        ...,
+        description="Short, focused analysis of their problem-solving depth based on the README snippet."
+    )
+
+
+class CareerAlignment(BaseModel):
+    recommended_roles: List[str] = Field(
+        ...,
+        description="Typical industry software engineering roles suited to their skill profiles."
+    )
+    green_flags: List[str] = Field(
+        ...,
+        description="Authentic engineering indicators, clear designs, or well-distributed knowledge flags."
+    )
+    red_flags: List[str] = Field(
+        ...,
+        description="Red flag observations, tutorial hell indicators, shallow clones, or topic gaps."
+    )
 
 
 class AnalysisResult(BaseModel):
-    """Structured analysis output enforced by the Gemini response_schema."""
-
     overall_score: int = Field(
         ...,
         ge=0,
         le=100,
-        description=(
-            "Composite employability score (0–100) weighting consistency, "
-            "depth of problem-solving, and authenticity of activity."
-        ),
+        description="Composite score (0–100) weighting engineering authenticity, project complexity, and skill depth."
     )
-    consistency_rating: str = Field(
+    consistency_analysis: ConsistencyAnalysis = Field(
         ...,
-        description="One of: Poor, Average, Good, Elite.",
+        description="Long-term activity distribution analysis."
     )
-    authenticity_flags: List[str] = Field(
+    leetcode_skills: LeetCodeSkills = Field(
         ...,
-        description=(
-            "List of red-flag observations. Examples: 'Tutorial Hell — "
-            "70 % of repos are unmodified forks', 'Artificial commit padding "
-            "— 45 commits pushed on a single day'. Empty list if clean."
-        ),
+        description="Topic-wise algorithmic proficiency breakdown."
     )
-    strengths_summary: str = Field(
+    project_rigor: List[ProjectRigorEntry] = Field(
         ...,
-        description=(
-            "Two-to-four sentence paragraph highlighting the candidate's "
-            "strongest signals: languages, streak discipline, hard-problem "
-            "ratio, and original project quality."
-        ),
+        description="Per-repository complexity and implementation rigor review."
+    )
+    career_alignment: CareerAlignment = Field(
+        ...,
+        description="Candidate's green flags, red flags, and recommended career roles."
+    )
+    actionable_feedback: str = Field(
+        ...,
+        description="Direct paragraph advising the candidate on clear next milestones and concrete goals."
     )
 
 
 # ── System Instruction ────────────────────────────────────────────────
 
 _SYSTEM_INSTRUCTION: str = """\
-You are an elite technical recruiter and engineering hiring manager with \
-15 years of experience evaluating developer portfolios.
+You are an expert technical evaluator, seasoned engineering hiring manager, and engineering mentor. \
+You will be provided with an expanded JSON payload containing deep technical signals from a candidate's GitHub and LeetCode profiles.
 
-You will receive a JSON payload containing a developer's GitHub and \
-LeetCode metrics. Your job is to analyze this data and produce a strict \
-JSON assessment. Do NOT output conversational text — output ONLY the \
-JSON object matching the required schema.
+Your objective is to analyze this data thoroughly and output a strict JSON object that conforms exactly to the required output schema. \
+Do NOT wrap your output in conversational filler.
 
-## Scoring Criteria
+## Portfolio Evaluation Framework
 
-### Consistency & Hard Work (40 % of score)
-- Look at **longest_streak_days**, **current_streak_days**, and \
-  **unique_active_days** on both platforms.
-- Compare **avg_per_active_day** — steady daily work (1–5/day) is far \
-  better than cramming 50 in one day.
-- A **largest_gap_days** > 30 is a yellow flag; > 90 is a red flag.
-- Reward candidates who show activity across **multiple days of the week** \
-  (day_of_week_distribution).
+### 1. Consistency & Pacing (Sustained over Streaks)
+- Do NOT penalize candidates strictly for missing a few days or having a broken "streak." Students and professionals have exams, health concerns, or legitimate breaks.
+- Instead, measure "Sustained Consistency": evaluate the density and distribution of GitHub commit timestamps and LeetCode submission calendars over trailing 30, 90, and 180-day windows.
+- Look at the "Frequency Vector": Is work distributed reasonably across weeks/months, or is there a single-day massive dump of 50+ commits/submissions (which indicates script/tutorial copying)?
 
-### Depth & Skill (30 % of score)
-- **LeetCode hard ratio**: solving > 15 % hard problems is strong signal.
-- **Original repositories** vs forks: more original repos with > 100 KB \
-  size indicates real project work.
-- **Top languages** diversity: 3–5 languages shows breadth without being \
-  unfocused.
-- **Stars received**: community validation.
+### 2. LeetCode Skill & Topic Distribution (The Circle Cloud Analysis)
+- Analyze the user's LeetCode topic-wise solving breakdown (extracted from their profile's tag-based problem-solving cloud).
+- Map their stats (e.g., Dynamic Programming, Arrays, Graphs, Trees, Strings) to identify core structural competencies.
+- Pinpoint specific high-level target topics that need more attention or practice based on low problem count relative to their overall tier.
 
-### Authenticity — Fake Activity Detection (30 % of score)
-Deduct points and add to ``authenticity_flags`` for:
-- **Tutorial Hell**: fork_ratio > 0.6 — the user forks popular repos \
-  without building anything original.
-- **Commit Padding**: days_with_10plus > 5 combined with \
-  avg_per_active_day > 8 — suggests scripted/artificial commits.
-- **Ghost Repos**: many repos with size_kb < 10 — empty placeholder repos.
-- **Single-Day Cramming**: busiest_single_day count > 30 on LeetCode \
-  or > 20 on GitHub is suspicious.
-- **Zero Activity Mismatch**: having 10+ repos but 0 recent commit events \
-  suggests old/abandoned work.
+### 3. GitHub Project Depth & Rigor (README Analysis)
+- Evaluate the injected text content of the public repositories' README files.
+- Assess the functional complexity, engineering challenge, and architectural requirements implied by the project setup (e.g., concurrency, low-level compilation, memory management, complex data structures).
+- Determine what problem-solving, analytical, and systems thinking skills this project natively develops. Identify "Ghost Repos" (empty placeholder clones) and exclude/flag them.
 
-If there are NO red flags, set ``authenticity_flags`` to an empty list.
-
-## Rating Bands
-- **Elite**:  score ≥ 85
-- **Good**:   score 65–84
-- **Average**: score 40–64
-- **Poor**:   score < 40
-
-Be fair but rigorous. A new developer with a short but genuine streak \
-should still score decently if their activity is authentic.\
+### 4. Career Alignment (Green Flags & Red Flags)
+- Project the candidate's portfolio against typical standard industry tech roles (e.g., Backend Engineer, Systems/Embedded Engineer, Full-Stack Developer).
+- Provide explicit, actionable feedback using:
+  - **Green Flags:** Authentic engineering indicators (e.g., clear design documentation, original core project logic, well-distributed topic knowledge).
+  - **Red Flags:** Structural gaps or warning signs (e.g., "Tutorial Hell" clone copies, shallow empty repos, major topic asymmetry where critical fundamentals are untouched).
 """
 
-# ── Gemini Schema (dict form for the SDK) ─────────────────────────────
+# ── Gemini Schema (dict form for the SDK to avoid nested ref schema errors) ─────────────────────────────
 
 _RESPONSE_SCHEMA: Dict[str, Any] = {
     "type": "object",
     "properties": {
         "overall_score": {
             "type": "integer",
-            "description": "Employability score 0-100",
+            "description": "Composite score (0–100) weighting engineering authenticity and skill depth.",
         },
-        "consistency_rating": {
-            "type": "string",
-            "enum": ["Poor", "Average", "Good", "Elite"],
-            "description": "Rating band",
+        "consistency_analysis": {
+            "type": "object",
+            "properties": {
+                "rating": {
+                    "type": "string",
+                    "enum": ["Sustained", "Fragmented", "Spiky"],
+                    "description": "Activity pacing rating.",
+                },
+                "evaluation": {
+                    "type": "string",
+                    "description": "Assessment of trailing activity and habits, looking past broken streaks.",
+                },
+            },
+            "required": ["rating", "evaluation"],
         },
-        "authenticity_flags": {
+        "leetcode_skills": {
+            "type": "object",
+            "properties": {
+                "strong_topics": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Strongest algorithmic topic areas.",
+                },
+                "growth_areas": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Topic areas needing more practice.",
+                },
+                "algorithmic_depth_summary": {
+                    "type": "string",
+                    "description": "Overview of DSA capabilities based on their tag data cloud.",
+                },
+            },
+            "required": ["strong_topics", "growth_areas", "algorithmic_depth_summary"],
+        },
+        "project_rigor": {
             "type": "array",
-            "items": {"type": "string"},
-            "description": "Red-flag observations, empty list if clean",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "repo_name": {
+                        "type": "string",
+                        "description": "Repository name.",
+                    },
+                    "inferred_complexity": {
+                        "type": "string",
+                        "enum": ["Low", "Medium", "High", "Advanced"],
+                        "description": "Inferred repository implementation complexity.",
+                    },
+                    "skills_developed": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "Key software engineering/architectural skills developed.",
+                    },
+                    "analysis": {
+                        "type": "string",
+                        "description": "Short analysis of code and problem-solving complexity based on README text.",
+                    },
+                },
+                "required": ["repo_name", "inferred_complexity", "skills_developed", "analysis"],
+            },
+            "description": "Per-repository rigor analysis.",
         },
-        "strengths_summary": {
+        "career_alignment": {
+            "type": "object",
+            "properties": {
+                "recommended_roles": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Target software engineering roles suited to their skills.",
+                },
+                "green_flags": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Authentic engineering indicators observed.",
+                },
+                "red_flags": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Warning signs or gaps observed.",
+                },
+            },
+            "required": ["recommended_roles", "green_flags", "red_flags"],
+        },
+        "actionable_feedback": {
             "type": "string",
-            "description": "2-4 sentence paragraph on candidate strengths",
+            "description": "Paragraph advising candidate on concrete next milestone goals.",
         },
     },
     "required": [
         "overall_score",
-        "consistency_rating",
-        "authenticity_flags",
-        "strengths_summary",
+        "consistency_analysis",
+        "leetcode_skills",
+        "project_rigor",
+        "career_alignment",
+        "actionable_feedback",
     ],
 }
+
 
 # ── Agent entry point ─────────────────────────────────────────────────
 
@@ -190,12 +302,13 @@ async def run_analysis(formatted: FormattedMetrics) -> AnalysisResult:
         system_instruction=_SYSTEM_INSTRUCTION,
         response_mime_type="application/json",
         response_schema=_RESPONSE_SCHEMA,
-        temperature=0.2,        # low temp → deterministic, consistent scores
-        max_output_tokens=1024,
+        temperature=0.15,
+        max_output_tokens=8192,
     )
 
     # Try each model in order until one succeeds
     last_error: Exception | None = None
+    response = None
     for model_name in _MODEL_CANDIDATES:
         try:
             logger.info("Trying model: %s", model_name)
@@ -220,14 +333,17 @@ async def run_analysis(formatted: FormattedMetrics) -> AnalysisResult:
         raise last_error  # type: ignore[misc]
 
     # Parse the structured JSON response
-    raw_text: str = response.text
+    raw_text: str = response.text or ""
     logger.debug("Gemini raw response: %s", raw_text[:500])
 
+    # Clean up json formatting wrappers (e.g. ```json ... ```)
+    raw_text = re.sub(r"^```json\s*", "", raw_text, flags=re.IGNORECASE)
+    raw_text = re.sub(r"\s*```$", "", raw_text)
+    raw_text = raw_text.strip()
+
     try:
-        parsed: Dict[str, Any] = json.loads(raw_text)
-    except json.JSONDecodeError as exc:
-        logger.error("Gemini returned invalid JSON: %s", exc)
-        raise ValueError(f"Gemini returned invalid JSON: {exc}") from exc
-
-    return AnalysisResult(**parsed)
-
+        # Validate and instantiate using Pydantic V2 model_validate_json
+        return AnalysisResult.model_validate_json(raw_text)
+    except Exception as exc:
+        logger.error("Gemini output failed validation: %s. Raw text: %s", exc, raw_text)
+        raise ValueError(f"Gemini output failed validation: {exc}") from exc

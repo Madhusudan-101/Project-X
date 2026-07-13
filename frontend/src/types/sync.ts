@@ -124,11 +124,37 @@ export interface SyncResponse<T> {
   error: string | null;
 }
 
+export interface ConsistencyAnalysis {
+  rating: "Sustained" | "Fragmented" | "Spiky";
+  evaluation: string;
+}
+
+export interface LeetCodeSkills {
+  strong_topics: string[];
+  growth_areas: string[];
+  algorithmic_depth_summary: string;
+}
+
+export interface ProjectRigorEntry {
+  repo_name: string;
+  inferred_complexity: "Low" | "Medium" | "High" | "Advanced";
+  skills_developed: string[];
+  analysis: string;
+}
+
+export interface CareerAlignment {
+  recommended_roles: string[];
+  green_flags: string[];
+  red_flags: string[];
+}
+
 export interface AnalysisResult {
   overall_score: number;
-  consistency_rating: "Poor" | "Average" | "Good" | "Elite";
-  authenticity_flags: string[];
-  strengths_summary: string;
+  consistency_analysis: ConsistencyAnalysis;
+  leetcode_skills: LeetCodeSkills;
+  project_rigor: ProjectRigorEntry[];
+  career_alignment: CareerAlignment;
+  actionable_feedback: string;
 }
 
 export interface AnalyzeApiResponse {
