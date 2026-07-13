@@ -36,6 +36,11 @@ export interface Role {
   minimumEmployabilityScore: number;
   status: RoleStatus;
   jobDescriptionPath: string | null;
+  resumeWeight: number;
+  githubWeight: number;
+  leetcodeWeight: number;
+  interviewWeight: number;
+  assessmentWeight: number;
   createdAt: string;
   updatedAt: string;
 }
@@ -50,6 +55,11 @@ export interface RoleCreatePayload {
   deadline: string;
   minimumEmployabilityScore: number;
   jobDescriptionPath?: string;
+  resumeWeight: number;
+  githubWeight: number;
+  leetcodeWeight: number;
+  interviewWeight: number;
+  assessmentWeight: number;
 }
 
 export interface RoleUpdatePayload {
@@ -62,6 +72,11 @@ export interface RoleUpdatePayload {
   deadline?: string;
   minimumEmployabilityScore?: number;
   jobDescriptionPath?: string;
+  resumeWeight?: number;
+  githubWeight?: number;
+  leetcodeWeight?: number;
+  interviewWeight?: number;
+  assessmentWeight?: number;
 }
 
 /** Response from POST /company/roles/extract-jd — used to pre-fill the

@@ -1,6 +1,6 @@
 from datetime import date
 from pydantic import BaseModel, Field, model_validator
-from typing import Optional, List
+from typing import Dict, Optional, List
 
 
 # ── Allowed values ─────────────────────────────────────────────────────
@@ -195,6 +195,25 @@ def _clean_string_list(values: List[str], *, field_label: str, max_items: int) -
     return cleaned
 
 
+# ── Weightage (Feature 4) ───────────────────────────────────────────────
+# How much each evaluation factor counts toward a candidate's final score
+# for a role. Must always total exactly 100.
+
+WEIGHT_FIELDS: List[str] = [
+    "resume_weight",
+    "github_weight",
+    "leetcode_weight",
+    "interview_weight",
+    "assessment_weight",
+]
+
+
+def _validate_weights_total(weights: Dict[str, int]) -> None:
+    total = sum(weights.values())
+    if total != 100:
+        raise ValueError(f"Role weightage must total exactly 100% (got {total}%).")
+
+
 class RoleCreateIn(BaseModel):
     title: str = Field(min_length=3, max_length=150)
     description: str = Field(min_length=20, max_length=5000)
@@ -205,6 +224,11 @@ class RoleCreateIn(BaseModel):
     deadline: date
     minimum_employability_score: int = Field(default=0, ge=0, le=100)
     job_description_path: Optional[str] = Field(None, max_length=500)
+    resume_weight: int = Field(default=20, ge=0, le=100)
+    github_weight: int = Field(default=20, ge=0, le=100)
+    leetcode_weight: int = Field(default=20, ge=0, le=100)
+    interview_weight: int = Field(default=20, ge=0, le=100)
+    assessment_weight: int = Field(default=20, ge=0, le=100)
 
     @model_validator(mode="after")
     def validate_fields(self) -> "RoleCreateIn":
@@ -223,6 +247,13 @@ class RoleCreateIn(BaseModel):
         )
         if self.deadline < date.today():
             raise ValueError("Deadline must be today or a future date.")
+        _validate_weights_total({
+            "resume_weight": self.resume_weight,
+            "github_weight": self.github_weight,
+            "leetcode_weight": self.leetcode_weight,
+            "interview_weight": self.interview_weight,
+            "assessment_weight": self.assessment_weight,
+        })
         return self
 
 
@@ -236,6 +267,11 @@ class RoleUpdateIn(BaseModel):
     deadline: Optional[date] = None
     minimum_employability_score: Optional[int] = Field(None, ge=0, le=100)
     job_description_path: Optional[str] = Field(None, max_length=500)
+    resume_weight: Optional[int] = Field(None, ge=0, le=100)
+    github_weight: Optional[int] = Field(None, ge=0, le=100)
+    leetcode_weight: Optional[int] = Field(None, ge=0, le=100)
+    interview_weight: Optional[int] = Field(None, ge=0, le=100)
+    assessment_weight: Optional[int] = Field(None, ge=0, le=100)
 
     @model_validator(mode="after")
     def validate_optional_fields(self) -> "RoleUpdateIn":
@@ -254,6 +290,21 @@ class RoleUpdateIn(BaseModel):
             self.preferred_qualifications = _clean_string_list(
                 self.preferred_qualifications, field_label="preferred qualifications", max_items=30
             )
+
+        weights = {
+            "resume_weight": self.resume_weight,
+            "github_weight": self.github_weight,
+            "leetcode_weight": self.leetcode_weight,
+            "interview_weight": self.interview_weight,
+            "assessment_weight": self.assessment_weight,
+        }
+        provided = {k: v for k, v in weights.items() if v is not None}
+        if provided and len(provided) != len(weights):
+            raise ValueError(
+                "To update role weightage, all five weight fields must be provided together."
+            )
+        if len(provided) == len(weights):
+            _validate_weights_total(provided)
         return self
 
 
@@ -270,6 +321,11 @@ class RoleOut(BaseModel):
     minimum_employability_score: int
     status: str
     job_description_path: Optional[str] = None
+    resume_weight: int
+    github_weight: int
+    leetcode_weight: int
+    interview_weight: int
+    assessment_weight: int
     created_at: str
     updated_at: str
 

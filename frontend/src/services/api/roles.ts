@@ -38,6 +38,11 @@ function normalizeRole(raw: Record<string, unknown>): Role {
     minimumEmployabilityScore: Number(raw.minimum_employability_score ?? 0),
     status: raw.status as RoleStatus,
     jobDescriptionPath: (raw.job_description_path as string | null) ?? null,
+    resumeWeight: Number(raw.resume_weight ?? 20),
+    githubWeight: Number(raw.github_weight ?? 20),
+    leetcodeWeight: Number(raw.leetcode_weight ?? 20),
+    interviewWeight: Number(raw.interview_weight ?? 20),
+    assessmentWeight: Number(raw.assessment_weight ?? 20),
     createdAt: raw.created_at as string,
     updatedAt: raw.updated_at as string,
   };
@@ -77,6 +82,11 @@ export const rolesService = {
         ...(payload.jobDescriptionPath !== undefined && {
           job_description_path: payload.jobDescriptionPath,
         }),
+        resume_weight: payload.resumeWeight,
+        github_weight: payload.githubWeight,
+        leetcode_weight: payload.leetcodeWeight,
+        interview_weight: payload.interviewWeight,
+        assessment_weight: payload.assessmentWeight,
       },
     }).then(normalizeRole),
 
@@ -109,6 +119,13 @@ export const rolesService = {
         }),
         ...(payload.jobDescriptionPath !== undefined && {
           job_description_path: payload.jobDescriptionPath,
+        }),
+        ...(payload.resumeWeight !== undefined && { resume_weight: payload.resumeWeight }),
+        ...(payload.githubWeight !== undefined && { github_weight: payload.githubWeight }),
+        ...(payload.leetcodeWeight !== undefined && { leetcode_weight: payload.leetcodeWeight }),
+        ...(payload.interviewWeight !== undefined && { interview_weight: payload.interviewWeight }),
+        ...(payload.assessmentWeight !== undefined && {
+          assessment_weight: payload.assessmentWeight,
         }),
       },
     }).then(normalizeRole),

@@ -27,8 +27,10 @@ import { EXPERIENCE_LEVELS, ROLE_TYPES } from "@/types/role";
 import type { JdExtractionResult, Role } from "@/types/role";
 import { rolesService } from "@/services/api/roles";
 import { ApiClientError } from "@/services/api/client";
+import { DEFAULT_WEIGHTS, type RoleWeights } from "@/lib/weightage";
 import { TagListInput, type TagListInputHandle } from "./TagListInput";
 import { JobDescriptionUploadPanel } from "./JobDescriptionUploadPanel";
+import { RoleWeightSliders } from "./RoleWeightSliders";
 
 // ── Validation ─────────────────────────────────────────────────────────
 
@@ -71,6 +73,7 @@ export function RoleFormDialog({ open, onOpenChange, mode, role, onSuccess }: Ro
   const [skillsError, setSkillsError] = useState("");
   const [preferredQualifications, setPreferredQualifications] = useState<string[]>([]);
   const [jobDescriptionPath, setJobDescriptionPath] = useState<string | undefined>(undefined);
+  const [weights, setWeights] = useState<RoleWeights>(DEFAULT_WEIGHTS);
   const skillsInputRef = useRef<TagListInputHandle>(null);
 
   const form = useForm<FormValues>({
@@ -93,11 +96,19 @@ export function RoleFormDialog({ open, onOpenChange, mode, role, onSuccess }: Ro
       setSkills(role.requiredSkills);
       setPreferredQualifications(role.preferredQualifications);
       setJobDescriptionPath(role.jobDescriptionPath ?? undefined);
+      setWeights({
+        resumeWeight: role.resumeWeight,
+        githubWeight: role.githubWeight,
+        leetcodeWeight: role.leetcodeWeight,
+        interviewWeight: role.interviewWeight,
+        assessmentWeight: role.assessmentWeight,
+      });
     } else {
       form.reset(BLANK_VALUES);
       setSkills([]);
       setPreferredQualifications([]);
       setJobDescriptionPath(undefined);
+      setWeights(DEFAULT_WEIGHTS);
     }
     setSkillsError("");
   }, [open, mode, role, form]);
@@ -143,6 +154,7 @@ export function RoleFormDialog({ open, onOpenChange, mode, role, onSuccess }: Ro
         deadline: values.deadline,
         minimumEmployabilityScore: values.minimumEmployabilityScore,
         ...(jobDescriptionPath && { jobDescriptionPath }),
+        ...weights,
       };
 
       const saved =
@@ -330,6 +342,9 @@ export function RoleFormDialog({ open, onOpenChange, mode, role, onSuccess }: Ro
               </p>
             )}
           </div>
+
+          {/* Evaluation weightage */}
+          <RoleWeightSliders weights={weights} onChange={setWeights} disabled={submitting} />
 
           <DialogFooter className="pt-2">
             <Button

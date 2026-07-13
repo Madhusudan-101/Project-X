@@ -24,6 +24,7 @@ from ..schemas import (
     RoleOut,
     RoleUpdateIn,
     VALID_ROLE_STATUSES,
+    WEIGHT_FIELDS,
 )
 from ..crud import (
     create_role,
@@ -60,6 +61,11 @@ def map_role(row: dict) -> dict:
         "minimum_employability_score": int(row.get("minimum_employability_score", 0)),
         "status": row["status"],
         "job_description_path": row.get("job_description_path"),
+        "resume_weight": int(row.get("resume_weight", 20)),
+        "github_weight": int(row.get("github_weight", 20)),
+        "leetcode_weight": int(row.get("leetcode_weight", 20)),
+        "interview_weight": int(row.get("interview_weight", 20)),
+        "assessment_weight": int(row.get("assessment_weight", 20)),
         "created_at": str(row.get("created_at", "")),
         "updated_at": str(row.get("updated_at", "")),
     }
@@ -103,6 +109,11 @@ def create_role_route(
             "deadline": payload.deadline.isoformat(),
             "minimum_employability_score": payload.minimum_employability_score,
             "job_description_path": payload.job_description_path,
+            "resume_weight": payload.resume_weight,
+            "github_weight": payload.github_weight,
+            "leetcode_weight": payload.leetcode_weight,
+            "interview_weight": payload.interview_weight,
+            "assessment_weight": payload.assessment_weight,
             "status": "draft",
         })
     except APIError as e:
@@ -184,6 +195,16 @@ def update_role_route(
         update_data["minimum_employability_score"] = payload.minimum_employability_score
     if payload.job_description_path is not None:
         update_data["job_description_path"] = payload.job_description_path
+    if payload.resume_weight is not None:
+        update_data["resume_weight"] = payload.resume_weight
+    if payload.github_weight is not None:
+        update_data["github_weight"] = payload.github_weight
+    if payload.leetcode_weight is not None:
+        update_data["leetcode_weight"] = payload.leetcode_weight
+    if payload.interview_weight is not None:
+        update_data["interview_weight"] = payload.interview_weight
+    if payload.assessment_weight is not None:
+        update_data["assessment_weight"] = payload.assessment_weight
 
     try:
         row = update_role(role_id, company["id"], update_data)
@@ -231,6 +252,13 @@ def publish_role_route(
         raise HTTPException(
             status_code=400,
             detail="Cannot publish a role with a deadline in the past. Update the deadline first.",
+        )
+
+    weights_total = sum(int(role.get(f, 0)) for f in WEIGHT_FIELDS)
+    if weights_total != 100:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Role weightage must total exactly 100% before publishing (currently {weights_total}%).",
         )
 
     row = update_role(role_id, company["id"], {"status": "published"})

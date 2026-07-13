@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { ArrowLeft, Briefcase, Calendar, GaugeCircle, Layers, Tag } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
+import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useCompanyGuard } from "@/hooks/use-company-guard";
 import { rolesService } from "@/services/api/roles";
@@ -12,6 +13,7 @@ import { RoleFormDialog } from "@/components/dashboard/roles/RoleFormDialog";
 import { RoleStatusBadge } from "@/components/dashboard/roles/RoleStatusBadge";
 import { RoleActionsMenu } from "@/components/dashboard/roles/RoleActionsMenu";
 import { DeleteRoleDialog } from "@/components/dashboard/roles/DeleteRoleDialog";
+import { WEIGHT_KEYS, WEIGHT_LABELS } from "@/lib/weightage";
 import type { Role } from "@/types/role";
 
 export const Route = createFileRoute("/company-roles/$roleId")({
@@ -196,6 +198,24 @@ function RoleDetailPage() {
                   >
                     {s}
                   </Badge>
+                ))}
+              </div>
+            </Card>
+
+            {/* Evaluation weightage */}
+            <Card className="p-5">
+              <h2 className="font-display text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+                Evaluation weightage
+              </h2>
+              <div className="mt-3 space-y-3">
+                {WEIGHT_KEYS.map((key) => (
+                  <div key={key} className="space-y-1">
+                    <div className="flex items-center justify-between text-sm">
+                      <span>{WEIGHT_LABELS[key]}</span>
+                      <span className="font-medium">{role[key]}%</span>
+                    </div>
+                    <Progress value={role[key]} aria-label={`${WEIGHT_LABELS[key]} weight`} />
+                  </div>
                 ))}
               </div>
             </Card>
