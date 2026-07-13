@@ -1,4 +1,4 @@
-"""Auth router — signup · login · logout · forgot · otp · reset · profile.
+"""Auth router — signup · login · logout · forgot · otp · reset · profile · company-signup.
 
 Conventions
 -----------
@@ -19,11 +19,17 @@ from ..deps import supabase, get_current_user
 from ..schemas import (
     AuthIn, SignupIn, UserOut, SessionOut,
     ForgotIn, VerifyOtpIn, ResetIn, ProfileUpdateIn,
+    CompanySignupIn, CompanySessionOut,
 )
-from ..crud import upsert_profile, get_profile_by_id, update_profile
+from ..crud import (
+    upsert_profile, get_profile_by_id, update_profile,
+    create_company, get_company_by_owner_id, get_profile_by_email,
+)
+
 
 log = logging.getLogger(__name__)
 router = APIRouter(prefix="/auth", tags=["auth"])
+
 
 
 # ── Helpers ────────────────────────────────────────────────────────────
@@ -62,7 +68,13 @@ def _ensure_profile(user_id: str, email: str, role: str,
 
 @router.post("/signup", response_model=SessionOut)
 def signup(payload: SignupIn):
+    # Prevent duplicate registrations by checking profiles
+    existing_profile = get_profile_by_email(payload.email)
+    if existing_profile:
+        raise HTTPException(status_code=409, detail="An account with this email already exists.")
+
     first = payload.resolved_first_name or ""
+
     last = payload.resolved_last_name or ""
 
     try:
@@ -222,6 +234,20 @@ def reset_password(payload: ResetIn):
     return {"ok": True}
 
 
+# ── GET /auth/profile ──────────────────────────────────────────────────
+
+@router.get("/profile", response_model=UserOut)
+def get_profile_route(current_user: dict = Depends(get_current_user)):
+    """Return the authenticated user's profile. Self-heals a missing row
+    (e.g. right after email confirmation, before any profile write has landed)."""
+    profile = _ensure_profile(
+        current_user["id"],
+        email=current_user["email"],
+        role=current_user.get("role", "candidate"),
+    )
+    return map_profile(profile)
+
+
 # ── PATCH /auth/profile ───────────────────────────────────────────────
 
 @router.patch("/profile", response_model=UserOut)
@@ -264,3 +290,122 @@ def update_profile_route(
         raise HTTPException(status_code=400, detail="Failed to update profile.")
 
     return map_profile(profile)
+
+
+# ── Helpers (company) ──────────────────────────────────────────────────
+
+def map_company(row: dict) -> dict:
+    """Convert a DB companies row → CompanyOut-compatible dict."""
+    return {
+        "id": row["id"],
+        "owner_id": row["owner_id"],
+        "name": row["name"],
+        "industry": row["industry"],
+        "size": row["size"],
+        "hiring_domains": row.get("hiring_domains") or [],
+        "website": row.get("website"),
+        "logo_url": row.get("logo_url"),
+        "is_verified": bool(row.get("is_verified", False)),
+        "created_at": str(row.get("created_at", "")),
+    }
+
+
+# ── POST /auth/company-signup ──────────────────────────────────────────
+
+@router.post("/company-signup", response_model=CompanySessionOut)
+def company_signup(payload: CompanySignupIn):
+    # Prevent duplicate registrations by checking profiles
+    existing_profile = get_profile_by_email(payload.email)
+    if existing_profile:
+        raise HTTPException(status_code=409, detail="An account with this email already exists.")
+
+    """
+    Atomic company registration:
+      1. Create Supabase auth user (role=company in user_metadata)
+      2. Upsert public.profiles row
+      3. Insert public.companies row (idempotent — returns existing on duplicate)
+      4. Return session + company profile
+
+    Returns 400 on weak password or invalid email.
+    The session.token will be empty if Supabase email confirmation is enabled;
+    the frontend should redirect to /auth/otp or the email-verify page in that case.
+    """
+    first = payload.first_name.strip()
+
+    last = payload.last_name.strip()
+    full_name = f"{first} {last}".strip()
+
+    # ── 1. Create Supabase auth user ─────────────────────────────────
+    try:
+        res = supabase.auth.sign_up({
+            "email": payload.email,
+            "password": payload.password,
+            "options": {
+                "data": {
+                    "role": "company",
+                    "name": full_name,
+                    "firstName": first,
+                    "lastName": last,
+                }
+            },
+        })
+    except AuthWeakPasswordError as e:
+        raise HTTPException(status_code=400, detail=e.message)
+    except AuthApiError as e:
+        # "User already registered" → 409 so the frontend can surface the right message
+        if "already registered" in (e.message or "").lower():
+            raise HTTPException(status_code=409, detail="An account with this email already exists.")
+        raise HTTPException(status_code=400, detail=e.message)
+
+    user = res.user
+    if not user:
+        raise HTTPException(status_code=400, detail="Signup failed — no user returned.")
+
+    session = res.session  # None when Supabase email-confirm is ON
+
+    # ── 2. Upsert profile row ────────────────────────────────────────
+    try:
+        profile = upsert_profile(user.id, {
+            "email": payload.email,
+            "role": "company",
+            "name": full_name,
+            "first_name": first,
+            "last_name": last,
+        })
+    except APIError as e:
+        log.warning("Profile upsert failed for %s: %s", user.id, e)
+        profile = None
+
+    # ── 3. Create company row (idempotent) ───────────────────────────
+    try:
+        existing = get_company_by_owner_id(user.id)
+        if existing:
+            company_row = existing
+        else:
+            company_row = create_company(user.id, {
+                "name": payload.company_name,
+                "industry": payload.industry,
+                "size": payload.size,
+                "hiring_domains": payload.hiring_domains,
+            })
+    except APIError as e:
+        log.warning("Company creation failed for %s: %s", user.id, e)
+        company_row = None
+
+    # ── 4. Build response ────────────────────────────────────────────
+    user_out = map_profile(profile) if profile else {
+        "id": user.id,
+        "email": payload.email,
+        "role": "company",
+        "name": full_name,
+        "firstName": first,
+        "lastName": last,
+        "onboarded": False,
+    }
+
+    return {
+        "user": user_out,
+        "token": session.access_token if session else "",
+        "expiresAt": str(session.expires_at) if session and session.expires_at else "",
+        "company": map_company(company_row) if company_row else None,
+    }

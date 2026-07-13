@@ -1,6 +1,6 @@
 from typing import Optional
 import os
-from fastapi import Header, HTTPException
+from fastapi import Depends, Header, HTTPException
 from dotenv import load_dotenv
 from supabase import create_client
 from supabase_auth.errors import AuthApiError
@@ -44,3 +44,13 @@ def get_current_user(authorization: Optional[str] = Header(None)) -> dict:
         "email": res.user.email,
         "role": meta.get("role", "candidate"),
     }
+
+
+def require_company_role(current_user: dict = Depends(get_current_user)) -> dict:
+    """Dependency: raises 403 if the authenticated user is not a company HR."""
+    if current_user.get("role") != "company":
+        raise HTTPException(
+            status_code=403,
+            detail="This endpoint is restricted to Company accounts.",
+        )
+    return current_user

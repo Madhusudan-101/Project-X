@@ -17,12 +17,17 @@ import { Route as CandidateRouteImport } from './routes/candidate'
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as AdminRouteImport } from './routes/admin'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as CompanyRolesIndexRouteImport } from './routes/company-roles/index'
+import { Route as CompanyRolesRoleIdRouteImport } from './routes/company-roles/$roleId'
 import { Route as AuthSignupRouteImport } from './routes/auth.signup'
 import { Route as AuthResetPasswordRouteImport } from './routes/auth.reset-password'
 import { Route as AuthProfileSetupRouteImport } from './routes/auth.profile-setup'
 import { Route as AuthOtpRouteImport } from './routes/auth.otp'
 import { Route as AuthLoginRouteImport } from './routes/auth.login'
 import { Route as AuthForgotPasswordRouteImport } from './routes/auth.forgot-password'
+import { Route as AuthConfirmRouteImport } from './routes/auth.confirm'
+import { Route as AuthCompanySignupRouteImport } from './routes/auth.company-signup'
+import { Route as AuthCompanyOnboardingRouteImport } from './routes/auth.company-onboarding'
 
 const SitemapDotxmlRoute = SitemapDotxmlRouteImport.update({
   id: '/sitemap.xml',
@@ -64,6 +69,16 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const CompanyRolesIndexRoute = CompanyRolesIndexRouteImport.update({
+  id: '/company-roles/',
+  path: '/company-roles/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const CompanyRolesRoleIdRoute = CompanyRolesRoleIdRouteImport.update({
+  id: '/company-roles/$roleId',
+  path: '/company-roles/$roleId',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AuthSignupRoute = AuthSignupRouteImport.update({
   id: '/signup',
   path: '/signup',
@@ -94,6 +109,21 @@ const AuthForgotPasswordRoute = AuthForgotPasswordRouteImport.update({
   path: '/forgot-password',
   getParentRoute: () => AuthRoute,
 } as any)
+const AuthConfirmRoute = AuthConfirmRouteImport.update({
+  id: '/confirm',
+  path: '/confirm',
+  getParentRoute: () => AuthRoute,
+} as any)
+const AuthCompanySignupRoute = AuthCompanySignupRouteImport.update({
+  id: '/company-signup',
+  path: '/company-signup',
+  getParentRoute: () => AuthRoute,
+} as any)
+const AuthCompanyOnboardingRoute = AuthCompanyOnboardingRouteImport.update({
+  id: '/company-onboarding',
+  path: '/company-onboarding',
+  getParentRoute: () => AuthRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -104,12 +134,17 @@ export interface FileRoutesByFullPath {
   '/company': typeof CompanyRoute
   '/portals': typeof PortalsRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
+  '/auth/company-onboarding': typeof AuthCompanyOnboardingRoute
+  '/auth/company-signup': typeof AuthCompanySignupRoute
+  '/auth/confirm': typeof AuthConfirmRoute
   '/auth/forgot-password': typeof AuthForgotPasswordRoute
   '/auth/login': typeof AuthLoginRoute
   '/auth/otp': typeof AuthOtpRoute
   '/auth/profile-setup': typeof AuthProfileSetupRoute
   '/auth/reset-password': typeof AuthResetPasswordRoute
   '/auth/signup': typeof AuthSignupRoute
+  '/company-roles/$roleId': typeof CompanyRolesRoleIdRoute
+  '/company-roles/': typeof CompanyRolesIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -120,12 +155,17 @@ export interface FileRoutesByTo {
   '/company': typeof CompanyRoute
   '/portals': typeof PortalsRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
+  '/auth/company-onboarding': typeof AuthCompanyOnboardingRoute
+  '/auth/company-signup': typeof AuthCompanySignupRoute
+  '/auth/confirm': typeof AuthConfirmRoute
   '/auth/forgot-password': typeof AuthForgotPasswordRoute
   '/auth/login': typeof AuthLoginRoute
   '/auth/otp': typeof AuthOtpRoute
   '/auth/profile-setup': typeof AuthProfileSetupRoute
   '/auth/reset-password': typeof AuthResetPasswordRoute
   '/auth/signup': typeof AuthSignupRoute
+  '/company-roles/$roleId': typeof CompanyRolesRoleIdRoute
+  '/company-roles': typeof CompanyRolesIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -137,12 +177,17 @@ export interface FileRoutesById {
   '/company': typeof CompanyRoute
   '/portals': typeof PortalsRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
+  '/auth/company-onboarding': typeof AuthCompanyOnboardingRoute
+  '/auth/company-signup': typeof AuthCompanySignupRoute
+  '/auth/confirm': typeof AuthConfirmRoute
   '/auth/forgot-password': typeof AuthForgotPasswordRoute
   '/auth/login': typeof AuthLoginRoute
   '/auth/otp': typeof AuthOtpRoute
   '/auth/profile-setup': typeof AuthProfileSetupRoute
   '/auth/reset-password': typeof AuthResetPasswordRoute
   '/auth/signup': typeof AuthSignupRoute
+  '/company-roles/$roleId': typeof CompanyRolesRoleIdRoute
+  '/company-roles/': typeof CompanyRolesIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -155,12 +200,17 @@ export interface FileRouteTypes {
     | '/company'
     | '/portals'
     | '/sitemap.xml'
+    | '/auth/company-onboarding'
+    | '/auth/company-signup'
+    | '/auth/confirm'
     | '/auth/forgot-password'
     | '/auth/login'
     | '/auth/otp'
     | '/auth/profile-setup'
     | '/auth/reset-password'
     | '/auth/signup'
+    | '/company-roles/$roleId'
+    | '/company-roles/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -171,12 +221,17 @@ export interface FileRouteTypes {
     | '/company'
     | '/portals'
     | '/sitemap.xml'
+    | '/auth/company-onboarding'
+    | '/auth/company-signup'
+    | '/auth/confirm'
     | '/auth/forgot-password'
     | '/auth/login'
     | '/auth/otp'
     | '/auth/profile-setup'
     | '/auth/reset-password'
     | '/auth/signup'
+    | '/company-roles/$roleId'
+    | '/company-roles'
   id:
     | '__root__'
     | '/'
@@ -187,12 +242,17 @@ export interface FileRouteTypes {
     | '/company'
     | '/portals'
     | '/sitemap.xml'
+    | '/auth/company-onboarding'
+    | '/auth/company-signup'
+    | '/auth/confirm'
     | '/auth/forgot-password'
     | '/auth/login'
     | '/auth/otp'
     | '/auth/profile-setup'
     | '/auth/reset-password'
     | '/auth/signup'
+    | '/company-roles/$roleId'
+    | '/company-roles/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -204,6 +264,8 @@ export interface RootRouteChildren {
   CompanyRoute: typeof CompanyRoute
   PortalsRoute: typeof PortalsRoute
   SitemapDotxmlRoute: typeof SitemapDotxmlRoute
+  CompanyRolesRoleIdRoute: typeof CompanyRolesRoleIdRoute
+  CompanyRolesIndexRoute: typeof CompanyRolesIndexRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -264,6 +326,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/company-roles/': {
+      id: '/company-roles/'
+      path: '/company-roles'
+      fullPath: '/company-roles/'
+      preLoaderRoute: typeof CompanyRolesIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/company-roles/$roleId': {
+      id: '/company-roles/$roleId'
+      path: '/company-roles/$roleId'
+      fullPath: '/company-roles/$roleId'
+      preLoaderRoute: typeof CompanyRolesRoleIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/auth/signup': {
       id: '/auth/signup'
       path: '/signup'
@@ -306,10 +382,34 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthForgotPasswordRouteImport
       parentRoute: typeof AuthRoute
     }
+    '/auth/confirm': {
+      id: '/auth/confirm'
+      path: '/confirm'
+      fullPath: '/auth/confirm'
+      preLoaderRoute: typeof AuthConfirmRouteImport
+      parentRoute: typeof AuthRoute
+    }
+    '/auth/company-signup': {
+      id: '/auth/company-signup'
+      path: '/company-signup'
+      fullPath: '/auth/company-signup'
+      preLoaderRoute: typeof AuthCompanySignupRouteImport
+      parentRoute: typeof AuthRoute
+    }
+    '/auth/company-onboarding': {
+      id: '/auth/company-onboarding'
+      path: '/company-onboarding'
+      fullPath: '/auth/company-onboarding'
+      preLoaderRoute: typeof AuthCompanyOnboardingRouteImport
+      parentRoute: typeof AuthRoute
+    }
   }
 }
 
 interface AuthRouteChildren {
+  AuthCompanyOnboardingRoute: typeof AuthCompanyOnboardingRoute
+  AuthCompanySignupRoute: typeof AuthCompanySignupRoute
+  AuthConfirmRoute: typeof AuthConfirmRoute
   AuthForgotPasswordRoute: typeof AuthForgotPasswordRoute
   AuthLoginRoute: typeof AuthLoginRoute
   AuthOtpRoute: typeof AuthOtpRoute
@@ -319,6 +419,9 @@ interface AuthRouteChildren {
 }
 
 const AuthRouteChildren: AuthRouteChildren = {
+  AuthCompanyOnboardingRoute: AuthCompanyOnboardingRoute,
+  AuthCompanySignupRoute: AuthCompanySignupRoute,
+  AuthConfirmRoute: AuthConfirmRoute,
   AuthForgotPasswordRoute: AuthForgotPasswordRoute,
   AuthLoginRoute: AuthLoginRoute,
   AuthOtpRoute: AuthOtpRoute,
@@ -338,6 +441,8 @@ const rootRouteChildren: RootRouteChildren = {
   CompanyRoute: CompanyRoute,
   PortalsRoute: PortalsRoute,
   SitemapDotxmlRoute: SitemapDotxmlRoute,
+  CompanyRolesRoleIdRoute: CompanyRolesRoleIdRoute,
+  CompanyRolesIndexRoute: CompanyRolesIndexRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

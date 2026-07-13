@@ -4,6 +4,7 @@ import {
   Link,
   createRootRouteWithContext,
   useRouter,
+  useNavigate,
   HeadContent,
   Scripts,
 } from "@tanstack/react-router";
@@ -131,8 +132,35 @@ function RootShell({ children }: { children: ReactNode }) {
   );
 }
 
+/**
+ * Supabase redirects email confirmation to the Site URL (e.g. http://localhost:8080/)
+ * with the auth result in the URL hash:
+ *   #access_token=...  — success
+ *   #error=...         — failure (expired link, etc.)
+ *
+ * We detect this on every mount and forward to /auth/confirm so our handler
+ * can parse the token or show the correct error message.
+ */
+function useSupabaseHashRedirect() {
+  const navigate = useNavigate();
+  useEffect(() => {
+    const hash = window.location.hash;
+    if (
+      hash &&
+      (hash.includes("access_token=") ||
+        hash.includes("error=") ||
+        hash.includes("error_code="))
+    ) {
+      // Preserve the full hash so /auth/confirm can parse it
+      navigate({ to: "/auth/confirm", hash: hash.replace(/^#/, "") });
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+}
+
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
+  useSupabaseHashRedirect();
 
   return (
     <QueryClientProvider client={queryClient}>

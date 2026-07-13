@@ -58,8 +58,12 @@ export async function request<T>(
 
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
-    const message = typeof body.detail === "string" ? body.detail : (body.message ?? res.statusText);
+    const message =
+      typeof body.detail === "string" ? body.detail : (body.message ?? res.statusText);
     throw new ApiClientError(message, res.status, body.code);
+  }
+  if (res.status === 204) {
+    return undefined as T;
   }
   return res.json() as Promise<T>;
 }
