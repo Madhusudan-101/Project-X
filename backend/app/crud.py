@@ -5,6 +5,7 @@ on the auth_client don't taint the DB client's auth context / RLS.
 """
 
 from typing import Dict, Any, List, Optional
+from uuid import uuid4
 from postgrest.exceptions import APIError
 from .deps import db_client
 
@@ -158,4 +159,19 @@ def delete_role(role_id: str, company_id: str) -> bool:
         .execute()
     )
     return bool(res.data)
+
+
+JD_STORAGE_BUCKET = "job-descriptions"
+
+
+def upload_job_description(company_id: str, filename: str, file_bytes: bytes) -> str:
+    """Upload a JD PDF to the job-descriptions bucket, scoped under the
+    company's own folder. Returns the storage object path."""
+    path = f"{company_id}/{uuid4()}-{filename}"
+    db_client.storage.from_(JD_STORAGE_BUCKET).upload(
+        path,
+        file_bytes,
+        file_options={"content-type": "application/pdf"},
+    )
+    return path
 

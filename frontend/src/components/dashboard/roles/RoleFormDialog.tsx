@@ -1,14 +1,13 @@
-import { useEffect, useRef, useState, type KeyboardEvent } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { toast } from "sonner";
-import { Loader2, Plus, X } from "lucide-react";
+import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Badge } from "@/components/ui/badge";
 import {
   Dialog,
   DialogContent,
@@ -24,10 +23,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { EXPERIENCE_LEVELS } from "@/types/role";
-import type { Role } from "@/types/role";
+import { EXPERIENCE_LEVELS, ROLE_TYPES } from "@/types/role";
+import type { JdExtractionResult, Role } from "@/types/role";
 import { rolesService } from "@/services/api/roles";
 import { ApiClientError } from "@/services/api/client";
+import { TagListInput, type TagListInputHandle } from "./TagListInput";
+import { JobDescriptionUploadPanel } from "./JobDescriptionUploadPanel";
 
 // ── Validation ─────────────────────────────────────────────────────────
 
@@ -35,6 +36,7 @@ const schema = z.object({
   title: z.string().trim().min(3, "Title must be at least 3 characters").max(150),
   description: z.string().trim().min(20, "Description must be at least 20 characters").max(5000),
   experienceLevel: z.string().min(1, "Select an experience level"),
+  roleType: z.string().optional(),
   deadline: z.string().min(1, "Select a deadline"),
   minimumEmployabilityScore: z.coerce
     .number()
@@ -43,6 +45,15 @@ const schema = z.object({
 });
 
 type FormValues = z.infer<typeof schema>;
+
+const BLANK_VALUES: FormValues = {
+  title: "",
+  description: "",
+  experienceLevel: "",
+  roleType: "",
+  deadline: "",
+  minimumEmployabilityScore: 0,
+};
 
 // ── Component ──────────────────────────────────────────────────────────
 
@@ -57,22 +68,17 @@ interface RoleFormDialogProps {
 export function RoleFormDialog({ open, onOpenChange, mode, role, onSuccess }: RoleFormDialogProps) {
   const [submitting, setSubmitting] = useState(false);
   const [skills, setSkills] = useState<string[]>([]);
-  const [skillInput, setSkillInput] = useState("");
   const [skillsError, setSkillsError] = useState("");
-  const skillInputRef = useRef<HTMLInputElement>(null);
+  const [preferredQualifications, setPreferredQualifications] = useState<string[]>([]);
+  const [jobDescriptionPath, setJobDescriptionPath] = useState<string | undefined>(undefined);
+  const skillsInputRef = useRef<TagListInputHandle>(null);
 
   const form = useForm<FormValues>({
     resolver: zodResolver(schema),
-    defaultValues: {
-      title: "",
-      description: "",
-      experienceLevel: "",
-      deadline: "",
-      minimumEmployabilityScore: 0,
-    },
+    defaultValues: BLANK_VALUES,
   });
 
-  // Reset form + skills whenever the dialog opens (create → blank, edit → hydrated)
+  // Reset form + tag lists whenever the dialog opens (create → blank, edit → hydrated)
   useEffect(() => {
     if (!open) return;
     if (mode === "edit" && role) {
@@ -80,55 +86,40 @@ export function RoleFormDialog({ open, onOpenChange, mode, role, onSuccess }: Ro
         title: role.title,
         description: role.description,
         experienceLevel: role.experienceLevel,
+        roleType: role.roleType ?? "",
         deadline: role.deadline,
         minimumEmployabilityScore: role.minimumEmployabilityScore,
       });
       setSkills(role.requiredSkills);
+      setPreferredQualifications(role.preferredQualifications);
+      setJobDescriptionPath(role.jobDescriptionPath ?? undefined);
     } else {
-      form.reset({
-        title: "",
-        description: "",
-        experienceLevel: "",
-        deadline: "",
-        minimumEmployabilityScore: 0,
-      });
+      form.reset(BLANK_VALUES);
       setSkills([]);
+      setPreferredQualifications([]);
+      setJobDescriptionPath(undefined);
     }
-    setSkillInput("");
     setSkillsError("");
   }, [open, mode, role, form]);
 
-  // ── Skill tag helpers ─────────────────────────────────────────────
+  // ── AI extraction → pre-fill the form for review ─────────────────────
 
-  const addSkill = () => {
-    const trimmed = skillInput.trim();
-    if (!trimmed) return;
-    if (skills.includes(trimmed)) {
-      setSkillInput("");
-      return;
+  const handleExtracted = (result: JdExtractionResult) => {
+    if (result.title) form.setValue("title", result.title, { shouldValidate: true });
+    if (result.description)
+      form.setValue("description", result.description, { shouldValidate: true });
+    if (result.experienceLevel) {
+      form.setValue("experienceLevel", result.experienceLevel, { shouldValidate: true });
     }
-    if (skills.length >= 30) {
-      setSkillsError("Maximum 30 skills allowed");
-      return;
+    if (result.roleType) form.setValue("roleType", result.roleType, { shouldValidate: true });
+    if (result.requiredSkills.length > 0) {
+      setSkills(result.requiredSkills);
+      setSkillsError("");
     }
-    setSkills((prev) => [...prev, trimmed]);
-    setSkillInput("");
-    setSkillsError("");
-  };
-
-  const removeSkill = (skill: string) => {
-    setSkills((prev) => prev.filter((s) => s !== skill));
-    setSkillsError("");
-  };
-
-  const handleSkillKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === "Enter") {
-      e.preventDefault();
-      addSkill();
+    if (result.preferredQualifications.length > 0) {
+      setPreferredQualifications(result.preferredQualifications);
     }
-    if (e.key === "Backspace" && skillInput === "" && skills.length > 0) {
-      setSkills((prev) => prev.slice(0, -1));
-    }
+    setJobDescriptionPath(result.storagePath);
   };
 
   // ── Submit ─────────────────────────────────────────────────────────
@@ -136,7 +127,7 @@ export function RoleFormDialog({ open, onOpenChange, mode, role, onSuccess }: Ro
   const onSubmit = async (values: FormValues) => {
     if (skills.length === 0) {
       setSkillsError("Add at least one required skill");
-      skillInputRef.current?.focus();
+      skillsInputRef.current?.focus();
       return;
     }
 
@@ -147,8 +138,11 @@ export function RoleFormDialog({ open, onOpenChange, mode, role, onSuccess }: Ro
         description: values.description,
         requiredSkills: skills,
         experienceLevel: values.experienceLevel,
+        ...(values.roleType && { roleType: values.roleType }),
+        preferredQualifications,
         deadline: values.deadline,
         minimumEmployabilityScore: values.minimumEmployabilityScore,
+        ...(jobDescriptionPath && { jobDescriptionPath }),
       };
 
       const saved =
@@ -185,6 +179,10 @@ export function RoleFormDialog({ open, onOpenChange, mode, role, onSuccess }: Ro
         </DialogHeader>
 
         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4" noValidate>
+          {mode === "create" && (
+            <JobDescriptionUploadPanel onExtracted={handleExtracted} disabled={submitting} />
+          )}
+
           {/* Title */}
           <div className="space-y-1.5">
             <Label htmlFor="role-title">Title</Label>
@@ -221,63 +219,21 @@ export function RoleFormDialog({ open, onOpenChange, mode, role, onSuccess }: Ro
           </div>
 
           {/* Required skills */}
-          <div className="space-y-1.5">
-            <Label htmlFor="role-skill-input">
-              Required skills <span className="text-muted-foreground">(at least one)</span>
-            </Label>
-            {skills.length > 0 && (
-              <div className="flex flex-wrap gap-1.5" role="list" aria-label="Required skills">
-                {skills.map((s) => (
-                  <Badge
-                    key={s}
-                    variant="outline"
-                    role="listitem"
-                    className="gap-1 border-primary/30 bg-primary/5 pr-1 text-primary"
-                  >
-                    {s}
-                    <button
-                      type="button"
-                      onClick={() => removeSkill(s)}
-                      aria-label={`Remove ${s}`}
-                      className="ml-1 rounded-full p-0.5 hover:bg-primary/20"
-                    >
-                      <X className="h-2.5 w-2.5" />
-                    </button>
-                  </Badge>
-                ))}
-              </div>
-            )}
-            <div className="flex gap-2">
-              <Input
-                id="role-skill-input"
-                ref={skillInputRef}
-                value={skillInput}
-                onChange={(e) => setSkillInput(e.target.value)}
-                onKeyDown={handleSkillKeyDown}
-                placeholder='e.g. "React" then press Enter'
-                aria-invalid={!!skillsError}
-                aria-describedby={skillsError ? "skills-error" : undefined}
-                autoComplete="off"
-              />
-              <Button
-                type="button"
-                variant="outline"
-                size="icon"
-                onClick={addSkill}
-                aria-label="Add skill"
-                className="shrink-0"
-              >
-                <Plus className="h-4 w-4" />
-              </Button>
-            </div>
-            {skillsError && (
-              <p id="skills-error" role="alert" className="text-xs text-destructive">
-                {skillsError}
-              </p>
-            )}
-          </div>
+          <TagListInput
+            ref={skillsInputRef}
+            id="role-skill-input"
+            label="Required skills"
+            hint="(at least one)"
+            values={skills}
+            onChange={(next) => {
+              setSkills(next);
+              setSkillsError("");
+            }}
+            placeholder='e.g. "React" then press Enter'
+            error={skillsError}
+          />
 
-          {/* Experience level + Deadline */}
+          {/* Experience level + Role type */}
           <div className="grid gap-3 sm:grid-cols-2">
             <div className="space-y-1.5">
               <Label htmlFor="role-experience">Experience level</Label>
@@ -308,21 +264,53 @@ export function RoleFormDialog({ open, onOpenChange, mode, role, onSuccess }: Ro
             </div>
 
             <div className="space-y-1.5">
-              <Label htmlFor="role-deadline">Application deadline</Label>
-              <Input
-                id="role-deadline"
-                type="date"
-                min={todayIso}
-                aria-required="true"
-                aria-invalid={!!form.formState.errors.deadline}
-                {...form.register("deadline")}
-              />
-              {form.formState.errors.deadline && (
-                <p role="alert" className="text-xs text-destructive">
-                  {form.formState.errors.deadline.message}
-                </p>
-              )}
+              <Label htmlFor="role-type">
+                Role type <span className="text-muted-foreground">(optional)</span>
+              </Label>
+              <Select
+                value={form.watch("roleType") || undefined}
+                onValueChange={(v) => form.setValue("roleType", v, { shouldValidate: true })}
+              >
+                <SelectTrigger id="role-type">
+                  <SelectValue placeholder="Select type" />
+                </SelectTrigger>
+                <SelectContent>
+                  {ROLE_TYPES.map((t) => (
+                    <SelectItem key={t} value={t}>
+                      {t}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
+          </div>
+
+          {/* Preferred qualifications */}
+          <TagListInput
+            id="role-preferred-qualifications-input"
+            label="Preferred qualifications"
+            hint="(optional)"
+            values={preferredQualifications}
+            onChange={setPreferredQualifications}
+            placeholder='e.g. "AWS certification" then press Enter'
+          />
+
+          {/* Deadline */}
+          <div className="space-y-1.5">
+            <Label htmlFor="role-deadline">Application deadline</Label>
+            <Input
+              id="role-deadline"
+              type="date"
+              min={todayIso}
+              aria-required="true"
+              aria-invalid={!!form.formState.errors.deadline}
+              {...form.register("deadline")}
+            />
+            {form.formState.errors.deadline && (
+              <p role="alert" className="text-xs text-destructive">
+                {form.formState.errors.deadline.message}
+              </p>
+            )}
           </div>
 
           {/* Minimum employability score */}

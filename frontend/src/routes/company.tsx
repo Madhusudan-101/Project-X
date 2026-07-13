@@ -327,6 +327,33 @@ function OverviewTab({ company, loading }: OverviewTabProps) {
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           {MODULES.map((m, i) => {
             const Icon = m.icon;
+            const cardContent = (
+              <Card
+                className={`group p-4 transition-all hover:-translate-y-0.5 hover:border-primary/30 ${
+                  m.to ? "cursor-pointer" : "cursor-not-allowed opacity-80"
+                }`}
+              >
+                <div className="flex items-start justify-between">
+                  <div className="grid h-9 w-9 place-items-center rounded-lg bg-primary/10 text-primary">
+                    <Icon className="h-4 w-4" aria-hidden="true" />
+                  </div>
+                  <Badge
+                    variant="outline"
+                    className={
+                      m.status === "Live"
+                        ? "border-success/30 bg-success/10 text-success"
+                        : m.status === "Beta"
+                          ? "border-secondary/30 bg-secondary/10 text-secondary"
+                          : "border-border text-muted-foreground"
+                    }
+                  >
+                    {m.status}
+                  </Badge>
+                </div>
+                <div className="mt-3 font-display text-sm font-semibold">{m.label}</div>
+                <p className="mt-0.5 text-xs text-muted-foreground">{m.desc}</p>
+              </Card>
+            );
             return (
               <motion.div
                 key={m.label}
@@ -334,27 +361,13 @@ function OverviewTab({ company, loading }: OverviewTabProps) {
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.25, delay: 0.05 * i }}
               >
-                <Card className="group cursor-not-allowed p-4 opacity-80 transition-all hover:-translate-y-0.5 hover:border-primary/30">
-                  <div className="flex items-start justify-between">
-                    <div className="grid h-9 w-9 place-items-center rounded-lg bg-primary/10 text-primary">
-                      <Icon className="h-4 w-4" aria-hidden="true" />
-                    </div>
-                    <Badge
-                      variant="outline"
-                      className={
-                        m.status === "Live"
-                          ? "border-success/30 bg-success/10 text-success"
-                          : m.status === "Beta"
-                            ? "border-secondary/30 bg-secondary/10 text-secondary"
-                            : "border-border text-muted-foreground"
-                      }
-                    >
-                      {m.status}
-                    </Badge>
-                  </div>
-                  <div className="mt-3 font-display text-sm font-semibold">{m.label}</div>
-                  <p className="mt-0.5 text-xs text-muted-foreground">{m.desc}</p>
-                </Card>
+                {m.to ? (
+                  <Link to={m.to} className="block">
+                    {cardContent}
+                  </Link>
+                ) : (
+                  cardContent
+                )}
               </motion.div>
             );
           })}
@@ -488,8 +501,15 @@ const MODULES: Array<{
   desc: string;
   icon: typeof Briefcase;
   status: "Live" | "Beta" | "Soon";
+  to?: string;
 }> = [
-  { label: "Jobs", desc: "Publish and manage job listings.", icon: Briefcase, status: "Soon" },
+  {
+    label: "Jobs",
+    desc: "Publish and manage job listings.",
+    icon: Briefcase,
+    status: "Live",
+    to: "/company-roles",
+  },
   { label: "Applicants", desc: "AI-scored pipeline view.", icon: Users, status: "Soon" },
   { label: "AI Interview Studio", desc: "Structured AI interviews.", icon: Wand2, status: "Beta" },
   { label: "OA Builder", desc: "Coding & MCQ assessments.", icon: ClipboardList, status: "Soon" },

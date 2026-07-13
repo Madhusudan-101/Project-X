@@ -2,7 +2,7 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { ArrowLeft, Briefcase, Calendar, GaugeCircle, Layers } from "lucide-react";
+import { ArrowLeft, Briefcase, Calendar, GaugeCircle, Layers, Tag } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -137,12 +137,19 @@ function RoleDetailPage() {
             </div>
 
             {/* Key facts */}
-            <Card className="grid gap-4 p-5 sm:grid-cols-3">
+            <Card className="grid gap-4 p-5 sm:grid-cols-2 lg:grid-cols-4">
               <div className="flex items-start gap-2.5">
                 <Layers className="mt-0.5 h-4 w-4 shrink-0 text-primary" aria-hidden="true" />
                 <div>
                   <p className="text-xs text-muted-foreground">Experience level</p>
                   <p className="text-sm font-medium">{role.experienceLevel}</p>
+                </div>
+              </div>
+              <div className="flex items-start gap-2.5">
+                <Tag className="mt-0.5 h-4 w-4 shrink-0 text-primary" aria-hidden="true" />
+                <div>
+                  <p className="text-xs text-muted-foreground">Role type</p>
+                  <p className="text-sm font-medium">{role.roleType ?? "Not specified"}</p>
                 </div>
               </div>
               <div className="flex items-start gap-2.5">
@@ -192,6 +199,31 @@ function RoleDetailPage() {
                 ))}
               </div>
             </Card>
+
+            {/* Preferred qualifications */}
+            {role.preferredQualifications.length > 0 && (
+              <Card className="p-5">
+                <h2 className="font-display text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+                  Preferred qualifications
+                </h2>
+                <div
+                  className="mt-3 flex flex-wrap gap-1.5"
+                  role="list"
+                  aria-label="Preferred qualifications"
+                >
+                  {role.preferredQualifications.map((q) => (
+                    <Badge
+                      key={q}
+                      variant="outline"
+                      role="listitem"
+                      className="border-border text-muted-foreground"
+                    >
+                      {q}
+                    </Badge>
+                  ))}
+                </div>
+              </Card>
+            )}
           </div>
         )}
       </main>

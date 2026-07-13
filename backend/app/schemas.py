@@ -179,14 +179,32 @@ VALID_EXPERIENCE_LEVELS: List[str] = [
 
 VALID_ROLE_STATUSES: List[str] = ["draft", "published", "archived"]
 
+VALID_ROLE_TYPES: List[str] = [
+    "Full-time",
+    "Part-time",
+    "Internship",
+    "Contract",
+    "Freelance",
+]
+
+
+def _clean_string_list(values: List[str], *, field_label: str, max_items: int) -> List[str]:
+    cleaned = [v.strip() for v in values if v.strip()]
+    if len(cleaned) > max_items:
+        raise ValueError(f"Maximum {max_items} {field_label} allowed.")
+    return cleaned
+
 
 class RoleCreateIn(BaseModel):
     title: str = Field(min_length=3, max_length=150)
     description: str = Field(min_length=20, max_length=5000)
     required_skills: List[str] = Field(default_factory=list)
     experience_level: str
+    role_type: Optional[str] = None
+    preferred_qualifications: List[str] = Field(default_factory=list)
     deadline: date
     minimum_employability_score: int = Field(default=0, ge=0, le=100)
+    job_description_path: Optional[str] = Field(None, max_length=500)
 
     @model_validator(mode="after")
     def validate_fields(self) -> "RoleCreateIn":
@@ -194,12 +212,15 @@ class RoleCreateIn(BaseModel):
             raise ValueError(
                 f"Invalid experience level. Must be one of: {', '.join(VALID_EXPERIENCE_LEVELS)}"
             )
-        cleaned = [s.strip() for s in self.required_skills if s.strip()]
+        if self.role_type is not None and self.role_type not in VALID_ROLE_TYPES:
+            raise ValueError(f"Invalid role type. Must be one of: {', '.join(VALID_ROLE_TYPES)}")
+        cleaned = _clean_string_list(self.required_skills, field_label="required skills", max_items=30)
         if not cleaned:
             raise ValueError("At least one required skill is needed.")
-        if len(cleaned) > 30:
-            raise ValueError("Maximum 30 required skills allowed.")
         self.required_skills = cleaned
+        self.preferred_qualifications = _clean_string_list(
+            self.preferred_qualifications, field_label="preferred qualifications", max_items=30
+        )
         if self.deadline < date.today():
             raise ValueError("Deadline must be today or a future date.")
         return self
@@ -210,8 +231,11 @@ class RoleUpdateIn(BaseModel):
     description: Optional[str] = Field(None, min_length=20, max_length=5000)
     required_skills: Optional[List[str]] = None
     experience_level: Optional[str] = None
+    role_type: Optional[str] = None
+    preferred_qualifications: Optional[List[str]] = None
     deadline: Optional[date] = None
     minimum_employability_score: Optional[int] = Field(None, ge=0, le=100)
+    job_description_path: Optional[str] = Field(None, max_length=500)
 
     @model_validator(mode="after")
     def validate_optional_fields(self) -> "RoleUpdateIn":
@@ -219,13 +243,17 @@ class RoleUpdateIn(BaseModel):
             raise ValueError(
                 f"Invalid experience level. Must be one of: {', '.join(VALID_EXPERIENCE_LEVELS)}"
             )
+        if self.role_type is not None and self.role_type not in VALID_ROLE_TYPES:
+            raise ValueError(f"Invalid role type. Must be one of: {', '.join(VALID_ROLE_TYPES)}")
         if self.required_skills is not None:
-            cleaned = [s.strip() for s in self.required_skills if s.strip()]
+            cleaned = _clean_string_list(self.required_skills, field_label="required skills", max_items=30)
             if not cleaned:
                 raise ValueError("At least one required skill is needed.")
-            if len(cleaned) > 30:
-                raise ValueError("Maximum 30 required skills allowed.")
             self.required_skills = cleaned
+        if self.preferred_qualifications is not None:
+            self.preferred_qualifications = _clean_string_list(
+                self.preferred_qualifications, field_label="preferred qualifications", max_items=30
+            )
         return self
 
 
@@ -236,8 +264,28 @@ class RoleOut(BaseModel):
     description: str
     required_skills: List[str]
     experience_level: str
+    role_type: Optional[str] = None
+    preferred_qualifications: List[str] = Field(default_factory=list)
     deadline: str
     minimum_employability_score: int
     status: str
+    job_description_path: Optional[str] = None
     created_at: str
     updated_at: str
+
+
+# ── Job description extraction schema ──────────────────────────────────
+
+
+class JobDescriptionExtractionOut(BaseModel):
+    """Response for POST /company/roles/extract-jd. Not a persisted role —
+    the frontend uses this to pre-fill the role creation form."""
+
+    storage_path: str
+    title: str
+    description: str
+    required_skills: List[str]
+    experience_level: str
+    role_type: str
+    preferred_qualifications: List[str]
+    warnings: List[str] = Field(default_factory=list)

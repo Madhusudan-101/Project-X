@@ -45,14 +45,23 @@ export async function request<T>(
     authHeaders["Authorization"] = `Bearer ${token}`;
   }
 
+  // FormData bodies (file uploads) must NOT be JSON-stringified, and the
+  // browser needs to set its own multipart/form-data boundary — so we
+  // omit Content-Type entirely and let fetch handle it.
+  const isFormData = options.body instanceof FormData;
+
   const res = await fetch(`${BASE_URL}${path}`, {
     method: options.method ?? "GET",
     headers: {
-      "Content-Type": "application/json",
+      ...(isFormData ? {} : { "Content-Type": "application/json" }),
       ...authHeaders,
       ...options.headers,
     },
-    body: options.body ? JSON.stringify(options.body) : undefined,
+    body: isFormData
+      ? (options.body as FormData)
+      : options.body
+        ? JSON.stringify(options.body)
+        : undefined,
     signal: options.signal,
   });
 

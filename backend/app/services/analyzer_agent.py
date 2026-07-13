@@ -4,7 +4,7 @@ Gemini Analyzer Agent — analyzer_agent.py
 Sends the formatted developer metrics to Google Gemini and returns a
 strict, structured JSON employability & authenticity analysis.
 
-Model  : gemini-1.5-flash  (fast, cheap, structured-output capable)
+Model  : gemini-3.1-flash-lite  (fast, cheap, structured-output capable)
 Output : Enforced via ``response_mime_type="application/json"`` +
          ``response_schema`` so the model *never* returns conversational text.
 """
@@ -170,7 +170,7 @@ async def run_analysis(formatted: FormattedMetrics) -> AnalysisResult:
     _configure_genai()
 
     model = genai.GenerativeModel(
-        model_name="gemini-1.5-flash",
+        model_name="gemini-3.1-flash-lite",
         system_instruction=_SYSTEM_INSTRUCTION,
     )
 

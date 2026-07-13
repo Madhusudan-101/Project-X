@@ -5,3 +5,5 @@ supabase
 pydantic
 httpx
 google-generativeai
+pypdf
+python-multipart

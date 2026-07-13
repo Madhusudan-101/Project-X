@@ -10,10 +10,17 @@
  *   DELETE /company/roles/{id}           — delete a role
  *   POST   /company/roles/{id}/publish   — publish a role
  *   POST   /company/roles/{id}/archive   — archive a role
+ *   POST   /company/roles/extract-jd     — upload a JD PDF, get AI-extracted fields
  */
 
 import { request } from "./client";
-import type { Role, RoleCreatePayload, RoleStatus, RoleUpdatePayload } from "@/types/role";
+import type {
+  JdExtractionResult,
+  Role,
+  RoleCreatePayload,
+  RoleStatus,
+  RoleUpdatePayload,
+} from "@/types/role";
 
 // ── Shape helpers (snake_case DB → camelCase TS) ───────────────────────
 
@@ -25,11 +32,27 @@ function normalizeRole(raw: Record<string, unknown>): Role {
     description: raw.description as string,
     requiredSkills: (raw.required_skills as string[]) ?? [],
     experienceLevel: raw.experience_level as string,
+    roleType: (raw.role_type as string | null) ?? null,
+    preferredQualifications: (raw.preferred_qualifications as string[]) ?? [],
     deadline: raw.deadline as string,
     minimumEmployabilityScore: Number(raw.minimum_employability_score ?? 0),
     status: raw.status as RoleStatus,
+    jobDescriptionPath: (raw.job_description_path as string | null) ?? null,
     createdAt: raw.created_at as string,
     updatedAt: raw.updated_at as string,
+  };
+}
+
+function normalizeJdExtraction(raw: Record<string, unknown>): JdExtractionResult {
+  return {
+    storagePath: raw.storage_path as string,
+    title: (raw.title as string) ?? "",
+    description: (raw.description as string) ?? "",
+    requiredSkills: (raw.required_skills as string[]) ?? [],
+    experienceLevel: (raw.experience_level as string) ?? "",
+    roleType: (raw.role_type as string) ?? "",
+    preferredQualifications: (raw.preferred_qualifications as string[]) ?? [],
+    warnings: (raw.warnings as string[]) ?? [],
   };
 }
 
@@ -45,8 +68,15 @@ export const rolesService = {
         description: payload.description,
         required_skills: payload.requiredSkills,
         experience_level: payload.experienceLevel,
+        ...(payload.roleType !== undefined && { role_type: payload.roleType }),
+        ...(payload.preferredQualifications !== undefined && {
+          preferred_qualifications: payload.preferredQualifications,
+        }),
         deadline: payload.deadline,
         minimum_employability_score: payload.minimumEmployabilityScore,
+        ...(payload.jobDescriptionPath !== undefined && {
+          job_description_path: payload.jobDescriptionPath,
+        }),
       },
     }).then(normalizeRole),
 
@@ -69,9 +99,16 @@ export const rolesService = {
         ...(payload.description !== undefined && { description: payload.description }),
         ...(payload.requiredSkills !== undefined && { required_skills: payload.requiredSkills }),
         ...(payload.experienceLevel !== undefined && { experience_level: payload.experienceLevel }),
+        ...(payload.roleType !== undefined && { role_type: payload.roleType }),
+        ...(payload.preferredQualifications !== undefined && {
+          preferred_qualifications: payload.preferredQualifications,
+        }),
         ...(payload.deadline !== undefined && { deadline: payload.deadline }),
         ...(payload.minimumEmployabilityScore !== undefined && {
           minimum_employability_score: payload.minimumEmployabilityScore,
+        }),
+        ...(payload.jobDescriptionPath !== undefined && {
+          job_description_path: payload.jobDescriptionPath,
         }),
       },
     }).then(normalizeRole),
@@ -91,4 +128,18 @@ export const rolesService = {
     request<Record<string, unknown>>(`/company/roles/${roleId}/archive`, {
       method: "POST",
     }).then(normalizeRole),
+
+  /**
+   * Upload a job-description PDF and get back AI-extracted hiring data
+   * (skills, experience level, role type, preferred qualifications) to
+   * pre-fill the role creation form. Does not create a role.
+   */
+  extractJobDescription: (file: File): Promise<JdExtractionResult> => {
+    const formData = new FormData();
+    formData.append("file", file);
+    return request<Record<string, unknown>>("/company/roles/extract-jd", {
+      method: "POST",
+      body: formData,
+    }).then(normalizeJdExtraction);
+  },
 };

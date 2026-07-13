@@ -13,11 +13,18 @@ import logging
 from datetime import date
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from postgrest.exceptions import APIError
+from storage3.exceptions import StorageApiError
 
 from ..deps import require_company_role
-from ..schemas import RoleCreateIn, RoleOut, RoleUpdateIn, VALID_ROLE_STATUSES
+from ..schemas import (
+    JobDescriptionExtractionOut,
+    RoleCreateIn,
+    RoleOut,
+    RoleUpdateIn,
+    VALID_ROLE_STATUSES,
+)
 from ..crud import (
     create_role,
     delete_role,
@@ -25,10 +32,15 @@ from ..crud import (
     get_role_by_id,
     list_roles_by_company,
     update_role,
+    upload_job_description,
 )
+from ..services.pdf_service import extract_text_from_pdf
+from ..services.jd_extractor_agent import run_jd_extraction
 
 log = logging.getLogger(__name__)
 router = APIRouter(prefix="/company/roles", tags=["roles"])
+
+MAX_JD_FILE_SIZE = 5 * 1024 * 1024  # 5 MB, matches the storage bucket limit
 
 
 # ── Helpers ────────────────────────────────────────────────────────────
@@ -42,9 +54,12 @@ def map_role(row: dict) -> dict:
         "description": row["description"],
         "required_skills": row.get("required_skills") or [],
         "experience_level": row["experience_level"],
+        "role_type": row.get("role_type"),
+        "preferred_qualifications": row.get("preferred_qualifications") or [],
         "deadline": str(row["deadline"]),
         "minimum_employability_score": int(row.get("minimum_employability_score", 0)),
         "status": row["status"],
+        "job_description_path": row.get("job_description_path"),
         "created_at": str(row.get("created_at", "")),
         "updated_at": str(row.get("updated_at", "")),
     }
@@ -83,8 +98,11 @@ def create_role_route(
             "description": payload.description,
             "required_skills": payload.required_skills,
             "experience_level": payload.experience_level,
+            "role_type": payload.role_type,
+            "preferred_qualifications": payload.preferred_qualifications,
             "deadline": payload.deadline.isoformat(),
             "minimum_employability_score": payload.minimum_employability_score,
+            "job_description_path": payload.job_description_path,
             "status": "draft",
         })
     except APIError as e:
@@ -156,10 +174,16 @@ def update_role_route(
         update_data["required_skills"] = payload.required_skills
     if payload.experience_level is not None:
         update_data["experience_level"] = payload.experience_level
+    if payload.role_type is not None:
+        update_data["role_type"] = payload.role_type
+    if payload.preferred_qualifications is not None:
+        update_data["preferred_qualifications"] = payload.preferred_qualifications
     if payload.deadline is not None:
         update_data["deadline"] = payload.deadline.isoformat()
     if payload.minimum_employability_score is not None:
         update_data["minimum_employability_score"] = payload.minimum_employability_score
+    if payload.job_description_path is not None:
+        update_data["job_description_path"] = payload.job_description_path
 
     try:
         row = update_role(role_id, company["id"], update_data)
@@ -230,3 +254,73 @@ def archive_role_route(
     if not row:
         raise HTTPException(status_code=404, detail="Role not found.")
     return map_role(row)
+
+
+# ── POST /company/roles/extract-jd ───────────────────────────────────────
+
+@router.post("/extract-jd", response_model=JobDescriptionExtractionOut)
+async def extract_job_description_route(
+    file: UploadFile = File(...),
+    current_user: dict = Depends(require_company_role),
+) -> dict:
+    """
+    Upload a job-description PDF, extract its text, and run it through
+    Gemini to get structured hiring data (skills, experience level, role
+    type, preferred qualifications). Does NOT create a role — the
+    frontend uses this to pre-fill the role creation form for review.
+    """
+    company = _get_owned_company(current_user)
+
+    is_pdf = (file.content_type == "application/pdf") or (
+        (file.filename or "").lower().endswith(".pdf")
+    )
+    if not is_pdf:
+        raise HTTPException(status_code=400, detail="Only PDF files are supported.")
+
+    file_bytes = await file.read()
+    if not file_bytes:
+        raise HTTPException(status_code=400, detail="The uploaded file is empty.")
+    if len(file_bytes) > MAX_JD_FILE_SIZE:
+        raise HTTPException(status_code=413, detail="File too large. Maximum size is 5 MB.")
+
+    warnings: List[str] = []
+
+    try:
+        storage_path = upload_job_description(company["id"], file.filename or "job-description.pdf", file_bytes)
+    except StorageApiError as e:
+        log.error("Storage upload failed for company %s: %s", company["id"], e)
+        raise HTTPException(status_code=502, detail=f"Failed to store the PDF: {e}")
+
+    try:
+        jd_text = extract_text_from_pdf(file_bytes)
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e))
+
+    try:
+        extraction = await run_jd_extraction(jd_text)
+    except RuntimeError as e:
+        # Missing GEMINI_API_KEY
+        raise HTTPException(status_code=503, detail=str(e))
+    except ValueError as e:
+        raise HTTPException(status_code=502, detail=f"Gemini returned unparseable output: {e}")
+    except Exception as e:
+        log.exception("Gemini JD extraction failed for company %s", company["id"])
+        raise HTTPException(status_code=500, detail=f"AI extraction failed: {e}")
+
+    if not extraction.required_skills:
+        warnings.append("Could not confidently extract required skills — please add them manually.")
+    if not extraction.experience_level:
+        warnings.append("Could not confidently determine experience level — please select one.")
+    if not extraction.role_type:
+        warnings.append("Could not confidently determine role type — please select one.")
+
+    return {
+        "storage_path": storage_path,
+        "title": extraction.title,
+        "description": extraction.description,
+        "required_skills": extraction.required_skills,
+        "experience_level": extraction.experience_level,
+        "role_type": extraction.role_type,
+        "preferred_qualifications": extraction.preferred_qualifications,
+        "warnings": warnings,
+    }
