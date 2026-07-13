@@ -1,3 +1,4 @@
+from datetime import date
 from pydantic import BaseModel, Field, model_validator
 from typing import Optional, List
 
@@ -164,3 +165,79 @@ class CompanyUpdateIn(BaseModel):
                 raise ValueError("At least one hiring domain is required.")
             self.hiring_domains = cleaned
         return self
+
+
+# ── Role (job posting) schemas ─────────────────────────────────────────
+
+VALID_EXPERIENCE_LEVELS: List[str] = [
+    "Entry-Level",
+    "Mid-Level",
+    "Senior",
+    "Lead",
+    "Executive",
+]
+
+VALID_ROLE_STATUSES: List[str] = ["draft", "published", "archived"]
+
+
+class RoleCreateIn(BaseModel):
+    title: str = Field(min_length=3, max_length=150)
+    description: str = Field(min_length=20, max_length=5000)
+    required_skills: List[str] = Field(default_factory=list)
+    experience_level: str
+    deadline: date
+    minimum_employability_score: int = Field(default=0, ge=0, le=100)
+
+    @model_validator(mode="after")
+    def validate_fields(self) -> "RoleCreateIn":
+        if self.experience_level not in VALID_EXPERIENCE_LEVELS:
+            raise ValueError(
+                f"Invalid experience level. Must be one of: {', '.join(VALID_EXPERIENCE_LEVELS)}"
+            )
+        cleaned = [s.strip() for s in self.required_skills if s.strip()]
+        if not cleaned:
+            raise ValueError("At least one required skill is needed.")
+        if len(cleaned) > 30:
+            raise ValueError("Maximum 30 required skills allowed.")
+        self.required_skills = cleaned
+        if self.deadline < date.today():
+            raise ValueError("Deadline must be today or a future date.")
+        return self
+
+
+class RoleUpdateIn(BaseModel):
+    title: Optional[str] = Field(None, min_length=3, max_length=150)
+    description: Optional[str] = Field(None, min_length=20, max_length=5000)
+    required_skills: Optional[List[str]] = None
+    experience_level: Optional[str] = None
+    deadline: Optional[date] = None
+    minimum_employability_score: Optional[int] = Field(None, ge=0, le=100)
+
+    @model_validator(mode="after")
+    def validate_optional_fields(self) -> "RoleUpdateIn":
+        if self.experience_level is not None and self.experience_level not in VALID_EXPERIENCE_LEVELS:
+            raise ValueError(
+                f"Invalid experience level. Must be one of: {', '.join(VALID_EXPERIENCE_LEVELS)}"
+            )
+        if self.required_skills is not None:
+            cleaned = [s.strip() for s in self.required_skills if s.strip()]
+            if not cleaned:
+                raise ValueError("At least one required skill is needed.")
+            if len(cleaned) > 30:
+                raise ValueError("Maximum 30 required skills allowed.")
+            self.required_skills = cleaned
+        return self
+
+
+class RoleOut(BaseModel):
+    id: str
+    company_id: str
+    title: str
+    description: str
+    required_skills: List[str]
+    experience_level: str
+    deadline: str
+    minimum_employability_score: int
+    status: str
+    created_at: str
+    updated_at: str

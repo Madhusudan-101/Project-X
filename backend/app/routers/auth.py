@@ -234,6 +234,20 @@ def reset_password(payload: ResetIn):
     return {"ok": True}
 
 
+# ── GET /auth/profile ──────────────────────────────────────────────────
+
+@router.get("/profile", response_model=UserOut)
+def get_profile_route(current_user: dict = Depends(get_current_user)):
+    """Return the authenticated user's profile. Self-heals a missing row
+    (e.g. right after email confirmation, before any profile write has landed)."""
+    profile = _ensure_profile(
+        current_user["id"],
+        email=current_user["email"],
+        role=current_user.get("role", "candidate"),
+    )
+    return map_profile(profile)
+
+
 # ── PATCH /auth/profile ───────────────────────────────────────────────
 
 @router.patch("/profile", response_model=UserOut)

@@ -17,6 +17,8 @@ import { Route as CandidateRouteImport } from './routes/candidate'
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as AdminRouteImport } from './routes/admin'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as CompanyRolesIndexRouteImport } from './routes/company-roles/index'
+import { Route as CompanyRolesRoleIdRouteImport } from './routes/company-roles/$roleId'
 import { Route as AuthSignupRouteImport } from './routes/auth.signup'
 import { Route as AuthResetPasswordRouteImport } from './routes/auth.reset-password'
 import { Route as AuthProfileSetupRouteImport } from './routes/auth.profile-setup'
@@ -65,6 +67,16 @@ const AdminRoute = AdminRouteImport.update({
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const CompanyRolesIndexRoute = CompanyRolesIndexRouteImport.update({
+  id: '/company-roles/',
+  path: '/company-roles/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const CompanyRolesRoleIdRoute = CompanyRolesRoleIdRouteImport.update({
+  id: '/company-roles/$roleId',
+  path: '/company-roles/$roleId',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AuthSignupRoute = AuthSignupRouteImport.update({
@@ -131,6 +143,8 @@ export interface FileRoutesByFullPath {
   '/auth/profile-setup': typeof AuthProfileSetupRoute
   '/auth/reset-password': typeof AuthResetPasswordRoute
   '/auth/signup': typeof AuthSignupRoute
+  '/company-roles/$roleId': typeof CompanyRolesRoleIdRoute
+  '/company-roles/': typeof CompanyRolesIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -150,6 +164,8 @@ export interface FileRoutesByTo {
   '/auth/profile-setup': typeof AuthProfileSetupRoute
   '/auth/reset-password': typeof AuthResetPasswordRoute
   '/auth/signup': typeof AuthSignupRoute
+  '/company-roles/$roleId': typeof CompanyRolesRoleIdRoute
+  '/company-roles': typeof CompanyRolesIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -170,6 +186,8 @@ export interface FileRoutesById {
   '/auth/profile-setup': typeof AuthProfileSetupRoute
   '/auth/reset-password': typeof AuthResetPasswordRoute
   '/auth/signup': typeof AuthSignupRoute
+  '/company-roles/$roleId': typeof CompanyRolesRoleIdRoute
+  '/company-roles/': typeof CompanyRolesIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -191,6 +209,8 @@ export interface FileRouteTypes {
     | '/auth/profile-setup'
     | '/auth/reset-password'
     | '/auth/signup'
+    | '/company-roles/$roleId'
+    | '/company-roles/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -210,6 +230,8 @@ export interface FileRouteTypes {
     | '/auth/profile-setup'
     | '/auth/reset-password'
     | '/auth/signup'
+    | '/company-roles/$roleId'
+    | '/company-roles'
   id:
     | '__root__'
     | '/'
@@ -229,6 +251,8 @@ export interface FileRouteTypes {
     | '/auth/profile-setup'
     | '/auth/reset-password'
     | '/auth/signup'
+    | '/company-roles/$roleId'
+    | '/company-roles/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -240,6 +264,8 @@ export interface RootRouteChildren {
   CompanyRoute: typeof CompanyRoute
   PortalsRoute: typeof PortalsRoute
   SitemapDotxmlRoute: typeof SitemapDotxmlRoute
+  CompanyRolesRoleIdRoute: typeof CompanyRolesRoleIdRoute
+  CompanyRolesIndexRoute: typeof CompanyRolesIndexRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -298,6 +324,20 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/company-roles/': {
+      id: '/company-roles/'
+      path: '/company-roles'
+      fullPath: '/company-roles/'
+      preLoaderRoute: typeof CompanyRolesIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/company-roles/$roleId': {
+      id: '/company-roles/$roleId'
+      path: '/company-roles/$roleId'
+      fullPath: '/company-roles/$roleId'
+      preLoaderRoute: typeof CompanyRolesRoleIdRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/auth/signup': {
@@ -401,6 +441,8 @@ const rootRouteChildren: RootRouteChildren = {
   CompanyRoute: CompanyRoute,
   PortalsRoute: PortalsRoute,
   SitemapDotxmlRoute: SitemapDotxmlRoute,
+  CompanyRolesRoleIdRoute: CompanyRolesRoleIdRoute,
+  CompanyRolesIndexRoute: CompanyRolesIndexRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

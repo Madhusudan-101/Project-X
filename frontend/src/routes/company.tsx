@@ -2,6 +2,7 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
+  ArrowRight,
   BarChart3,
   Bell,
   Briefcase,
@@ -29,7 +30,9 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useAuthStore } from "@/store/auth";
 import { useCompanyStore } from "@/store/company";
 import { companyService } from "@/services/api/company";
+import { rolesService } from "@/services/api/roles";
 import type { Company } from "@/types/company";
+import type { Role } from "@/types/role";
 
 // ── Route ──────────────────────────────────────────────────────────────
 
@@ -197,12 +200,7 @@ function CompanyPortal() {
                 <OverviewTab company={company ?? null} loading={companyLoading} />
               </TabsContent>
               <TabsContent value="jobs" className="mt-0">
-                <ComingSoonTab
-                  icon={Briefcase}
-                  title="Job Listings"
-                  body="Post new roles, clone existing ones, and manage your entire pipeline — all in one place."
-                  feature="Feature 2"
-                />
+                <JobsTabEntry />
               </TabsContent>
               <TabsContent value="applicants" className="mt-0">
                 <ComingSoonTab
@@ -376,6 +374,77 @@ function OverviewTab({ company, loading }: OverviewTabProps) {
         </div>
       </Card>
     </div>
+  );
+}
+
+// ── Jobs tab entry (Feature 2: Role Posting) ───────────────────────────
+
+function JobsTabEntry() {
+  const { data: roles, isLoading } = useQuery<Role[]>({
+    queryKey: ["company-roles"],
+    queryFn: () => rolesService.list(),
+    staleTime: 60 * 1000,
+  });
+
+  const counts = useMemo(() => {
+    const all = roles ?? [];
+    return {
+      total: all.length,
+      draft: all.filter((r) => r.status === "draft").length,
+      published: all.filter((r) => r.status === "published").length,
+      archived: all.filter((r) => r.status === "archived").length,
+    };
+  }, [roles]);
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.3 }}
+    >
+      <Card className="relative overflow-hidden p-6">
+        <div className="flex flex-col gap-6 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-start gap-4">
+            <div className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-gradient-brand text-primary-foreground shadow-glow">
+              <Briefcase className="h-6 w-6" aria-hidden="true" />
+            </div>
+            <div>
+              <h2 className="font-display text-lg font-semibold">Role Postings</h2>
+              <p className="mt-0.5 max-w-sm text-sm text-muted-foreground">
+                Create, publish, archive and manage every role you&apos;re hiring for.
+              </p>
+            </div>
+          </div>
+          <Link to="/company-roles">
+            <Button className="bg-gradient-brand text-primary-foreground shadow-soft">
+              Manage roles
+              <ArrowRight className="ml-2 h-4 w-4" />
+            </Button>
+          </Link>
+        </div>
+
+        <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
+          {[
+            { label: "Total", value: counts.total },
+            { label: "Draft", value: counts.draft },
+            { label: "Published", value: counts.published },
+            { label: "Archived", value: counts.archived },
+          ].map((stat) => (
+            <div
+              key={stat.label}
+              className="rounded-lg border border-border/60 bg-surface/60 p-3 text-center"
+            >
+              {isLoading ? (
+                <Skeleton className="mx-auto h-6 w-8" />
+              ) : (
+                <div className="font-display text-xl font-bold">{stat.value}</div>
+              )}
+              <div className="mt-0.5 text-xs text-muted-foreground">{stat.label}</div>
+            </div>
+          ))}
+        </div>
+      </Card>
+    </motion.div>
   );
 }
 

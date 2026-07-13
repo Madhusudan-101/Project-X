@@ -10,7 +10,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException
 from postgrest.exceptions import APIError
 
-from ..deps import get_current_user
+from ..deps import require_company_role
 from ..schemas import CompanyOut, CompanyUpdateIn
 from ..crud import get_company_by_owner_id, update_company
 
@@ -36,21 +36,11 @@ def map_company(row: dict) -> dict:
     }
 
 
-def _require_company_role(current_user: dict = Depends(get_current_user)) -> dict:
-    """Dependency: raises 403 if the authenticated user is not a company HR."""
-    if current_user.get("role") != "company":
-        raise HTTPException(
-            status_code=403,
-            detail="This endpoint is restricted to Company accounts.",
-        )
-    return current_user
-
-
 # ── GET /company/me ────────────────────────────────────────────────────
 
 @router.get("/me", response_model=CompanyOut)
 def get_my_company(
-    current_user: dict = Depends(_require_company_role),
+    current_user: dict = Depends(require_company_role),
 ) -> dict:
     """Return the company profile for the authenticated HR user."""
     owner_id = current_user["id"]
@@ -73,7 +63,7 @@ def get_my_company(
 @router.patch("/me", response_model=CompanyOut)
 def update_my_company(
     payload: CompanyUpdateIn,
-    current_user: dict = Depends(_require_company_role),
+    current_user: dict = Depends(require_company_role),
 ) -> dict:
     """Partially update the company profile (website, logo, domains, etc.)."""
     owner_id = current_user["id"]
