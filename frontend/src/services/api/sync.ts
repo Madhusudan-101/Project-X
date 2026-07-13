@@ -1,6 +1,8 @@
 /**
- * Sync API service — talks to POST /api/sync/github/:username
- * and POST /api/sync/leetcode/:username
+ * Sync API service — talks to:
+ *   - POST /api/sync/github/:username
+ *   - POST /api/sync/leetcode/:username
+ *   - POST /api/v1/analyze/:username
  */
 
 import { request } from "./client";
@@ -8,6 +10,7 @@ import type {
   GitHubProfileData,
   LeetCodeProfileData,
   SyncResponse,
+  AnalyzeApiResponse,
 } from "@/types/sync";
 
 // ── Username extraction helpers ──────────────────────────────────────
@@ -80,4 +83,19 @@ export const syncService = {
       `/api/sync/leetcode/${encodeURIComponent(username)}`,
       { method: "POST" },
     ),
+
+  analyze: (githubUsername: string | null, leetcodeUsername: string | null) => {
+    // We can use either as the path parameter or use a dummy/fallback one.
+    const pathUsername = githubUsername ?? leetcodeUsername ?? "user";
+    return request<AnalyzeApiResponse>(
+      `/api/v1/analyze/${encodeURIComponent(pathUsername)}`,
+      {
+        method: "POST",
+        body: {
+          github_username: githubUsername,
+          leetcode_username: leetcodeUsername,
+        },
+      },
+    );
+  },
 };

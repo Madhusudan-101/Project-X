@@ -46,7 +46,7 @@ import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useAuthStore } from "@/store/auth";
-import { GitHubSyncCard, LeetCodeSyncCard } from "@/components/dashboard/ProfileSyncPanel";
+import { ProfileAnalyzerPanel } from "@/components/dashboard/ProfileSyncPanel";
 
 export const Route = createFileRoute("/candidate")({
   component: CandidatePortal,
@@ -311,11 +311,8 @@ function AnalyzerTab() {
         stat="Not analyzed yet"
       />
 
-      {/* Live sync panels */}
-      <div className="grid gap-4 md:grid-cols-2">
-        <GitHubSyncCard />
-        <LeetCodeSyncCard />
-      </div>
+      {/* Sync + AI analysis */}
+      <ProfileAnalyzerPanel />
 
       <Card className="p-5">
         <div className="mb-4 flex items-center justify-between">

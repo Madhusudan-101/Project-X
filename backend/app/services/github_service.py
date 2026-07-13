@@ -218,14 +218,67 @@ async def _fetch_events(
     return all_events
 
 
+async def _fetch_repo_commits(
+    client: httpx.AsyncClient,
+    owner: str,
+    repo: str,
+) -> List[str]:
+    """
+    GET /repos/{owner}/{repo}/commits?per_page=100
+
+    Returns a list of ISO-8601 ``commit.author.date`` strings.
+    Silently returns [] on 403 (rate limit), 404, or 409 (empty repo).
+    """
+    url = f"{GITHUB_API_BASE}/repos/{owner}/{repo}/commits"
+    params = {"per_page": 100}
+    resp = await client.get(url, params=params, timeout=_REQUEST_TIMEOUT)
+    if resp.status_code in (403, 404, 409):
+        return []
+    resp.raise_for_status()
+
+    dates: List[str] = []
+    for commit_obj in resp.json():
+        try:
+            dt_str = commit_obj["commit"]["author"]["date"]
+            dates.append(dt_str)
+        except (KeyError, TypeError):
+            continue
+    return dates
+
+
+async def _fetch_repo_readme(
+    client: httpx.AsyncClient,
+    owner: str,
+    repo: str,
+    *,
+    max_chars: int = 2000,
+) -> Optional[str]:
+    """
+    GET /repos/{owner}/{repo}/readme  (raw markdown via Accept header).
+
+    Returns the raw README text truncated to *max_chars*, or *None* if
+    the repo has no README or the request is rate-limited.
+    """
+    url = f"{GITHUB_API_BASE}/repos/{owner}/{repo}/readme"
+    headers = {"Accept": "application/vnd.github.v3.raw"}
+    resp = await client.get(url, headers=headers, timeout=_REQUEST_TIMEOUT)
+    if resp.status_code in (403, 404):
+        return None
+    resp.raise_for_status()
+    text: str = resp.text
+    return text[:max_chars] if len(text) > max_chars else text
+
+
 async def fetch_github_raw_for_analysis(username: str) -> Dict[str, Any]:
     """
     Fetch *all* raw GitHub data needed by the formatter / analyzer.
 
     Returns a dict with:
-      - ``profile``  – full user object
-      - ``repos``    – list of repo objects (includes ``fork`` bool, sizes, timestamps)
-      - ``events``   – list of recent public events (PushEvent, etc.)
+      - ``profile``       – full user object
+      - ``repos``         – list of repo objects (includes ``fork`` bool, sizes, timestamps)
+      - ``events``        – list of recent public events (PushEvent, etc.)
+      - ``repo_commits``  – {repo_name: [ISO-8601 commit date strings]}
+      - ``repo_readmes``  – {repo_name: raw markdown text}
     """
     headers: Dict[str, str] = _build_headers()
 
@@ -234,9 +287,31 @@ async def fetch_github_raw_for_analysis(username: str) -> Dict[str, Any]:
         repos = await _fetch_repos(client, username)
         events = await _fetch_events(client, username)
 
+        # Deep per-repo data: commit timelines + READMEs
+        # Limit to 15 most-recently-updated owner repos to conserve API calls
+        owner_repos = [r for r in repos if not r.get("fork")][:15]
+
+        repo_commits: Dict[str, List[str]] = {}
+        repo_readmes: Dict[str, str] = {}
+
+        for repo in owner_repos:
+            name: str = repo.get("name", "")
+            if not name:
+                continue
+
+            commits = await _fetch_repo_commits(client, username, name)
+            if commits:
+                repo_commits[name] = commits
+
+            readme = await _fetch_repo_readme(client, username, name)
+            if readme:
+                repo_readmes[name] = readme
+
     return {
         "profile": profile,
         "repos": repos,
         "events": events,
+        "repo_commits": repo_commits,
+        "repo_readmes": repo_readmes,
     }
 

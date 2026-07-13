@@ -1,9 +1,12 @@
 /**
  * ProfileSyncPanel
  * ────────────────
- * Self-contained panel that lives inside the candidate dashboard's Analyzer tab.
- * Allows users to paste their GitHub / LeetCode profile URLs, extracts the username,
- * calls the backend sync endpoints, and displays the fetched data in rich result cards.
+ * Three-layer UI:
+ *   1. GitHubSyncCard  + LeetCodeSyncCard  — independent profile fetchers
+ *   2. "Run AI Analysis" CTA — appears once at least one profile is synced
+ *   3. AIAnalysisResultCard — Gemini analysis result rendered below the CTA
+ *
+ * ProfileAnalyzerPanel is the exported composite that wires all three layers.
  */
 
 import { useState, useCallback } from "react";
@@ -22,6 +25,16 @@ import {
   AlertCircle,
   ArrowRight,
   Sparkles,
+  ShieldCheck,
+  ShieldAlert,
+  Brain,
+  ChevronDown,
+  ChevronUp,
+  History,
+  Tag,
+  Clock,
+  FolderGit2,
+  BookOpen,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -33,11 +46,156 @@ import {
   extractGitHubUsername,
   extractLeetCodeUsername,
 } from "@/services/api/sync";
-import type { GitHubProfileData, LeetCodeProfileData } from "@/types/sync";
+import type {
+  GitHubProfileData,
+  LeetCodeProfileData,
+  AnalysisResult,
+  FormattedMetrics,
+} from "@/types/sync";
 
-// ── GitHub Panel ─────────────────────────────────────────────────────
+// ── Score ring (SVG donut) ────────────────────────────────────────────
 
-export function GitHubSyncCard() {
+function ScoreRing({ score }: { score: number }) {
+  const r = 38;
+  const circ = 2 * Math.PI * r;
+  const filled = (score / 100) * circ;
+
+  const colorClass =
+    score >= 85
+      ? { text: "text-emerald-500", stroke: "stroke-emerald-500" }
+      : score >= 65
+        ? { text: "text-primary", stroke: "stroke-primary" }
+        : score >= 40
+          ? { text: "text-amber-500", stroke: "stroke-amber-500" }
+          : { text: "text-destructive", stroke: "stroke-destructive" };
+
+  return (
+    <div className="relative h-28 w-28 shrink-0">
+      <svg className="h-full w-full -rotate-90" viewBox="0 0 100 100">
+        <circle
+          cx="50" cy="50" r={r}
+          fill="none"
+          className="stroke-border"
+          strokeWidth="9"
+        />
+        <circle
+          cx="50" cy="50" r={r}
+          fill="none"
+          className={colorClass.stroke}
+          strokeWidth="9"
+          strokeDasharray={`${filled} ${circ - filled}`}
+          strokeLinecap="round"
+        />
+      </svg>
+      <div className="absolute inset-0 flex flex-col items-center justify-center">
+        <span className={`font-display text-3xl font-bold leading-none ${colorClass.text}`}>
+          {score}
+        </span>
+        <span className="mt-0.5 text-[10px] text-muted-foreground">/100</span>
+      </div>
+    </div>
+  );
+}
+
+// ── Rating badge ──────────────────────────────────────────────────────
+
+const ratingStyle: Record<AnalysisResult["consistency_rating"], string> = {
+  Poor:    "border-destructive/30 bg-destructive/10 text-destructive",
+  Average: "border-amber-500/30 bg-amber-500/10 text-amber-600 dark:text-amber-400",
+  Good:    "border-primary/30 bg-primary/10 text-primary",
+  Elite:   "border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400",
+};
+
+// ── AI Analysis Result Card ───────────────────────────────────────────
+
+function AIAnalysisResultCard({ result }: { result: AnalysisResult }) {
+  const clean = result.authenticity_flags.length === 0;
+
+  return (
+    <div className="animate-in fade-in slide-in-from-bottom-3 duration-400 space-y-4">
+      {/* Score + rating strip */}
+      <Card className="overflow-hidden">
+        <div className="flex items-center gap-3 border-b border-border/60 px-5 py-3">
+          <Brain className="h-4 w-4 text-primary" />
+          <span className="font-display text-sm font-semibold">AI Analysis Result</span>
+          <Badge className="ml-auto border-primary/30 bg-primary/10 text-primary text-[11px]">
+            Gemini 3.5 Flash
+          </Badge>
+        </div>
+
+        <div className="flex flex-col gap-6 p-5 sm:flex-row sm:items-center">
+          {/* Score ring */}
+          <ScoreRing score={result.overall_score} />
+
+          {/* Right side */}
+          <div className="flex-1 space-y-3">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="font-display text-lg font-semibold">Employability Score</span>
+              <Badge className={`${ratingStyle[result.consistency_rating]} text-xs font-semibold`}>
+                {result.consistency_rating}
+              </Badge>
+            </div>
+
+            {/* Strengths */}
+            <p className="text-sm leading-relaxed text-muted-foreground">
+              {result.strengths_summary}
+            </p>
+          </div>
+        </div>
+      </Card>
+
+      {/* Authenticity flags */}
+      <Card className="p-5">
+        <div className="mb-3 flex items-center gap-2">
+          {clean ? (
+            <ShieldCheck className="h-4 w-4 text-emerald-500" />
+          ) : (
+            <ShieldAlert className="h-4 w-4 text-destructive" />
+          )}
+          <span className="font-display text-sm font-semibold">
+            Authenticity Check
+          </span>
+          {clean ? (
+            <Badge className="ml-auto border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-[11px]">
+              All clear
+            </Badge>
+          ) : (
+            <Badge className="ml-auto border-destructive/30 bg-destructive/10 text-destructive text-[11px]">
+              {result.authenticity_flags.length} flag{result.authenticity_flags.length > 1 ? "s" : ""}
+            </Badge>
+          )}
+        </div>
+
+        {clean ? (
+          <div className="flex items-center gap-2 rounded-lg bg-emerald-500/8 p-3 text-sm text-emerald-700 dark:text-emerald-400">
+            <CheckCircle2 className="h-4 w-4 shrink-0" />
+            No red flags detected — activity looks genuine and consistent.
+          </div>
+        ) : (
+          <ul className="space-y-2">
+            {result.authenticity_flags.map((flag, i) => (
+              <li
+                key={i}
+                className="flex items-start gap-2 rounded-lg bg-destructive/8 p-3 text-sm text-destructive"
+              >
+                <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+                {flag}
+              </li>
+            ))}
+          </ul>
+        )}
+      </Card>
+    </div>
+  );
+}
+
+// ── GitHub Sync Card ──────────────────────────────────────────────────
+
+export function GitHubSyncCard({
+  onSynced,
+}: {
+  onSynced?: (username: string) => void;
+}) {
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -55,29 +213,26 @@ export function GitHubSyncCard() {
       const res = await syncService.github(username);
       if (res.ok && res.data) {
         setData(res.data);
+        onSynced?.(username);
       } else {
         setError(res.error ?? "Something went wrong.");
       }
     } catch (err: unknown) {
-      const msg =
-        err instanceof Error ? err.message : "Failed to reach the server.";
+      const msg = err instanceof Error ? err.message : "Failed to reach the server.";
       setError(msg);
     } finally {
       setLoading(false);
     }
-  }, [input]);
+  }, [input, onSynced]);
 
   return (
     <Card className="overflow-hidden">
-      {/* Header */}
       <div className="flex items-center gap-3 border-b border-border/60 px-5 py-4">
         <div className="grid h-10 w-10 place-items-center rounded-xl bg-[#333] text-white">
           <Github className="h-5 w-5" />
         </div>
         <div className="flex-1">
-          <h3 className="font-display text-base font-semibold">
-            GitHub Analyzer
-          </h3>
+          <h3 className="font-display text-base font-semibold">GitHub Analyzer</h3>
           <p className="text-xs text-muted-foreground">
             Paste your GitHub profile link to import your coding activity.
           </p>
@@ -90,7 +245,6 @@ export function GitHubSyncCard() {
       </div>
 
       <div className="px-5 py-4">
-        {/* Input row */}
         <div className="flex gap-2">
           <Input
             id="github-url-input"
@@ -123,110 +277,19 @@ export function GitHubSyncCard() {
           </div>
         )}
 
-        {/* Result card */}
         {data && <GitHubResultCard data={data} />}
       </div>
     </Card>
   );
 }
 
-function GitHubResultCard({ data }: { data: GitHubProfileData }) {
-  const totalLangBytes = data.top_languages.reduce((s, l) => s + l.bytes, 0);
+// ── LeetCode Sync Card ────────────────────────────────────────────────
 
-  return (
-    <div className="mt-4 space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
-      {/* Profile row */}
-      <div className="flex items-center gap-3">
-        {data.avatar_url && (
-          <img
-            src={data.avatar_url}
-            alt={data.username}
-            className="h-12 w-12 rounded-full border-2 border-border"
-          />
-        )}
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2">
-            <span className="font-display font-semibold truncate">
-              {data.name ?? data.username}
-            </span>
-            <a
-              href={`https://github.com/${data.username}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-muted-foreground hover:text-primary transition-colors"
-            >
-              <ExternalLink className="h-3.5 w-3.5" />
-            </a>
-          </div>
-          <div className="text-xs text-muted-foreground truncate">
-            @{data.username}
-            {data.bio && ` · ${data.bio}`}
-          </div>
-        </div>
-      </div>
-
-      {/* Stat chips */}
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-        <MiniStat
-          icon={GitFork}
-          label="Public repos"
-          value={String(data.public_repos)}
-        />
-        <MiniStat
-          icon={Users}
-          label="Followers"
-          value={formatNumber(data.followers)}
-        />
-        <MiniStat
-          icon={Star}
-          label="Following"
-          value={formatNumber(data.following)}
-        />
-        <MiniStat
-          icon={Calendar}
-          label="Account age"
-          value={`${Math.floor(data.account_age_days / 365)}y ${data.account_age_days % 365}d`}
-        />
-      </div>
-
-      {/* Language breakdown */}
-      {data.top_languages.length > 0 && (
-        <div>
-          <div className="mb-2 flex items-center gap-2 text-xs font-medium text-muted-foreground">
-            <Sparkles className="h-3.5 w-3.5 text-primary" />
-            Top Languages
-          </div>
-          <div className="space-y-2">
-            {data.top_languages.slice(0, 6).map((lang) => (
-              <div key={lang.language} className="flex items-center gap-3">
-                <span className="w-20 text-xs font-medium truncate">
-                  {lang.language}
-                </span>
-                <div className="flex-1">
-                  <Progress
-                    value={
-                      totalLangBytes > 0
-                        ? (lang.bytes / totalLangBytes) * 100
-                        : 0
-                    }
-                    className="h-2"
-                  />
-                </div>
-                <span className="w-12 text-right text-xs text-muted-foreground">
-                  {lang.percentage.toFixed(1)}%
-                </span>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ── LeetCode Panel ───────────────────────────────────────────────────
-
-export function LeetCodeSyncCard() {
+export function LeetCodeSyncCard({
+  onSynced,
+}: {
+  onSynced?: (username: string) => void;
+}) {
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -244,29 +307,26 @@ export function LeetCodeSyncCard() {
       const res = await syncService.leetcode(username);
       if (res.ok && res.data) {
         setData(res.data);
+        onSynced?.(username);
       } else {
         setError(res.error ?? "Something went wrong.");
       }
     } catch (err: unknown) {
-      const msg =
-        err instanceof Error ? err.message : "Failed to reach the server.";
+      const msg = err instanceof Error ? err.message : "Failed to reach the server.";
       setError(msg);
     } finally {
       setLoading(false);
     }
-  }, [input]);
+  }, [input, onSynced]);
 
   return (
     <Card className="overflow-hidden">
-      {/* Header */}
       <div className="flex items-center gap-3 border-b border-border/60 px-5 py-4">
         <div className="grid h-10 w-10 place-items-center rounded-xl bg-[#FFA116]/15 text-[#FFA116]">
           <Code2 className="h-5 w-5" />
         </div>
         <div className="flex-1">
-          <h3 className="font-display text-base font-semibold">
-            LeetCode Analyzer
-          </h3>
+          <h3 className="font-display text-base font-semibold">LeetCode Analyzer</h3>
           <p className="text-xs text-muted-foreground">
             Paste your LeetCode profile link to import your problem-solving stats.
           </p>
@@ -279,7 +339,6 @@ export function LeetCodeSyncCard() {
       </div>
 
       <div className="px-5 py-4">
-        {/* Input row */}
         <div className="flex gap-2">
           <Input
             id="leetcode-url-input"
@@ -312,23 +371,450 @@ export function LeetCodeSyncCard() {
           </div>
         )}
 
-        {/* Result card */}
         {data && <LeetCodeResultCard data={data} />}
       </div>
     </Card>
   );
 }
 
+// ── Composite panel with AI CTA ───────────────────────────────────────
+
+export function ProfileAnalyzerPanel() {
+  const [ghUsername, setGhUsername] = useState<string | null>(null);
+  const [lcUsername, setLcUsername] = useState<string | null>(null);
+  const [analyzing, setAnalyzing] = useState(false);
+  const [analysisResult, setAnalysisResult] = useState<AnalysisResult | null>(null);
+  const [formattedMetrics, setFormattedMetrics] = useState<FormattedMetrics | null>(null);
+  const [analysisError, setAnalysisError] = useState<string | null>(null);
+
+  const canAnalyze = ghUsername !== null || lcUsername !== null;
+
+  const handleAnalyze = useCallback(async () => {
+    setAnalyzing(true);
+    setAnalysisError(null);
+    setAnalysisResult(null);
+    setFormattedMetrics(null);
+    try {
+      const res = await syncService.analyze(ghUsername, lcUsername);
+      if (res.ok && res.analysis) {
+        setAnalysisResult(res.analysis);
+        setFormattedMetrics(res.formatted_metrics ?? null);
+      } else {
+        setAnalysisError(res.error ?? "Analysis failed — please try again.");
+      }
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Could not reach the server.";
+      setAnalysisError(msg);
+    } finally {
+      setAnalyzing(false);
+    }
+  }, [ghUsername, lcUsername]);
+
+  return (
+    <div className="space-y-4">
+      {/* Sync cards */}
+      <div className="grid gap-4 md:grid-cols-2">
+        <GitHubSyncCard onSynced={setGhUsername} />
+        <LeetCodeSyncCard onSynced={setLcUsername} />
+      </div>
+
+      {/* AI Analysis CTA — only visible once at least one profile is synced */}
+      {canAnalyze && (
+        <Card className="overflow-hidden animate-in fade-in slide-in-from-bottom-2 duration-300">
+          <div className="flex flex-col items-center gap-4 px-6 py-6 text-center sm:flex-row sm:text-left">
+            <div className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-gradient-to-br from-primary/20 to-primary/5 text-primary">
+              <Sparkles className="h-6 w-6" />
+            </div>
+            <div className="flex-1">
+              <h3 className="font-display text-base font-semibold">
+                Ready to run AI analysis
+              </h3>
+              <p className="mt-0.5 text-sm text-muted-foreground">
+                Gemini will score your consistency, detect fake activity, and summarise your strengths.
+                {ghUsername && lcUsername
+                  ? " Both GitHub and LeetCode are connected."
+                  : ghUsername
+                    ? " Add LeetCode for a fuller picture."
+                    : " Add GitHub for a fuller picture."}
+              </p>
+            </div>
+            <Button
+              onClick={handleAnalyze}
+              disabled={analyzing}
+              className="shrink-0 bg-gradient-brand text-primary-foreground min-w-[160px]"
+            >
+              {analyzing ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Analysing…
+                </>
+              ) : (
+                <>
+                  <Brain className="mr-2 h-4 w-4" />
+                  Run AI Analysis
+                </>
+              )}
+            </Button>
+          </div>
+
+          {analysisError && (
+            <div className="mx-5 mb-4 flex items-start gap-2 rounded-lg bg-destructive/10 p-3 text-sm text-destructive">
+              <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+              {analysisError}
+            </div>
+          )}
+        </Card>
+      )}
+
+      {/* Analysis result */}
+      {analysisResult && <AIAnalysisResultCard result={analysisResult} />}
+
+      {/* Deep metrics result */}
+      {analysisResult && formattedMetrics && (
+        <DeepMetricsResultCard metrics={formattedMetrics} />
+      )}
+    </div>
+  );
+}
+
+// ── Deep Metrics Result Card ──────────────────────────────────────────
+
+interface DeepMetricsResultCardProps {
+  metrics: FormattedMetrics;
+}
+
+export function DeepMetricsResultCard({ metrics }: DeepMetricsResultCardProps) {
+  const gh = metrics.github;
+  const lc = metrics.leetcode;
+  const [activeTab, setActiveTab] = useState<"github" | "leetcode">(
+    gh ? "github" : "leetcode"
+  );
+  const [expandedRepo, setExpandedRepo] = useState<string | null>(null);
+
+  const toggleReadme = (repoName: string) => {
+    setExpandedRepo(expandedRepo === repoName ? null : repoName);
+  };
+
+  if (!gh && !lc) return null;
+
+  return (
+    <Card className="overflow-hidden mt-4">
+      {/* Tab Headers */}
+      <div className="flex border-b border-border/60 bg-surface/40">
+        {gh && (
+          <button
+            onClick={() => setActiveTab("github")}
+            className={`flex-1 py-3 px-4 font-display text-sm font-semibold flex items-center justify-center gap-2 border-b-2 transition-all ${
+              activeTab === "github"
+                ? "border-primary text-primary bg-background/50"
+                : "border-transparent text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            <Github className="h-4 w-4" />
+            GitHub Repository Insights
+          </button>
+        )}
+        {lc && (
+          <button
+            onClick={() => setActiveTab("leetcode")}
+            className={`flex-1 py-3 px-4 font-display text-sm font-semibold flex items-center justify-center gap-2 border-b-2 transition-all ${
+              activeTab === "leetcode"
+                ? "border-primary text-primary bg-background/50"
+                : "border-transparent text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            <Code2 className="h-4 w-4" />
+            LeetCode Algorithmic Insights
+          </button>
+        )}
+      </div>
+
+      <div className="p-5">
+        {activeTab === "github" && gh && (
+          <div className="space-y-4">
+            <div className="flex justify-between items-center">
+              <h4 className="font-display text-sm font-semibold flex items-center gap-2 text-foreground">
+                <FolderGit2 className="h-4 w-4 text-primary" />
+                Original Repositories ({gh.repos.filter((r) => !r.is_fork).length})
+              </h4>
+              <span className="text-xs text-muted-foreground">
+                Total stars received: {gh.total_stars_received}
+              </span>
+            </div>
+
+            <div className="grid gap-3">
+              {gh.repos.map((repo) => (
+                <div
+                  key={repo.name}
+                  className="rounded-lg border border-border/60 bg-surface/40 p-4 transition-all hover:border-primary/20"
+                >
+                  <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-2">
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2">
+                        <span className="font-display text-sm font-semibold text-foreground">
+                          {repo.name}
+                        </span>
+                        {repo.primary_language && (
+                          <Badge variant="outline" className="text-[10px] px-1.5 py-0.5">
+                            {repo.primary_language}
+                          </Badge>
+                        )}
+                        {repo.is_fork && (
+                          <Badge variant="outline" className="text-[10px] px-1.5 py-0.5 text-muted-foreground">
+                            Fork
+                          </Badge>
+                        )}
+                      </div>
+                      <div className="text-xs text-muted-foreground flex flex-wrap gap-x-4 gap-y-1">
+                        <span>Size: {repo.size_kb} KB</span>
+                        <span>Created: {repo.created}</span>
+                        <span>Last push: {repo.last_push}</span>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2 self-start sm:self-center">
+                      {repo.commit_dates.length > 0 && (
+                        <Badge className="bg-primary/10 text-primary border-primary/20 text-[11px] flex items-center gap-1">
+                          <History className="h-3 w-3" />
+                          {repo.commit_dates.length} commits
+                        </Badge>
+                      )}
+                      {repo.readme_snippet && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => toggleReadme(repo.name)}
+                          className="h-8 text-xs flex items-center gap-1 text-primary hover:text-primary hover:bg-primary/10"
+                        >
+                          <BookOpen className="h-3.5 w-3.5" />
+                          {expandedRepo === repo.name ? "Hide README" : "View README"}
+                          {expandedRepo === repo.name ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+
+                  {expandedRepo === repo.name && repo.readme_snippet && (
+                    <div className="mt-4 p-3.5 rounded-md bg-background/80 border border-border/80 text-xs leading-relaxed text-muted-foreground overflow-x-auto font-mono max-h-60 overflow-y-auto whitespace-pre-wrap">
+                      {repo.readme_snippet}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {activeTab === "leetcode" && lc && (
+          <div className="grid gap-6 md:grid-cols-2">
+            {/* Topic Tags Breakdown */}
+            <div className="space-y-4">
+              <h4 className="font-display text-sm font-semibold flex items-center gap-2 text-foreground">
+                <Tag className="h-4 w-4 text-primary" />
+                Solve DNA (Topic Tags)
+              </h4>
+
+              {lc.topic_tags ? (
+                <div className="space-y-4">
+                  {/* Advanced */}
+                  {lc.topic_tags.advanced.length > 0 && (
+                    <div className="space-y-2">
+                      <div className="text-xs font-semibold text-rose-500 uppercase tracking-wider">
+                        Advanced Algorithms
+                      </div>
+                      <div className="flex flex-wrap gap-1.5">
+                        {lc.topic_tags.advanced.map((tag) => (
+                          <Badge
+                            key={tag.tagName}
+                            className="bg-rose-500/10 hover:bg-rose-500/20 text-rose-600 dark:text-rose-400 border-rose-500/20 text-xs px-2.5 py-1"
+                          >
+                            {tag.tagName} ({tag.problemsSolved})
+                          </Badge>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Intermediate */}
+                  {lc.topic_tags.intermediate.length > 0 && (
+                    <div className="space-y-2">
+                      <div className="text-xs font-semibold text-amber-500 uppercase tracking-wider">
+                        Intermediate Core
+                      </div>
+                      <div className="flex flex-wrap gap-1.5">
+                        {lc.topic_tags.intermediate.map((tag) => (
+                          <Badge
+                            key={tag.tagName}
+                            className="bg-amber-500/10 hover:bg-amber-500/20 text-amber-600 dark:text-amber-400 border-amber-500/20 text-xs px-2.5 py-1"
+                          >
+                            {tag.tagName} ({tag.problemsSolved})
+                          </Badge>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Fundamental */}
+                  {lc.topic_tags.fundamental.length > 0 && (
+                    <div className="space-y-2">
+                      <div className="text-xs font-semibold text-emerald-500 uppercase tracking-wider">
+                        Fundamentals
+                      </div>
+                      <div className="flex flex-wrap gap-1.5">
+                        {lc.topic_tags.fundamental.map((tag) => (
+                          <Badge
+                            key={tag.tagName}
+                            className="bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 border-emerald-500/20 text-xs px-2.5 py-1"
+                          >
+                            {tag.tagName} ({tag.problemsSolved})
+                          </Badge>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="rounded-lg border border-dashed border-border/70 bg-surface/40 p-6 text-center text-xs text-muted-foreground">
+                  No topic tag data found.
+                </div>
+              )}
+            </div>
+
+            {/* Recent Submissions */}
+            <div className="space-y-4">
+              <h4 className="font-display text-sm font-semibold flex items-center gap-2 text-foreground">
+                <Clock className="h-4 w-4 text-primary" />
+                Recent Submissions
+              </h4>
+
+              {lc.recent_submissions.length > 0 ? (
+                <div className="rounded-lg border border-border/60 bg-surface/20 divide-y divide-border/60 max-h-[360px] overflow-y-auto">
+                  {lc.recent_submissions.map((sub, i) => (
+                    <div
+                      key={i}
+                      className="px-4 py-3 flex items-center justify-between gap-4 text-xs hover:bg-surface/40 transition-colors"
+                    >
+                      <div className="min-w-0">
+                        <span className="font-semibold text-foreground truncate block">
+                          {sub.title}
+                        </span>
+                        <a
+                          href={`https://leetcode.com/problems/${sub.titleSlug}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-[10px] text-primary hover:underline"
+                        >
+                          leetcode.com/problems/{sub.titleSlug}
+                        </a>
+                      </div>
+                      <span className="text-muted-foreground whitespace-nowrap shrink-0">
+                        {sub.timestamp
+                          ? new Date(sub.timestamp).toLocaleDateString(undefined, {
+                              month: "short",
+                              day: "numeric",
+                              hour: "2-digit",
+                              minute: "2-digit",
+                            })
+                          : "Recent"}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="rounded-lg border border-dashed border-border/70 bg-surface/40 p-6 text-center text-xs text-muted-foreground">
+                  No recent submissions found.
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+    </Card>
+  );
+}
+
+
+// ── Result sub-cards ──────────────────────────────────────────────────
+
+function GitHubResultCard({ data }: { data: GitHubProfileData }) {
+  const totalLangBytes = data.top_languages.reduce((s, l) => s + l.bytes, 0);
+
+  return (
+    <div className="mt-4 space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
+      <div className="flex items-center gap-3">
+        {data.avatar_url && (
+          <img
+            src={data.avatar_url}
+            alt={data.username}
+            className="h-12 w-12 rounded-full border-2 border-border"
+          />
+        )}
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2">
+            <span className="font-display font-semibold truncate">
+              {data.name ?? data.username}
+            </span>
+            <a
+              href={`https://github.com/${data.username}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-muted-foreground hover:text-primary transition-colors"
+            >
+              <ExternalLink className="h-3.5 w-3.5" />
+            </a>
+          </div>
+          <div className="text-xs text-muted-foreground truncate">
+            @{data.username}
+            {data.bio && ` · ${data.bio}`}
+          </div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+        <MiniStat icon={GitFork}  label="Public repos"  value={String(data.public_repos)} />
+        <MiniStat icon={Users}    label="Followers"     value={formatNumber(data.followers)} />
+        <MiniStat icon={Star}     label="Following"     value={formatNumber(data.following)} />
+        <MiniStat icon={Calendar} label="Account age"
+          value={`${Math.floor(data.account_age_days / 365)}y ${data.account_age_days % 365}d`}
+        />
+      </div>
+
+      {data.top_languages.length > 0 && (
+        <div>
+          <div className="mb-2 flex items-center gap-2 text-xs font-medium text-muted-foreground">
+            <Sparkles className="h-3.5 w-3.5 text-primary" />
+            Top Languages
+          </div>
+          <div className="space-y-2">
+            {data.top_languages.slice(0, 6).map((lang) => (
+              <div key={lang.language} className="flex items-center gap-3">
+                <span className="w-20 text-xs font-medium truncate">{lang.language}</span>
+                <div className="flex-1">
+                  <Progress
+                    value={totalLangBytes > 0 ? (lang.bytes / totalLangBytes) * 100 : 0}
+                    className="h-2"
+                  />
+                </div>
+                <span className="w-12 text-right text-xs text-muted-foreground">
+                  {lang.percentage.toFixed(1)}%
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function LeetCodeResultCard({ data }: { data: LeetCodeProfileData }) {
   const { breakdown, streak } = data;
-  // LeetCode totals (approximate for percentage calculations)
   const TOTAL_EASY = 830;
   const TOTAL_MEDIUM = 1740;
   const TOTAL_HARD = 760;
 
   return (
     <div className="mt-4 space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
-      {/* Profile row */}
       <div className="flex items-center gap-3">
         {data.avatar_url && (
           <img
@@ -357,114 +843,54 @@ function LeetCodeResultCard({ data }: { data: LeetCodeProfileData }) {
           </div>
         </div>
         <div className="text-right">
-          <div className="font-display text-2xl font-bold text-primary">
-            {data.total_solved}
-          </div>
+          <div className="font-display text-2xl font-bold text-primary">{data.total_solved}</div>
           <div className="text-[11px] text-muted-foreground">Total Solved</div>
         </div>
       </div>
 
-      {/* Difficulty breakdown */}
       <div className="grid grid-cols-3 gap-3">
-        <DifficultyBar
-          label="Easy"
-          solved={breakdown.easy}
-          total={TOTAL_EASY}
-          color="text-success"
-          bgColor="bg-success/15"
-          progressColor="[&>div]:bg-success"
-        />
-        <DifficultyBar
-          label="Medium"
-          solved={breakdown.medium}
-          total={TOTAL_MEDIUM}
-          color="text-warning-foreground"
-          bgColor="bg-warning/15"
-          progressColor="[&>div]:bg-warning"
-        />
-        <DifficultyBar
-          label="Hard"
-          solved={breakdown.hard}
-          total={TOTAL_HARD}
-          color="text-destructive"
-          bgColor="bg-destructive/15"
-          progressColor="[&>div]:bg-destructive"
-        />
+        <DifficultyBar label="Easy"   solved={breakdown.easy}   total={TOTAL_EASY}
+          color="text-success" bgColor="bg-success/15" progressColor="[&>div]:bg-success" />
+        <DifficultyBar label="Medium" solved={breakdown.medium} total={TOTAL_MEDIUM}
+          color="text-warning-foreground" bgColor="bg-warning/15" progressColor="[&>div]:bg-warning" />
+        <DifficultyBar label="Hard"   solved={breakdown.hard}   total={TOTAL_HARD}
+          color="text-destructive" bgColor="bg-destructive/15" progressColor="[&>div]:bg-destructive" />
       </div>
 
-      {/* Streak row */}
       <div className="grid grid-cols-3 gap-2">
-        <MiniStat
-          icon={Flame}
-          label="Current streak"
-          value={`${streak.current_streak}d`}
-        />
-        <MiniStat
-          icon={Trophy}
-          label="Longest streak"
-          value={`${streak.longest_streak}d`}
-        />
-        <MiniStat
-          icon={Calendar}
-          label="Active days"
-          value={String(streak.total_active_days)}
-        />
+        <MiniStat icon={Flame}    label="Current streak"  value={`${streak.current_streak}d`} />
+        <MiniStat icon={Trophy}   label="Longest streak"  value={`${streak.longest_streak}d`} />
+        <MiniStat icon={Calendar} label="Active days"     value={String(streak.total_active_days)} />
       </div>
     </div>
   );
 }
 
-// ── Shared tiny components ───────────────────────────────────────────
+// ── Shared tiny components ────────────────────────────────────────────
 
-function MiniStat({
-  icon: Icon,
-  label,
-  value,
-}: {
-  icon: typeof Star;
-  label: string;
-  value: string;
-}) {
+function MiniStat({ icon: Icon, label, value }: { icon: typeof Star; label: string; value: string }) {
   return (
     <div className="flex items-center gap-2 rounded-lg border border-border/60 bg-surface/60 px-3 py-2">
       <Icon className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
       <div className="min-w-0">
         <div className="text-sm font-semibold truncate">{value}</div>
-        <div className="text-[10px] text-muted-foreground truncate">
-          {label}
-        </div>
+        <div className="text-[10px] text-muted-foreground truncate">{label}</div>
       </div>
     </div>
   );
 }
 
-function DifficultyBar({
-  label,
-  solved,
-  total,
-  color,
-  bgColor,
-  progressColor,
-}: {
-  label: string;
-  solved: number;
-  total: number;
-  color: string;
-  bgColor: string;
-  progressColor: string;
+function DifficultyBar({ label, solved, total, color, bgColor, progressColor }: {
+  label: string; solved: number; total: number;
+  color: string; bgColor: string; progressColor: string;
 }) {
   return (
     <div className={`rounded-lg ${bgColor} p-3`}>
       <div className="flex items-baseline justify-between">
         <span className={`text-xs font-semibold ${color}`}>{label}</span>
-        <span className="text-[11px] text-muted-foreground">
-          {solved}/{total}
-        </span>
+        <span className="text-[11px] text-muted-foreground">{solved}/{total}</span>
       </div>
-      <Progress
-        value={total > 0 ? (solved / total) * 100 : 0}
-        className={`mt-2 h-1.5 ${progressColor}`}
-      />
+      <Progress value={total > 0 ? (solved / total) * 100 : 0} className={`mt-2 h-1.5 ${progressColor}`} />
     </div>
   );
 }

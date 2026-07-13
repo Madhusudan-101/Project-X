@@ -32,6 +32,13 @@ class RepoSummary(BaseModel):
     created: str = ""            # YYYY-MM-DD
     last_push: str = ""          # YYYY-MM-DD
     days_since_last_push: int = 0
+    commit_dates: List[str] = Field(
+        default_factory=list,
+        description="ISO-8601 commit timestamps from the repo's history.",
+    )
+    readme_snippet: Optional[str] = Field(
+        None, description="Raw README markdown text (truncated to ~2000 chars).",
+    )
 
 
 class ActivityMetrics(BaseModel):
@@ -66,6 +73,26 @@ class GitHubMetrics(BaseModel):
     )
 
 
+class TopicTagEntry(BaseModel):
+    """Single tag solve count (e.g. 'Dynamic Programming': 12 solved)."""
+    tagName: str
+    problemsSolved: int = 0
+
+
+class TopicTagBreakdown(BaseModel):
+    """Per-tier algorithmic tag solve counts."""
+    advanced: List[TopicTagEntry] = Field(default_factory=list)
+    intermediate: List[TopicTagEntry] = Field(default_factory=list)
+    fundamental: List[TopicTagEntry] = Field(default_factory=list)
+
+
+class RecentSubmission(BaseModel):
+    """A single recent accepted LeetCode submission."""
+    title: str
+    titleSlug: str
+    timestamp: str  # ISO-8601
+
+
 class LeetCodeMetrics(BaseModel):
     total_solved: int = 0
     easy: int = 0
@@ -73,6 +100,13 @@ class LeetCodeMetrics(BaseModel):
     hard: int = 0
     easy_medium_hard_ratio: str = "0:0:0"
     submission_activity: ActivityMetrics = ActivityMetrics()
+    recent_submissions: List[RecentSubmission] = Field(
+        default_factory=list,
+        description="Last 50 accepted submissions with timestamps.",
+    )
+    topic_tags: Optional[TopicTagBreakdown] = Field(
+        None, description="Algorithmic category solve map by skill tier.",
+    )
 
 
 class FormattedMetrics(BaseModel):
@@ -194,13 +228,18 @@ def _format_github(raw: Dict[str, Any]) -> GitHubMetrics:
             lang_counter[lang] += 1
     top_languages = [l for l, _ in lang_counter.most_common(8)]
 
+    # Deep per-repo data from the raw payload
+    repo_commits: Dict[str, List[str]] = raw.get("repo_commits", {})
+    repo_readmes: Dict[str, str] = raw.get("repo_readmes", {})
+
     # Repo summaries (limit to 25 for token efficiency)
     repo_summaries: List[RepoSummary] = []
     for r in repos_raw[:25]:
         lp = _iso_to_date(r.get("pushed_at", ""))
+        rname = r.get("name", "")
         repo_summaries.append(
             RepoSummary(
-                name=r.get("name", ""),
+                name=rname,
                 is_fork=r.get("fork", False),
                 stars=r.get("stargazers_count", 0),
                 size_kb=r.get("size", 0),
@@ -208,6 +247,8 @@ def _format_github(raw: Dict[str, Any]) -> GitHubMetrics:
                 created=(_iso_to_date(r.get("created_at", "")) or today).isoformat(),
                 last_push=(lp or today).isoformat(),
                 days_since_last_push=(today - lp).days if lp else 0,
+                commit_dates=repo_commits.get(rname, []),
+                readme_snippet=repo_readmes.get(rname),
             )
         )
 
@@ -281,6 +322,36 @@ def _format_leetcode(raw: Dict[str, Any]) -> LeetCodeMetrics:
 
     activity = _compute_activity_metrics(day_counts)
 
+    # ── Recent submissions ──
+    raw_subs: List[Dict[str, Any]] = raw.get("recent_submissions", [])
+    recent_submissions = [
+        RecentSubmission(
+            title=s.get("title", ""),
+            titleSlug=s.get("titleSlug", ""),
+            timestamp=s.get("timestamp", ""),
+        )
+        for s in raw_subs
+    ]
+
+    # ── Topic tags ──
+    raw_tags: Optional[Dict[str, Any]] = raw.get("topic_tags")
+    topic_tags: Optional[TopicTagBreakdown] = None
+    if raw_tags:
+        topic_tags = TopicTagBreakdown(
+            advanced=[
+                TopicTagEntry(tagName=t.get("tagName", ""), problemsSolved=t.get("problemsSolved", 0))
+                for t in raw_tags.get("advanced", [])
+            ],
+            intermediate=[
+                TopicTagEntry(tagName=t.get("tagName", ""), problemsSolved=t.get("problemsSolved", 0))
+                for t in raw_tags.get("intermediate", [])
+            ],
+            fundamental=[
+                TopicTagEntry(tagName=t.get("tagName", ""), problemsSolved=t.get("problemsSolved", 0))
+                for t in raw_tags.get("fundamental", [])
+            ],
+        )
+
     return LeetCodeMetrics(
         total_solved=total_solved,
         easy=easy,
@@ -288,6 +359,8 @@ def _format_leetcode(raw: Dict[str, Any]) -> LeetCodeMetrics:
         hard=hard,
         easy_medium_hard_ratio=ratio,
         submission_activity=activity,
+        recent_submissions=recent_submissions,
+        topic_tags=topic_tags,
     )
 
 

@@ -4,4 +4,4 @@ python-dotenv
 supabase
 pydantic
 httpx
-google-generativeai
+google-genai

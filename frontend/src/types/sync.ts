@@ -42,9 +42,101 @@ export interface LeetCodeProfileData {
   streak: LeetCodeStreakInfo;
 }
 
+export interface RepoSummary {
+  name: string;
+  is_fork: boolean;
+  stars: number;
+  size_kb: number;
+  primary_language: string | null;
+  created: string;
+  last_push: string;
+  days_since_last_push: number;
+  commit_dates: string[];
+  readme_snippet: string | null;
+}
+
+export interface ActivityMetrics {
+  total_events: number;
+  total_commits: number;
+  unique_active_days: number;
+  avg_per_active_day: number;
+  longest_streak_days: number;
+  current_streak_days: number;
+  largest_gap_days: number;
+  busiest_single_day: {
+    date: string;
+    count: number;
+  };
+  days_with_10plus: number;
+  day_of_week_distribution: Record<string, number>;
+}
+
+export interface GitHubMetrics {
+  account_age_days: number;
+  total_repos: number;
+  original_repos: number;
+  forked_repos: number;
+  fork_ratio: number;
+  total_stars_received: number;
+  top_languages: string[];
+  repos: RepoSummary[];
+  recent_activity: ActivityMetrics;
+  commits_per_repo: Record<string, number>;
+}
+
+export interface RecentSubmission {
+  title: string;
+  titleSlug: string;
+  timestamp: string;
+}
+
+export interface TopicTagEntry {
+  tagName: string;
+  problemsSolved: number;
+}
+
+export interface TopicTagBreakdown {
+  advanced: TopicTagEntry[];
+  intermediate: TopicTagEntry[];
+  fundamental: TopicTagEntry[];
+}
+
+export interface LeetCodeMetrics {
+  total_solved: number;
+  easy: number;
+  medium: number;
+  hard: number;
+  easy_medium_hard_ratio: string;
+  submission_activity: ActivityMetrics;
+  recent_submissions: RecentSubmission[];
+  topic_tags: TopicTagBreakdown | null;
+}
+
+export interface FormattedMetrics {
+  github: GitHubMetrics | null;
+  leetcode: LeetCodeMetrics | null;
+}
+
 export interface SyncResponse<T> {
   ok: boolean;
   platform: string;
   data: T | null;
   error: string | null;
 }
+
+export interface AnalysisResult {
+  overall_score: number;
+  consistency_rating: "Poor" | "Average" | "Good" | "Elite";
+  authenticity_flags: string[];
+  strengths_summary: string;
+}
+
+export interface AnalyzeApiResponse {
+  ok: boolean;
+  username: string;
+  analysis: AnalysisResult | null;
+  formatted_metrics?: FormattedMetrics | null;
+  warnings: string[];
+  error: string | null;
+}
+

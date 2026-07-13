@@ -4,7 +4,8 @@ Gemini Analyzer Agent — analyzer_agent.py
 Sends the formatted developer metrics to Google Gemini and returns a
 strict, structured JSON employability & authenticity analysis.
 
-Model  : gemini-1.5-flash  (fast, cheap, structured-output capable)
+Model  : gemini-3.5-flash  (fast, cheap, structured-output capable)
+SDK    : google-genai  (the new, supported SDK)
 Output : Enforced via ``response_mime_type="application/json"`` +
          ``response_schema`` so the model *never* returns conversational text.
 """
@@ -16,7 +17,8 @@ import logging
 import os
 from typing import Any, Dict, List
 
-import google.generativeai as genai
+from google import genai
+from google.genai import types
 from pydantic import BaseModel, Field
 
 from .formatter import FormattedMetrics
@@ -146,18 +148,24 @@ _RESPONSE_SCHEMA: Dict[str, Any] = {
     ],
 }
 
-
 # ── Agent entry point ─────────────────────────────────────────────────
 
+# Models to try in order — primary first, then fallbacks.
+_MODEL_CANDIDATES: List[str] = [
+    "gemini-3.5-flash",
+    "gemini-3.1-flash-lite",
+    "gemini-2.0-flash",
+]
 
-def _configure_genai() -> None:
-    """Configure the SDK with the API key from env (idempotent)."""
+
+def _get_client() -> genai.Client:
+    """Create a Gemini client using the API key from env."""
     api_key = os.getenv("GEMINI_API_KEY")
     if not api_key:
         raise RuntimeError(
             "GEMINI_API_KEY is not set. Add it to your .env file."
         )
-    genai.configure(api_key=api_key)
+    return genai.Client(api_key=api_key)
 
 
 async def run_analysis(formatted: FormattedMetrics) -> AnalysisResult:
@@ -165,14 +173,10 @@ async def run_analysis(formatted: FormattedMetrics) -> AnalysisResult:
     Send the formatted developer metrics to Gemini and return a
     structured ``AnalysisResult``.
 
-    Uses ``generate_content_async`` so it doesn't block the event loop.
+    Uses the new ``google-genai`` SDK with ``aio`` for async calls.
+    Tries multiple models in order if the primary is unavailable.
     """
-    _configure_genai()
-
-    model = genai.GenerativeModel(
-        model_name="gemini-1.5-flash",
-        system_instruction=_SYSTEM_INSTRUCTION,
-    )
+    client = _get_client()
 
     # Build the user prompt — just the data, no instructions
     prompt = (
@@ -182,15 +186,38 @@ async def run_analysis(formatted: FormattedMetrics) -> AnalysisResult:
 
     logger.info("Sending %d-char prompt to Gemini", len(prompt))
 
-    response = await model.generate_content_async(
-        prompt,
-        generation_config=genai.GenerationConfig(
-            response_mime_type="application/json",
-            response_schema=_RESPONSE_SCHEMA,
-            temperature=0.2,       # low temp → deterministic, consistent scores
-            max_output_tokens=1024,
-        ),
+    config = types.GenerateContentConfig(
+        system_instruction=_SYSTEM_INSTRUCTION,
+        response_mime_type="application/json",
+        response_schema=_RESPONSE_SCHEMA,
+        temperature=0.2,        # low temp → deterministic, consistent scores
+        max_output_tokens=1024,
     )
+
+    # Try each model in order until one succeeds
+    last_error: Exception | None = None
+    for model_name in _MODEL_CANDIDATES:
+        try:
+            logger.info("Trying model: %s", model_name)
+            response = await client.aio.models.generate_content(
+                model=model_name,
+                contents=prompt,
+                config=config,
+            )
+            logger.info("Success with model: %s", model_name)
+            break
+        except Exception as exc:
+            last_error = exc
+            err_str = str(exc)
+            # Retry with next model on 429 (rate limit) or 503 (unavailable)
+            if "429" in err_str or "503" in err_str or "UNAVAILABLE" in err_str or "RESOURCE_EXHAUSTED" in err_str:
+                logger.warning("Model %s unavailable (%s), trying next fallback…", model_name, type(exc).__name__)
+                continue
+            # For other errors (auth, bad request, etc.) don't retry
+            raise
+    else:
+        # All models failed
+        raise last_error  # type: ignore[misc]
 
     # Parse the structured JSON response
     raw_text: str = response.text
@@ -203,3 +230,4 @@ async def run_analysis(formatted: FormattedMetrics) -> AnalysisResult:
         raise ValueError(f"Gemini returned invalid JSON: {exc}") from exc
 
     return AnalysisResult(**parsed)
+

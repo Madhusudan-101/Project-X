@@ -59,6 +59,41 @@ query getUserProfile($username: String!) {
 }
 """
 
+_RECENT_AC_SUBMISSIONS_QUERY: str = """
+query recentAcSubmissions($username: String!, $limit: Int!) {
+    recentAcSubmissionList(username: $username, limit: $limit) {
+        id
+        title
+        titleSlug
+        timestamp
+    }
+}
+"""
+
+_TOPIC_TAGS_QUERY: str = """
+query userProblemsSolved($username: String!) {
+    matchedUser(username: $username) {
+        tagProblemCounts {
+            advanced {
+                tagName
+                tagSlug
+                problemsSolved
+            }
+            intermediate {
+                tagName
+                tagSlug
+                problemsSolved
+            }
+            fundamental {
+                tagName
+                tagSlug
+                problemsSolved
+            }
+        }
+    }
+}
+"""
+
 # ── Response Models ───────────────────────────────────────────────────
 
 
@@ -245,25 +280,49 @@ async def fetch_leetcode_raw_for_analysis(username: str) -> Dict[str, Any]:
 
     Returns a dict with:
       - ``username``
-      - ``submission_calendar`` – dict of {unix_ts_str: count}
-      - ``ac_stats``           – list of {difficulty, count}
-      - ``profile``            – {realName, ranking, userAvatar}
+      - ``submission_calendar``  – dict of {unix_ts_str: count}
+      - ``ac_stats``             – list of {difficulty, count}
+      - ``profile``              – {realName, ranking, userAvatar}
+      - ``recent_submissions``   – list of recent AC submissions with timestamps
+      - ``topic_tags``           – {advanced, intermediate, fundamental} tag counts
     """
-    payload: Dict[str, Any] = {
-        "query": _USER_PROFILE_QUERY,
-        "variables": {"username": username},
-    }
-
     async with httpx.AsyncClient(headers=_HEADERS) as client:
-        resp = await client.post(
+        # 1. Core profile + calendar + solve stats
+        profile_resp = await client.post(
             LEETCODE_GRAPHQL_URL,
-            json=payload,
+            json={
+                "query": _USER_PROFILE_QUERY,
+                "variables": {"username": username},
+            },
             timeout=_REQUEST_TIMEOUT,
         )
-        resp.raise_for_status()
+        profile_resp.raise_for_status()
 
-    body: Dict[str, Any] = resp.json()
-    data: Optional[Dict[str, Any]] = body.get("data", {}).get("matchedUser")
+        # 2. Recent accepted submissions (last 50)
+        submissions_resp = await client.post(
+            LEETCODE_GRAPHQL_URL,
+            json={
+                "query": _RECENT_AC_SUBMISSIONS_QUERY,
+                "variables": {"username": username, "limit": 50},
+            },
+            timeout=_REQUEST_TIMEOUT,
+        )
+        submissions_resp.raise_for_status()
+
+        # 3. Topic tags breakdown
+        tags_resp = await client.post(
+            LEETCODE_GRAPHQL_URL,
+            json={
+                "query": _TOPIC_TAGS_QUERY,
+                "variables": {"username": username},
+            },
+            timeout=_REQUEST_TIMEOUT,
+        )
+        tags_resp.raise_for_status()
+
+    # ── Parse profile response ──
+    profile_body: Dict[str, Any] = profile_resp.json()
+    data: Optional[Dict[str, Any]] = profile_body.get("data", {}).get("matchedUser")
 
     if data is None:
         raise ValueError(f"LeetCode user '{username}' not found.")
@@ -276,10 +335,41 @@ async def fetch_leetcode_raw_for_analysis(username: str) -> Dict[str, Any]:
         except (json.JSONDecodeError, TypeError):
             pass
 
+    # ── Parse recent submissions ──
+    subs_body: Dict[str, Any] = submissions_resp.json()
+    raw_subs: list = subs_body.get("data", {}).get("recentAcSubmissionList", []) or []
+    recent_submissions: list[Dict[str, Any]] = []
+    for sub in raw_subs:
+        ts = sub.get("timestamp")
+        iso_ts = ""
+        if ts:
+            try:
+                iso_ts = datetime.fromtimestamp(int(ts), tz=timezone.utc).isoformat()
+            except (ValueError, OSError):
+                iso_ts = str(ts)
+        recent_submissions.append({
+            "id": sub.get("id", ""),
+            "title": sub.get("title", ""),
+            "titleSlug": sub.get("titleSlug", ""),
+            "timestamp": iso_ts,
+        })
+
+    # ── Parse topic tags ──
+    tags_body: Dict[str, Any] = tags_resp.json()
+    tags_data = tags_body.get("data", {}).get("matchedUser", {}) or {}
+    raw_tag_counts = tags_data.get("tagProblemCounts", {})
+    topic_tags: Dict[str, list] = {
+        "advanced": raw_tag_counts.get("advanced", []) or [],
+        "intermediate": raw_tag_counts.get("intermediate", []) or [],
+        "fundamental": raw_tag_counts.get("fundamental", []) or [],
+    }
+
     return {
         "username": data.get("username", username),
         "submission_calendar": raw_calendar,
         "ac_stats": data.get("submitStatsGlobal", {}).get("acSubmissionNum", []),
         "profile": data.get("profile", {}),
+        "recent_submissions": recent_submissions,
+        "topic_tags": topic_tags,
     }
 
