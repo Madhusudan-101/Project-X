@@ -35,6 +35,7 @@ import {
   Clock,
   FolderGit2,
   BookOpen,
+  FileText,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -51,6 +52,7 @@ import type {
   LeetCodeProfileData,
   AnalysisResult,
   FormattedMetrics,
+  ResumeAnalysisResult,
 } from "@/types/sync";
 
 // ── Score ring (SVG donut) ────────────────────────────────────────────
@@ -511,7 +513,42 @@ export function ProfileAnalyzerPanel() {
   const [formattedMetrics, setFormattedMetrics] = useState<FormattedMetrics | null>(null);
   const [analysisError, setAnalysisError] = useState<string | null>(null);
 
+  // Resume states
+  const [resumeFile, setResumeFile] = useState<File | null>(null);
+  const [resumeAnalyzing, setResumeAnalyzing] = useState(false);
+  const [resumeResult, setResumeResult] = useState<ResumeAnalysisResult | null>(null);
+  const [resumeError, setResumeError] = useState<string | null>(null);
+
   const canAnalyze = ghUsername !== null || lcUsername !== null;
+
+  const onFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files.length > 0) {
+      const selected = e.target.files[0];
+      if (selected.type === "application/pdf" || selected.name.toLowerCase().endsWith(".pdf")) {
+        setResumeFile(selected);
+        setResumeError(null);
+        setResumeResult(null);
+      } else {
+        setResumeError("Please select a PDF file.");
+      }
+    }
+  };
+
+  const handleResumeAnalyze = async () => {
+    if (!resumeFile) return;
+    setResumeAnalyzing(true);
+    setResumeError(null);
+    setResumeResult(null);
+    try {
+      const res = await syncService.analyzeResume(resumeFile, ghUsername, lcUsername);
+      setResumeResult(res);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Resume analysis failed.";
+      setResumeError(msg);
+    } finally {
+      setResumeAnalyzing(false);
+    }
+  };
 
   const handleAnalyze = useCallback(async () => {
     setAnalyzing(true);
@@ -535,7 +572,186 @@ export function ProfileAnalyzerPanel() {
   }, [ghUsername, lcUsername]);
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
+      {/* ── Resume Analyzer Card ── */}
+      <Card className="p-5">
+        <div className="flex items-center gap-3 border-b border-border/60 pb-4">
+          <div className="grid h-10 w-10 place-items-center rounded-xl bg-primary/10 text-primary">
+            <FileText className="h-5 w-5" />
+          </div>
+          <div className="flex-1">
+            <h3 className="font-display text-base font-semibold">Resume Analyzer</h3>
+            <p className="text-xs text-muted-foreground">
+              Cross-reference your PDF resume with your verified portfolio coding metrics.
+            </p>
+          </div>
+          {resumeResult && (
+            <Badge className="border-success/30 bg-success/10 text-success">
+              <CheckCircle2 className="mr-1 h-3 w-3" /> Analyzed
+            </Badge>
+          )}
+        </div>
+
+        <div className="pt-4 space-y-4">
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="relative">
+              <input
+                type="file"
+                accept=".pdf"
+                onChange={onFileChange}
+                className="hidden"
+                id="resume-upload-input"
+                disabled={resumeAnalyzing}
+              />
+              <Button
+                asChild
+                variant="outline"
+                className="cursor-pointer"
+                disabled={resumeAnalyzing}
+              >
+                <label htmlFor="resume-upload-input" className="flex items-center gap-2">
+                  <FileText className="h-4 w-4" />
+                  {resumeFile ? "Change PDF" : "Select Resume PDF"}
+                </label>
+              </Button>
+            </div>
+
+            {resumeFile && (
+              <div className="flex items-center gap-2 bg-surface/80 px-3 py-1.5 rounded-lg border border-border text-sm">
+                <span className="font-medium text-foreground truncate max-w-[200px]">
+                  {resumeFile.name}
+                </span>
+                <span className="text-xs text-muted-foreground">
+                  ({(resumeFile.size / 1024).toFixed(1)} KB)
+                </span>
+                <button
+                  onClick={() => {
+                    setResumeFile(null);
+                    setResumeResult(null);
+                    setResumeError(null);
+                  }}
+                  className="text-muted-foreground hover:text-destructive transition-colors ml-1"
+                  disabled={resumeAnalyzing}
+                >
+                  &times;
+                </button>
+              </div>
+            )}
+
+            {resumeFile && (
+              <Button
+                onClick={handleResumeAnalyze}
+                disabled={resumeAnalyzing}
+                className="bg-gradient-brand text-primary-foreground flex items-center gap-2"
+              >
+                {resumeAnalyzing ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Analyzing…
+                  </>
+                ) : (
+                  <>
+                    <Brain className="h-4 w-4" />
+                    Analyze Resume
+                  </>
+                )}
+              </Button>
+            )}
+          </div>
+
+          {resumeError && (
+            <div className="flex items-start gap-2 rounded-lg bg-destructive/10 p-3 text-sm text-destructive animate-in fade-in duration-200">
+              <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+              {resumeError}
+            </div>
+          )}
+
+          {/* Resume Analysis Output */}
+          {resumeResult && (
+            <div className="space-y-4 pt-4 border-t border-border/60 animate-in fade-in duration-300">
+              {/* Discrepancies */}
+              <div className="space-y-2">
+                <h4 className="text-xs font-semibold text-rose-500 uppercase tracking-wider flex items-center gap-1.5">
+                  <ShieldAlert className="h-3.5 w-3.5" />
+                  Detected Discrepancies (Resume Claims vs Portfolio Reality)
+                </h4>
+                {resumeResult.detected_discrepancies.length > 0 ? (
+                  <div className="grid gap-2">
+                    {resumeResult.detected_discrepancies.map((disc, i) => (
+                      <div key={i} className="rounded-lg border border-rose-500/20 bg-rose-500/5 p-3 text-xs space-y-1">
+                        <div className="font-semibold text-foreground flex items-center gap-1 text-[11px]">
+                          <span className="text-rose-500 font-bold">CLAIM:</span> {disc.resume_claim}
+                        </div>
+                        <div className="text-muted-foreground flex items-start gap-1 leading-relaxed">
+                          <span className="text-emerald-500 font-bold">REALITY:</span> {disc.portfolio_reality}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-xs text-muted-foreground bg-emerald-500/5 border border-emerald-500/20 rounded-lg p-3">
+                    No discrepancies detected! Your resume claims perfectly match your verified coding profiles.
+                  </div>
+                )}
+              </div>
+
+              {/* Strengths & Weaknesses side-by-side */}
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="space-y-2">
+                  <h4 className="text-xs font-semibold text-emerald-500 uppercase tracking-wider flex items-center gap-1.5">
+                    <ShieldCheck className="h-3.5 w-3.5" />
+                    Resume Strengths
+                  </h4>
+                  <ul className="space-y-1.5 text-xs text-muted-foreground">
+                    {resumeResult.strengths.map((str, i) => (
+                      <li key={i} className="flex items-start gap-1.5 bg-emerald-500/5 p-2 rounded-md border border-emerald-500/10">
+                        <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500 shrink-0 mt-0.5" />
+                        <span>{str}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+
+                <div className="space-y-2">
+                  <h4 className="text-xs font-semibold text-amber-500 uppercase tracking-wider flex items-center gap-1.5">
+                    <AlertCircle className="h-3.5 w-3.5 text-amber-500/80" />
+                    Formatting & Layout Weaknesses
+                  </h4>
+                  <ul className="space-y-1.5 text-xs text-muted-foreground">
+                    {resumeResult.weaknesses.map((weak, i) => (
+                      <li key={i} className="flex items-start gap-1.5 bg-amber-500/5 p-2 rounded-md border border-amber-500/10">
+                        <AlertCircle className="h-3.5 w-3.5 text-amber-500/80 shrink-0 mt-0.5" />
+                        <span>{weak}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              </div>
+
+              {/* 7-day Daily action plan */}
+              <div className="space-y-2 pt-2">
+                <h4 className="text-xs font-semibold text-primary uppercase tracking-wider flex items-center gap-1.5">
+                  <Sparkles className="h-3.5 w-3.5" />
+                  7-Day Portfolio & Resume Action Plan
+                </h4>
+                <div className="grid gap-2 sm:grid-cols-7">
+                  {resumeResult.next_week_action_plan.map((task, i) => (
+                    <div key={i} className="rounded-lg border border-primary/20 bg-primary/5 p-3 text-[11px] leading-relaxed flex flex-col justify-between">
+                      <div>
+                        <div className="font-bold text-primary mb-1 uppercase tracking-wider text-[10px]">
+                          Day {i + 1}
+                        </div>
+                        <p className="text-muted-foreground">{task}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      </Card>
+
       {/* Sync cards */}
       <div className="grid gap-4 md:grid-cols-2">
         <GitHubSyncCard onSynced={setGhUsername} />

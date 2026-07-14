@@ -15,13 +15,14 @@ import logging
 from typing import Optional
 
 import httpx
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, UploadFile, File, Form
 from pydantic import BaseModel, Field
 
 from ..services.github_service import fetch_github_raw_for_analysis
 from ..services.leetcode_service import fetch_leetcode_raw_for_analysis
 from ..services.formatter import format_for_analysis, FormattedMetrics
 from ..services.analyzer_agent import run_analysis, AnalysisResult
+from ..services.resume_analyzer_agent import analyze_resume, ResumeAnalysisResult
 
 logger = logging.getLogger(__name__)
 
@@ -162,3 +163,65 @@ async def analyze_user(
         formatted_metrics=formatted,
         warnings=warnings,
     )
+
+
+@router.post(
+    "/analyze-resume",
+    response_model=ResumeAnalysisResult,
+    summary="Upload and analyze a PDF resume against coding metrics",
+)
+async def analyze_resume_endpoint(
+    file: UploadFile = File(...),
+    github_username: Optional[str] = Form(None),
+    leetcode_username: Optional[str] = Form(None),
+) -> ResumeAnalysisResult:
+    """
+    Accepts a PDF resume upload, fetches the corresponding GitHub and LeetCode
+    portfolio data if usernames are provided, and runs the resume authenticity analyzer.
+    """
+    # Verify file is a PDF
+    if not file.filename or not file.filename.lower().endswith(".pdf"):
+        raise HTTPException(
+            status_code=400,
+            detail="Only PDF resume files are accepted."
+        )
+
+    try:
+        resume_bytes = await file.read()
+    except Exception as exc:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Failed to read uploaded resume file: {exc}"
+        )
+
+    github_raw = None
+    leetcode_raw = None
+
+    # Fetch GitHub metrics if username provided
+    if github_username:
+        try:
+            github_raw = await fetch_github_raw_for_analysis(github_username)
+        except Exception as exc:
+            logger.warning("Failed to fetch GitHub raw metrics for resume analysis: %s", exc)
+
+    # Fetch LeetCode metrics if username provided
+    if leetcode_username:
+        try:
+            leetcode_raw = await fetch_leetcode_raw_for_analysis(leetcode_username)
+        except Exception as exc:
+            logger.warning("Failed to fetch LeetCode raw metrics for resume analysis: %s", exc)
+
+    # Format the metrics
+    formatted = format_for_analysis(github_raw, leetcode_raw)
+
+    # Run analysis
+    try:
+        result = await analyze_resume(resume_bytes, formatted)
+        return result
+    except Exception as exc:
+        logger.exception("Resume analysis failed")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Resume analysis failed: {exc}"
+        )
+

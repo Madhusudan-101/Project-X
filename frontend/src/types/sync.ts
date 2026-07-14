@@ -166,3 +166,16 @@ export interface AnalyzeApiResponse {
   error: string | null;
 }
 
+export interface Discrepancy {
+  resume_claim: string;
+  portfolio_reality: string;
+}
+
+export interface ResumeAnalysisResult {
+  detected_discrepancies: Discrepancy[];
+  strengths: string[];
+  weaknesses: string[];
+  next_week_action_plan: string[];
+}
+
+

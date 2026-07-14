@@ -33,7 +33,7 @@ export const authService = {
     request<{ ok: true }>("/auth/forgot", { method: "POST", body: { email } }),
 
   verifyOtp: (email: string, code: string) =>
-    request<{ token: string }>("/auth/otp/verify", { method: "POST", body: { email, code } }),
+    request<{ ok: true }>("/auth/otp/verify", { method: "POST", body: { email, code } }),
 
   resetPassword: (token: string, password: string) =>
     request<{ ok: true }>("/auth/reset", { method: "POST", body: { token, password } }),

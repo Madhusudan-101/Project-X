@@ -11,6 +11,7 @@ import type {
   LeetCodeProfileData,
   SyncResponse,
   AnalyzeApiResponse,
+  ResumeAnalysisResult,
 } from "@/types/sync";
 
 // ── Username extraction helpers ──────────────────────────────────────
@@ -95,6 +96,25 @@ export const syncService = {
           github_username: githubUsername,
           leetcode_username: leetcodeUsername,
         },
+      },
+    );
+  },
+
+  analyzeResume: (file: File, githubUsername: string | null, leetcodeUsername: string | null) => {
+    const formData = new FormData();
+    formData.append("file", file);
+    if (githubUsername) {
+      formData.append("github_username", githubUsername);
+    }
+    if (leetcodeUsername) {
+      formData.append("leetcode_username", leetcodeUsername);
+    }
+
+    return request<ResumeAnalysisResult>(
+      `/api/v1/analyze-resume`,
+      {
+        method: "POST",
+        body: formData,
       },
     );
   },

@@ -302,15 +302,6 @@ function AnalyzerTab() {
         </div>
       </div>
 
-      {/* Resume — stays as a static card for now */}
-      <AnalyzerCard
-        icon={FileText}
-        title="Resume Analyzer"
-        body="ATS score, keyword gaps, role-specific rewrites. Drop a PDF."
-        cta="Upload resume"
-        stat="Not analyzed yet"
-      />
-
       {/* Sync + AI analysis */}
       <ProfileAnalyzerPanel />
 

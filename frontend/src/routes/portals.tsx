@@ -81,11 +81,7 @@ function PortalsPage() {
                         <Link to="/auth/login" search={{ role: p.role }}>Login</Link>
                       </Button>
                       <Button asChild size="sm" variant="outline">
-                        {p.role === "company" ? (
-                          <Link to="/auth/company-signup">Sign up</Link>
-                        ) : (
-                          <Link to="/auth/signup" search={{ role: p.role }}>Sign up</Link>
-                        )}
+                        <Link to="/auth/signup" search={{ role: p.role }}>Sign up</Link>
                       </Button>
                     </div>
                   </div>

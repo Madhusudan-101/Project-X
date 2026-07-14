@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from .routers import auth, sync, analyze, company, roles
+from .routers import auth
 
 app = FastAPI(title="Project-X API")
 
@@ -22,10 +22,6 @@ app.add_middleware(
 )
 
 app.include_router(auth.router)
-app.include_router(sync.router)
-app.include_router(analyze.router)
-app.include_router(company.router)
-app.include_router(roles.router)
 
 @app.get("/")
 def root():

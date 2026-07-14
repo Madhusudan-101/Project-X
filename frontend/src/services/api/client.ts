@@ -45,14 +45,21 @@ export async function request<T>(
     authHeaders["Authorization"] = `Bearer ${token}`;
   }
 
+  const isFormData = options.body instanceof FormData;
+  const headers: Record<string, string> = {
+    ...authHeaders,
+    ...options.headers,
+  };
+  if (!isFormData) {
+    headers["Content-Type"] = "application/json";
+  }
+
   const res = await fetch(`${BASE_URL}${path}`, {
     method: options.method ?? "GET",
-    headers: {
-      "Content-Type": "application/json",
-      ...authHeaders,
-      ...options.headers,
-    },
-    body: options.body ? JSON.stringify(options.body) : undefined,
+    headers,
+    body: options.body
+      ? (isFormData ? (options.body as any) : JSON.stringify(options.body))
+      : undefined,
     signal: options.signal,
   });
 
