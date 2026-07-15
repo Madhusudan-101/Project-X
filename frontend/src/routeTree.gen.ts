@@ -18,7 +18,14 @@ import { Route as AuthRouteImport } from './routes/auth'
 import { Route as AdminRouteImport } from './routes/admin'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as CompanyRolesIndexRouteImport } from './routes/company-roles/index'
+import { Route as CollegeIndexRouteImport } from './routes/college/index'
 import { Route as CompanyRolesRoleIdRouteImport } from './routes/company-roles/$roleId'
+import { Route as CollegeStudentsRouteImport } from './routes/college/students'
+import { Route as CollegeShortlistRouteImport } from './routes/college/shortlist'
+import { Route as CollegeReportsRouteImport } from './routes/college/reports'
+import { Route as CollegeDrivesRouteImport } from './routes/college/drives'
+import { Route as CollegeDepartmentsRouteImport } from './routes/college/departments'
+import { Route as CollegeAnalyticsRouteImport } from './routes/college/analytics'
 import { Route as AuthSignupRouteImport } from './routes/auth.signup'
 import { Route as AuthResetPasswordRouteImport } from './routes/auth.reset-password'
 import { Route as AuthProfileSetupRouteImport } from './routes/auth.profile-setup'
@@ -74,10 +81,45 @@ const CompanyRolesIndexRoute = CompanyRolesIndexRouteImport.update({
   path: '/company-roles/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const CollegeIndexRoute = CollegeIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => CollegeRoute,
+} as any)
 const CompanyRolesRoleIdRoute = CompanyRolesRoleIdRouteImport.update({
   id: '/company-roles/$roleId',
   path: '/company-roles/$roleId',
   getParentRoute: () => rootRouteImport,
+} as any)
+const CollegeStudentsRoute = CollegeStudentsRouteImport.update({
+  id: '/students',
+  path: '/students',
+  getParentRoute: () => CollegeRoute,
+} as any)
+const CollegeShortlistRoute = CollegeShortlistRouteImport.update({
+  id: '/shortlist',
+  path: '/shortlist',
+  getParentRoute: () => CollegeRoute,
+} as any)
+const CollegeReportsRoute = CollegeReportsRouteImport.update({
+  id: '/reports',
+  path: '/reports',
+  getParentRoute: () => CollegeRoute,
+} as any)
+const CollegeDrivesRoute = CollegeDrivesRouteImport.update({
+  id: '/drives',
+  path: '/drives',
+  getParentRoute: () => CollegeRoute,
+} as any)
+const CollegeDepartmentsRoute = CollegeDepartmentsRouteImport.update({
+  id: '/departments',
+  path: '/departments',
+  getParentRoute: () => CollegeRoute,
+} as any)
+const CollegeAnalyticsRoute = CollegeAnalyticsRouteImport.update({
+  id: '/analytics',
+  path: '/analytics',
+  getParentRoute: () => CollegeRoute,
 } as any)
 const AuthSignupRoute = AuthSignupRouteImport.update({
   id: '/signup',
@@ -130,7 +172,7 @@ export interface FileRoutesByFullPath {
   '/admin': typeof AdminRoute
   '/auth': typeof AuthRouteWithChildren
   '/candidate': typeof CandidateRoute
-  '/college': typeof CollegeRoute
+  '/college': typeof CollegeRouteWithChildren
   '/company': typeof CompanyRoute
   '/portals': typeof PortalsRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
@@ -143,7 +185,14 @@ export interface FileRoutesByFullPath {
   '/auth/profile-setup': typeof AuthProfileSetupRoute
   '/auth/reset-password': typeof AuthResetPasswordRoute
   '/auth/signup': typeof AuthSignupRoute
+  '/college/analytics': typeof CollegeAnalyticsRoute
+  '/college/departments': typeof CollegeDepartmentsRoute
+  '/college/drives': typeof CollegeDrivesRoute
+  '/college/reports': typeof CollegeReportsRoute
+  '/college/shortlist': typeof CollegeShortlistRoute
+  '/college/students': typeof CollegeStudentsRoute
   '/company-roles/$roleId': typeof CompanyRolesRoleIdRoute
+  '/college/': typeof CollegeIndexRoute
   '/company-roles/': typeof CompanyRolesIndexRoute
 }
 export interface FileRoutesByTo {
@@ -151,7 +200,6 @@ export interface FileRoutesByTo {
   '/admin': typeof AdminRoute
   '/auth': typeof AuthRouteWithChildren
   '/candidate': typeof CandidateRoute
-  '/college': typeof CollegeRoute
   '/company': typeof CompanyRoute
   '/portals': typeof PortalsRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
@@ -164,7 +212,14 @@ export interface FileRoutesByTo {
   '/auth/profile-setup': typeof AuthProfileSetupRoute
   '/auth/reset-password': typeof AuthResetPasswordRoute
   '/auth/signup': typeof AuthSignupRoute
+  '/college/analytics': typeof CollegeAnalyticsRoute
+  '/college/departments': typeof CollegeDepartmentsRoute
+  '/college/drives': typeof CollegeDrivesRoute
+  '/college/reports': typeof CollegeReportsRoute
+  '/college/shortlist': typeof CollegeShortlistRoute
+  '/college/students': typeof CollegeStudentsRoute
   '/company-roles/$roleId': typeof CompanyRolesRoleIdRoute
+  '/college': typeof CollegeIndexRoute
   '/company-roles': typeof CompanyRolesIndexRoute
 }
 export interface FileRoutesById {
@@ -173,7 +228,7 @@ export interface FileRoutesById {
   '/admin': typeof AdminRoute
   '/auth': typeof AuthRouteWithChildren
   '/candidate': typeof CandidateRoute
-  '/college': typeof CollegeRoute
+  '/college': typeof CollegeRouteWithChildren
   '/company': typeof CompanyRoute
   '/portals': typeof PortalsRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
@@ -186,7 +241,14 @@ export interface FileRoutesById {
   '/auth/profile-setup': typeof AuthProfileSetupRoute
   '/auth/reset-password': typeof AuthResetPasswordRoute
   '/auth/signup': typeof AuthSignupRoute
+  '/college/analytics': typeof CollegeAnalyticsRoute
+  '/college/departments': typeof CollegeDepartmentsRoute
+  '/college/drives': typeof CollegeDrivesRoute
+  '/college/reports': typeof CollegeReportsRoute
+  '/college/shortlist': typeof CollegeShortlistRoute
+  '/college/students': typeof CollegeStudentsRoute
   '/company-roles/$roleId': typeof CompanyRolesRoleIdRoute
+  '/college/': typeof CollegeIndexRoute
   '/company-roles/': typeof CompanyRolesIndexRoute
 }
 export interface FileRouteTypes {
@@ -209,7 +271,14 @@ export interface FileRouteTypes {
     | '/auth/profile-setup'
     | '/auth/reset-password'
     | '/auth/signup'
+    | '/college/analytics'
+    | '/college/departments'
+    | '/college/drives'
+    | '/college/reports'
+    | '/college/shortlist'
+    | '/college/students'
     | '/company-roles/$roleId'
+    | '/college/'
     | '/company-roles/'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -217,7 +286,6 @@ export interface FileRouteTypes {
     | '/admin'
     | '/auth'
     | '/candidate'
-    | '/college'
     | '/company'
     | '/portals'
     | '/sitemap.xml'
@@ -230,7 +298,14 @@ export interface FileRouteTypes {
     | '/auth/profile-setup'
     | '/auth/reset-password'
     | '/auth/signup'
+    | '/college/analytics'
+    | '/college/departments'
+    | '/college/drives'
+    | '/college/reports'
+    | '/college/shortlist'
+    | '/college/students'
     | '/company-roles/$roleId'
+    | '/college'
     | '/company-roles'
   id:
     | '__root__'
@@ -251,7 +326,14 @@ export interface FileRouteTypes {
     | '/auth/profile-setup'
     | '/auth/reset-password'
     | '/auth/signup'
+    | '/college/analytics'
+    | '/college/departments'
+    | '/college/drives'
+    | '/college/reports'
+    | '/college/shortlist'
+    | '/college/students'
     | '/company-roles/$roleId'
+    | '/college/'
     | '/company-roles/'
   fileRoutesById: FileRoutesById
 }
@@ -260,7 +342,7 @@ export interface RootRouteChildren {
   AdminRoute: typeof AdminRoute
   AuthRoute: typeof AuthRouteWithChildren
   CandidateRoute: typeof CandidateRoute
-  CollegeRoute: typeof CollegeRoute
+  CollegeRoute: typeof CollegeRouteWithChildren
   CompanyRoute: typeof CompanyRoute
   PortalsRoute: typeof PortalsRoute
   SitemapDotxmlRoute: typeof SitemapDotxmlRoute
@@ -333,12 +415,61 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof CompanyRolesIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/college/': {
+      id: '/college/'
+      path: '/'
+      fullPath: '/college/'
+      preLoaderRoute: typeof CollegeIndexRouteImport
+      parentRoute: typeof CollegeRoute
+    }
     '/company-roles/$roleId': {
       id: '/company-roles/$roleId'
       path: '/company-roles/$roleId'
       fullPath: '/company-roles/$roleId'
       preLoaderRoute: typeof CompanyRolesRoleIdRouteImport
       parentRoute: typeof rootRouteImport
+    }
+    '/college/students': {
+      id: '/college/students'
+      path: '/students'
+      fullPath: '/college/students'
+      preLoaderRoute: typeof CollegeStudentsRouteImport
+      parentRoute: typeof CollegeRoute
+    }
+    '/college/shortlist': {
+      id: '/college/shortlist'
+      path: '/shortlist'
+      fullPath: '/college/shortlist'
+      preLoaderRoute: typeof CollegeShortlistRouteImport
+      parentRoute: typeof CollegeRoute
+    }
+    '/college/reports': {
+      id: '/college/reports'
+      path: '/reports'
+      fullPath: '/college/reports'
+      preLoaderRoute: typeof CollegeReportsRouteImport
+      parentRoute: typeof CollegeRoute
+    }
+    '/college/drives': {
+      id: '/college/drives'
+      path: '/drives'
+      fullPath: '/college/drives'
+      preLoaderRoute: typeof CollegeDrivesRouteImport
+      parentRoute: typeof CollegeRoute
+    }
+    '/college/departments': {
+      id: '/college/departments'
+      path: '/departments'
+      fullPath: '/college/departments'
+      preLoaderRoute: typeof CollegeDepartmentsRouteImport
+      parentRoute: typeof CollegeRoute
+    }
+    '/college/analytics': {
+      id: '/college/analytics'
+      path: '/analytics'
+      fullPath: '/college/analytics'
+      preLoaderRoute: typeof CollegeAnalyticsRouteImport
+      parentRoute: typeof CollegeRoute
     }
     '/auth/signup': {
       id: '/auth/signup'
@@ -432,12 +563,35 @@ const AuthRouteChildren: AuthRouteChildren = {
 
 const AuthRouteWithChildren = AuthRoute._addFileChildren(AuthRouteChildren)
 
+interface CollegeRouteChildren {
+  CollegeAnalyticsRoute: typeof CollegeAnalyticsRoute
+  CollegeDepartmentsRoute: typeof CollegeDepartmentsRoute
+  CollegeDrivesRoute: typeof CollegeDrivesRoute
+  CollegeReportsRoute: typeof CollegeReportsRoute
+  CollegeShortlistRoute: typeof CollegeShortlistRoute
+  CollegeStudentsRoute: typeof CollegeStudentsRoute
+  CollegeIndexRoute: typeof CollegeIndexRoute
+}
+
+const CollegeRouteChildren: CollegeRouteChildren = {
+  CollegeAnalyticsRoute: CollegeAnalyticsRoute,
+  CollegeDepartmentsRoute: CollegeDepartmentsRoute,
+  CollegeDrivesRoute: CollegeDrivesRoute,
+  CollegeReportsRoute: CollegeReportsRoute,
+  CollegeShortlistRoute: CollegeShortlistRoute,
+  CollegeStudentsRoute: CollegeStudentsRoute,
+  CollegeIndexRoute: CollegeIndexRoute,
+}
+
+const CollegeRouteWithChildren =
+  CollegeRoute._addFileChildren(CollegeRouteChildren)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AdminRoute: AdminRoute,
   AuthRoute: AuthRouteWithChildren,
   CandidateRoute: CandidateRoute,
-  CollegeRoute: CollegeRoute,
+  CollegeRoute: CollegeRouteWithChildren,
   CompanyRoute: CompanyRoute,
   PortalsRoute: PortalsRoute,
   SitemapDotxmlRoute: SitemapDotxmlRoute,
@@ -447,13 +601,3 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
-
-import type { getRouter } from './router.tsx'
-import type { startInstance } from './start.ts'
-declare module '@tanstack/react-start' {
-  interface Register {
-    ssr: true
-    router: Awaited<ReturnType<typeof getRouter>>
-    config: Awaited<ReturnType<typeof startInstance.getOptions>>
-  }
-}

@@ -1,5 +1,6 @@
 from pydantic import BaseModel, Field
-from typing import Optional
+from typing import Optional, List, Union
+from datetime import date
 
 
 # ── Auth request payloads ──────────────────────────────────────────────
@@ -67,3 +68,38 @@ class ProfileUpdateIn(BaseModel):
     firstName: Optional[str] = None
     lastName: Optional[str] = None
     onboarded: Optional[bool] = None
+
+
+# ── College Portal payloads ───────────────────────────────────────────
+
+class DriveEligibilityIn(BaseModel):
+    branch: Optional[Union[str, List[str]]] = None
+    graduationYear: Optional[int] = None
+    minimumScore: Optional[float] = None
+
+
+class DriveIn(BaseModel):
+    companyName: str
+    role: str
+    eligibility: DriveEligibilityIn = Field(default_factory=DriveEligibilityIn)
+    date: date
+    status: str = "Active"
+
+
+class ShortlistFilterIn(BaseModel):
+    branch: Optional[str] = None
+    graduationYear: Optional[int] = None
+    minimumScore: Optional[float] = None
+    verificationStatus: Optional[str] = None
+
+
+class DepartmentIn(BaseModel):
+    name: str
+    code: Optional[str] = None
+    hodName: Optional[str] = None
+
+
+class DepartmentUpdateIn(BaseModel):
+    name: Optional[str] = None
+    code: Optional[str] = None
+    hodName: Optional[str] = None

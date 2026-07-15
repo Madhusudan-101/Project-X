@@ -24,6 +24,17 @@ export class ApiClientError extends Error {
   }
 }
 
+/** Base URL for services that need to build a `fetch()` call manually (file uploads, blobs). */
+export function getApiBaseUrl(): string {
+  return BASE_URL;
+}
+
+/** Authorization header for services that bypass `request()` (FormData/blob calls). */
+export function getAuthHeader(): Record<string, string> {
+  const token = useAuthStore.getState().session?.token;
+  return token ? { Authorization: `Bearer ${token}` } : {};
+}
+
 /**
  * Mock request. Currently resolves via `mockHandler` — replace with `fetch(BASE_URL + path)`
  * when FastAPI endpoints are live.

@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from .routers import auth
+from .routers import auth, students, drives, dashboard, shortlist, departments
 
 app = FastAPI(title="Project-X API")
 
@@ -22,6 +22,11 @@ app.add_middleware(
 )
 
 app.include_router(auth.router)
+app.include_router(students.router)
+app.include_router(drives.router)
+app.include_router(dashboard.router)
+app.include_router(shortlist.router)
+app.include_router(departments.router)
 
 @app.get("/")
 def root():
