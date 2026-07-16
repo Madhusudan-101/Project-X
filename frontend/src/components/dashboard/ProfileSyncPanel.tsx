@@ -38,6 +38,7 @@ import {
   FileText,
   PenLine,
   Target,
+  Award,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -865,6 +866,25 @@ export function ProfileAnalyzerPanel() {
                       </div>
                     </div>
                   ))}
+                </div>
+              </div>
+
+              {/* Overall rating — final synthesis */}
+              <div className="rounded-xl border border-border/60 bg-surface/60 p-4 pt-5 mt-2">
+                <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
+                  <ScoreRing score={resumeResult.overall_rating.score} />
+                  <div className="flex-1 space-y-1.5">
+                    <div className="flex items-center gap-1.5 text-xs font-semibold text-foreground uppercase tracking-wider">
+                      <Award className="h-3.5 w-3.5 text-primary" />
+                      Overall Rating
+                    </div>
+                    <Badge className="border-primary/30 bg-primary/10 text-primary text-xs font-semibold">
+                      {resumeResult.overall_rating.verdict}
+                    </Badge>
+                    <p className="text-sm text-muted-foreground leading-relaxed pt-1">
+                      {resumeResult.overall_rating.summary}
+                    </p>
+                  </div>
                 </div>
               </div>
             </div>

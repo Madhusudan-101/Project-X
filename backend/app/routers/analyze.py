@@ -146,6 +146,11 @@ async def analyze_user(
     except Exception as exc:
         logger.exception("Gemini analysis failed for %s", username)
         err_msg = str(exc)
+        if "timeout" in err_msg.lower() or "deadline_exceeded" in err_msg.lower():
+            raise HTTPException(
+                status_code=504,
+                detail="Gemini API timed out generating the analysis. Please try again.",
+            )
         if "429" in err_msg or "quota" in err_msg.lower() or "exhausted" in err_msg.lower():
             raise HTTPException(
                 status_code=429,
@@ -222,6 +227,17 @@ async def analyze_resume_endpoint(
         return result
     except Exception as exc:
         logger.exception("Resume analysis failed")
+        err_msg = str(exc)
+        if "timeout" in err_msg.lower() or "timed out" in err_msg.lower() or "deadline_exceeded" in err_msg.lower():
+            raise HTTPException(
+                status_code=504,
+                detail="Gemini API timed out generating the analysis. Please try again.",
+            )
+        if "429" in err_msg or "quota" in err_msg.lower() or "exhausted" in err_msg.lower():
+            raise HTTPException(
+                status_code=429,
+                detail="Gemini API rate limit or quota exceeded. Please wait a few seconds and try again.",
+            )
         raise HTTPException(
             status_code=500,
             detail=f"Resume analysis failed: {exc}"

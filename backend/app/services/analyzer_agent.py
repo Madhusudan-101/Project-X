@@ -304,6 +304,7 @@ async def run_analysis(formatted: FormattedMetrics) -> AnalysisResult:
         response_schema=_RESPONSE_SCHEMA,
         temperature=0.15,
         max_output_tokens=8192,
+        http_options=types.HttpOptions(timeout=60_000),
     )
 
     # Try each model in order until one succeeds
@@ -323,7 +324,11 @@ async def run_analysis(formatted: FormattedMetrics) -> AnalysisResult:
             last_error = exc
             err_str = str(exc)
             # Retry with next model on 429 (rate limit) or 503 (unavailable)
-            if "429" in err_str or "503" in err_str or "UNAVAILABLE" in err_str or "RESOURCE_EXHAUSTED" in err_str:
+            if (
+                "429" in err_str or "503" in err_str or "504" in err_str
+                or "UNAVAILABLE" in err_str or "RESOURCE_EXHAUSTED" in err_str
+                or "DEADLINE_EXCEEDED" in err_str
+            ):
                 logger.warning("Model %s unavailable (%s), trying next fallback…", model_name, type(exc).__name__)
                 continue
             # For other errors (auth, bad request, etc.) don't retry

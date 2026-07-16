@@ -177,6 +177,12 @@ export interface RoleFitAssessment {
   fit_summary: string;
 }
 
+export interface OverallRating {
+  score: number;
+  verdict: string;
+  summary: string;
+}
+
 export interface ResumeAnalysisResult {
   detected_discrepancies: Discrepancy[];
   role_fit: RoleFitAssessment;
@@ -184,6 +190,7 @@ export interface ResumeAnalysisResult {
   weaknesses: string[];
   resume_corrections: string[];
   next_week_action_plan: string[];
+  overall_rating: OverallRating;
 }
 
 /** Tech-only target roles a candidate can pick before running the resume analyzer. */
