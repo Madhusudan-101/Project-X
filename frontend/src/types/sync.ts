@@ -171,11 +171,33 @@ export interface Discrepancy {
   portfolio_reality: string;
 }
 
+export interface RoleFitAssessment {
+  matched_skills: string[];
+  missing_skills: string[];
+  fit_summary: string;
+}
+
 export interface ResumeAnalysisResult {
   detected_discrepancies: Discrepancy[];
+  role_fit: RoleFitAssessment;
   strengths: string[];
   weaknesses: string[];
+  resume_corrections: string[];
   next_week_action_plan: string[];
 }
+
+/** Tech-only target roles a candidate can pick before running the resume analyzer. */
+export const TECH_ROLES = [
+  "Software Engineer (SWE / SDE)",
+  "AI / ML Engineer",
+  "Data Engineer",
+  "Data Scientist",
+  "Quant Developer",
+  "DevOps / SRE / Cloud Engineer",
+  "Cybersecurity Engineer",
+  "Full-Stack / Frontend Engineer",
+] as const;
+
+export type TechRole = (typeof TECH_ROLES)[number];
 
 

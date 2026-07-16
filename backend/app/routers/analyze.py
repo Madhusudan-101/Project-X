@@ -172,12 +172,14 @@ async def analyze_user(
 )
 async def analyze_resume_endpoint(
     file: UploadFile = File(...),
+    target_role: str = Form(...),
     github_username: Optional[str] = Form(None),
     leetcode_username: Optional[str] = Form(None),
 ) -> ResumeAnalysisResult:
     """
-    Accepts a PDF resume upload, fetches the corresponding GitHub and LeetCode
-    portfolio data if usernames are provided, and runs the resume authenticity analyzer.
+    Accepts a PDF resume upload and a target tech role, fetches the corresponding
+    GitHub and LeetCode portfolio data if usernames are provided, and runs the resume
+    authenticity + role-fit analyzer.
     """
     # Verify file is a PDF
     if not file.filename or not file.filename.lower().endswith(".pdf"):
@@ -216,7 +218,7 @@ async def analyze_resume_endpoint(
 
     # Run analysis
     try:
-        result = await analyze_resume(resume_bytes, formatted)
+        result = await analyze_resume(resume_bytes, formatted, target_role)
         return result
     except Exception as exc:
         logger.exception("Resume analysis failed")

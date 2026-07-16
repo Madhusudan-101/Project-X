@@ -100,9 +100,15 @@ export const syncService = {
     );
   },
 
-  analyzeResume: (file: File, githubUsername: string | null, leetcodeUsername: string | null) => {
+  analyzeResume: (
+    file: File,
+    githubUsername: string | null,
+    leetcodeUsername: string | null,
+    targetRole: string,
+  ) => {
     const formData = new FormData();
     formData.append("file", file);
+    formData.append("target_role", targetRole);
     if (githubUsername) {
       formData.append("github_username", githubUsername);
     }

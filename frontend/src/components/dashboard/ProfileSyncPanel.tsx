@@ -36,6 +36,8 @@ import {
   FolderGit2,
   BookOpen,
   FileText,
+  PenLine,
+  Target,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -43,10 +45,18 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   syncService,
   extractGitHubUsername,
   extractLeetCodeUsername,
 } from "@/services/api/sync";
+import { TECH_ROLES } from "@/types/sync";
 import type {
   GitHubProfileData,
   LeetCodeProfileData,
@@ -515,8 +525,10 @@ export function ProfileAnalyzerPanel() {
 
   // Resume states
   const [resumeFile, setResumeFile] = useState<File | null>(null);
+  const [targetRole, setTargetRole] = useState<string>("");
   const [resumeAnalyzing, setResumeAnalyzing] = useState(false);
   const [resumeResult, setResumeResult] = useState<ResumeAnalysisResult | null>(null);
+  const [analyzedRole, setAnalyzedRole] = useState<string>("");
   const [resumeError, setResumeError] = useState<string | null>(null);
 
   const canAnalyze = ghUsername !== null || lcUsername !== null;
@@ -535,13 +547,14 @@ export function ProfileAnalyzerPanel() {
   };
 
   const handleResumeAnalyze = async () => {
-    if (!resumeFile) return;
+    if (!resumeFile || !targetRole) return;
     setResumeAnalyzing(true);
     setResumeError(null);
     setResumeResult(null);
     try {
-      const res = await syncService.analyzeResume(resumeFile, ghUsername, lcUsername);
+      const res = await syncService.analyzeResume(resumeFile, ghUsername, lcUsername, targetRole);
       setResumeResult(res);
+      setAnalyzedRole(targetRole);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Resume analysis failed.";
       setResumeError(msg);
@@ -593,6 +606,34 @@ export function ProfileAnalyzerPanel() {
         </div>
 
         <div className="pt-4 space-y-4">
+          {/* Step 1: target role */}
+          <div className="space-y-1.5">
+            <label className="text-xs font-semibold text-foreground flex items-center gap-1.5">
+              <Target className="h-3.5 w-3.5 text-primary" />
+              Target Role <span className="text-destructive">*</span>
+            </label>
+            <Select
+              value={targetRole}
+              onValueChange={setTargetRole}
+              disabled={resumeAnalyzing}
+            >
+              <SelectTrigger className="w-full sm:w-72">
+                <SelectValue placeholder="Which role are you applying for?" />
+              </SelectTrigger>
+              <SelectContent>
+                {TECH_ROLES.map((role) => (
+                  <SelectItem key={role} value={role}>
+                    {role}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-[11px] text-muted-foreground">
+              Your resume will be verified against the skills this role typically requires.
+            </p>
+          </div>
+
+          {/* Step 2: upload + analyze */}
           <div className="flex flex-wrap items-center gap-3">
             <div className="relative">
               <input
@@ -641,7 +682,8 @@ export function ProfileAnalyzerPanel() {
             {resumeFile && (
               <Button
                 onClick={handleResumeAnalyze}
-                disabled={resumeAnalyzing}
+                disabled={resumeAnalyzing || !targetRole}
+                title={!targetRole ? "Select a target role first" : undefined}
                 className="bg-gradient-brand text-primary-foreground flex items-center gap-2"
               >
                 {resumeAnalyzing ? (
@@ -658,6 +700,13 @@ export function ProfileAnalyzerPanel() {
               </Button>
             )}
           </div>
+
+          {resumeFile && !targetRole && (
+            <p className="text-[11px] text-amber-500 flex items-center gap-1">
+              <AlertCircle className="h-3 w-3" />
+              Select a target role above to enable analysis.
+            </p>
+          )}
 
           {resumeError && (
             <div className="flex items-start gap-2 rounded-lg bg-destructive/10 p-3 text-sm text-destructive animate-in fade-in duration-200">
@@ -695,6 +744,59 @@ export function ProfileAnalyzerPanel() {
                 )}
               </div>
 
+              {/* Role fit */}
+              <div className="space-y-2 rounded-lg border border-violet-500/20 bg-violet-500/5 p-3">
+                <h4 className="text-xs font-semibold text-violet-500 uppercase tracking-wider flex items-center gap-1.5">
+                  <Target className="h-3.5 w-3.5" />
+                  Role Fit — {analyzedRole}
+                </h4>
+                <p className="text-xs text-muted-foreground leading-relaxed">
+                  {resumeResult.role_fit.fit_summary}
+                </p>
+                <div className="grid gap-3 sm:grid-cols-2 pt-1">
+                  <div className="space-y-1.5">
+                    <span className="text-[11px] font-semibold text-emerald-500 uppercase tracking-wider">
+                      Skills you have
+                    </span>
+                    <div className="flex flex-wrap gap-1.5">
+                      {resumeResult.role_fit.matched_skills.length > 0 ? (
+                        resumeResult.role_fit.matched_skills.map((skill, i) => (
+                          <span
+                            key={i}
+                            className="inline-flex items-center gap-1 rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2.5 py-1 text-[11px] text-emerald-600 dark:text-emerald-400"
+                          >
+                            <CheckCircle2 className="h-3 w-3" />
+                            {skill}
+                          </span>
+                        ))
+                      ) : (
+                        <span className="text-[11px] text-muted-foreground">None identified yet.</span>
+                      )}
+                    </div>
+                  </div>
+                  <div className="space-y-1.5">
+                    <span className="text-[11px] font-semibold text-amber-500 uppercase tracking-wider">
+                      Skills you're missing
+                    </span>
+                    <div className="flex flex-wrap gap-1.5">
+                      {resumeResult.role_fit.missing_skills.length > 0 ? (
+                        resumeResult.role_fit.missing_skills.map((skill, i) => (
+                          <span
+                            key={i}
+                            className="inline-flex items-center gap-1 rounded-full border border-amber-500/20 bg-amber-500/10 px-2.5 py-1 text-[11px] text-amber-600 dark:text-amber-400"
+                          >
+                            <AlertCircle className="h-3 w-3" />
+                            {skill}
+                          </span>
+                        ))
+                      ) : (
+                        <span className="text-[11px] text-muted-foreground">No gaps found — great fit!</span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
               {/* Strengths & Weaknesses side-by-side */}
               <div className="grid gap-4 sm:grid-cols-2">
                 <div className="space-y-2">
@@ -728,11 +830,29 @@ export function ProfileAnalyzerPanel() {
                 </div>
               </div>
 
-              {/* 7-day Daily action plan */}
+              {/* Resume text corrections — one-off edits, not a daily plan */}
+              {resumeResult.resume_corrections.length > 0 && (
+                <div className="space-y-2 pt-2">
+                  <h4 className="text-xs font-semibold text-sky-500 uppercase tracking-wider flex items-center gap-1.5">
+                    <PenLine className="h-3.5 w-3.5" />
+                    Recommended Resume Edits
+                  </h4>
+                  <ul className="space-y-1.5 text-xs text-muted-foreground">
+                    {resumeResult.resume_corrections.map((fix, i) => (
+                      <li key={i} className="flex items-start gap-1.5 bg-sky-500/5 p-2 rounded-md border border-sky-500/10">
+                        <PenLine className="h-3.5 w-3.5 text-sky-500 shrink-0 mt-0.5" />
+                        <span>{fix}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {/* 7-day skill-building plan */}
               <div className="space-y-2 pt-2">
                 <h4 className="text-xs font-semibold text-primary uppercase tracking-wider flex items-center gap-1.5">
                   <Sparkles className="h-3.5 w-3.5" />
-                  7-Day Portfolio & Resume Action Plan
+                  7-Day Skill Improvement Plan
                 </h4>
                 <div className="grid gap-2 sm:grid-cols-7">
                   {resumeResult.next_week_action_plan.map((task, i) => (
