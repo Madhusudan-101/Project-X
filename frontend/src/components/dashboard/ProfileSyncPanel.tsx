@@ -369,9 +369,12 @@ export function GitHubSyncCard({
           <Github className="h-5 w-5" />
         </div>
         <div className="flex-1">
-          <h3 className="font-display text-base font-semibold">GitHub Analyzer</h3>
+          <h3 className="font-display text-base font-semibold flex items-center gap-1">
+            GitHub Analyzer <span className="text-destructive">*</span>
+          </h3>
           <p className="text-xs text-muted-foreground">
             Paste your GitHub profile link to import your coding activity.
+            <span className="text-destructive"> Required</span> for Resume Analysis.
           </p>
         </div>
         {data && (
@@ -548,12 +551,13 @@ export function ProfileAnalyzerPanel() {
   };
 
   const handleResumeAnalyze = async () => {
-    if (!resumeFile || !targetRole) return;
+    if (!resumeFile || !targetRole || !ghUsername) return;
+    const githubUsername = ghUsername;
     setResumeAnalyzing(true);
     setResumeError(null);
     setResumeResult(null);
     try {
-      const res = await syncService.analyzeResume(resumeFile, ghUsername, lcUsername, targetRole);
+      const res = await syncService.analyzeResume(resumeFile, githubUsername, lcUsername, targetRole);
       setResumeResult(res);
       setAnalyzedRole(targetRole);
     } catch (err: unknown) {
@@ -587,6 +591,12 @@ export function ProfileAnalyzerPanel() {
 
   return (
     <div className="space-y-6">
+      {/* Sync cards — GitHub sync is required before Resume Analysis below */}
+      <div className="grid gap-4 md:grid-cols-2">
+        <GitHubSyncCard onSynced={setGhUsername} />
+        <LeetCodeSyncCard onSynced={setLcUsername} />
+      </div>
+
       {/* ── Resume Analyzer Card ── */}
       <Card className="p-5">
         <div className="flex items-center gap-3 border-b border-border/60 pb-4">
@@ -597,6 +607,7 @@ export function ProfileAnalyzerPanel() {
             <h3 className="font-display text-base font-semibold">Resume Analyzer</h3>
             <p className="text-xs text-muted-foreground">
               Cross-reference your PDF resume with your verified portfolio coding metrics.
+              {!ghUsername && " Sync your GitHub profile above first."}
             </p>
           </div>
           {resumeResult && (
@@ -683,8 +694,14 @@ export function ProfileAnalyzerPanel() {
             {resumeFile && (
               <Button
                 onClick={handleResumeAnalyze}
-                disabled={resumeAnalyzing || !targetRole}
-                title={!targetRole ? "Select a target role first" : undefined}
+                disabled={resumeAnalyzing || !targetRole || !ghUsername}
+                title={
+                  !targetRole
+                    ? "Select a target role first"
+                    : !ghUsername
+                      ? "Sync your GitHub profile below first"
+                      : undefined
+                }
                 className="bg-gradient-brand text-primary-foreground flex items-center gap-2"
               >
                 {resumeAnalyzing ? (
@@ -702,10 +719,14 @@ export function ProfileAnalyzerPanel() {
             )}
           </div>
 
-          {resumeFile && !targetRole && (
+          {resumeFile && (!targetRole || !ghUsername) && (
             <p className="text-[11px] text-amber-500 flex items-center gap-1">
               <AlertCircle className="h-3 w-3" />
-              Select a target role above to enable analysis.
+              {!targetRole && !ghUsername
+                ? "Select a target role above and sync your GitHub profile below to enable analysis."
+                : !targetRole
+                  ? "Select a target role above to enable analysis."
+                  : "Sync your GitHub profile below to enable analysis — it's required so we can verify your resume against real activity."}
             </p>
           )}
 
@@ -891,12 +912,6 @@ export function ProfileAnalyzerPanel() {
           )}
         </div>
       </Card>
-
-      {/* Sync cards */}
-      <div className="grid gap-4 md:grid-cols-2">
-        <GitHubSyncCard onSynced={setGhUsername} />
-        <LeetCodeSyncCard onSynced={setLcUsername} />
-      </div>
 
       {/* AI Analysis CTA — only visible once at least one profile is synced */}
       {canAnalyze && (

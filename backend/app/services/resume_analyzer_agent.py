@@ -14,6 +14,7 @@ import json
 import logging
 import os
 import re
+from datetime import date
 from typing import Any, Dict, List
 
 from google import genai
@@ -281,6 +282,13 @@ async def analyze_resume(
         ),
         f"Here are the candidate's actual verified coding metrics:\n{portfolio.model_dump_json()}",
         f"The candidate's target tech role is: {target_role}",
+        f"Today's real-world date is {date.today().isoformat()}. Use this as the ONLY ground "
+        "truth for any date/timeline reasoning in the resume (internship dates, graduation year, "
+        "project dates, etc.) — do not assume any other 'current date' from your own training. "
+        "Only flag a date as future-dated, impossible, or chronologically anomalous if it is "
+        "genuinely after this real date or otherwise logically inconsistent (e.g. an end date "
+        "before its start date); a date that is simply in the past or present relative to this "
+        "real date is NOT an anomaly.",
     ]
 
     config = genai_types.GenerateContentConfig(
@@ -354,7 +362,7 @@ async def analyze_resume(
         response_mime_type="application/json",
         response_schema=_RESPONSE_SCHEMA,
         temperature=0.2,
-        max_output_tokens=4096,
+        max_output_tokens=8192,
         http_options=genai_types.HttpOptions(timeout=60_000),
     )
 

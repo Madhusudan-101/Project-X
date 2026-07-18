@@ -178,12 +178,13 @@ async def analyze_user(
 async def analyze_resume_endpoint(
     file: UploadFile = File(...),
     target_role: str = Form(...),
-    github_username: Optional[str] = Form(None),
+    github_username: str = Form(...),
     leetcode_username: Optional[str] = Form(None),
 ) -> ResumeAnalysisResult:
     """
-    Accepts a PDF resume upload and a target tech role, fetches the corresponding
-    GitHub and LeetCode portfolio data if usernames are provided, and runs the resume
+    Accepts a PDF resume upload, a target tech role, and a synced GitHub username
+    (required so the analyzer always has real portfolio data to verify the resume
+    against), plus an optional LeetCode username, and runs the resume
     authenticity + role-fit analyzer.
     """
     # Verify file is a PDF
@@ -201,15 +202,18 @@ async def analyze_resume_endpoint(
             detail=f"Failed to read uploaded resume file: {exc}"
         )
 
-    github_raw = None
-    leetcode_raw = None
+    # GitHub is required — fetch failure here is fatal, not silently swallowed,
+    # since the whole point of requiring it is to guarantee real data to verify against.
+    try:
+        github_raw = await fetch_github_raw_for_analysis(github_username)
+    except Exception as exc:
+        logger.warning("Failed to fetch GitHub raw metrics for resume analysis: %s", exc)
+        raise HTTPException(
+            status_code=404,
+            detail=f"Could not fetch GitHub data for '{github_username}'. Please re-sync your GitHub profile and try again.",
+        )
 
-    # Fetch GitHub metrics if username provided
-    if github_username:
-        try:
-            github_raw = await fetch_github_raw_for_analysis(github_username)
-        except Exception as exc:
-            logger.warning("Failed to fetch GitHub raw metrics for resume analysis: %s", exc)
+    leetcode_raw = None
 
     # Fetch LeetCode metrics if username provided
     if leetcode_username:

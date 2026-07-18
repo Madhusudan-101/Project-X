@@ -102,16 +102,14 @@ export const syncService = {
 
   analyzeResume: (
     file: File,
-    githubUsername: string | null,
+    githubUsername: string,
     leetcodeUsername: string | null,
     targetRole: string,
   ) => {
     const formData = new FormData();
     formData.append("file", file);
     formData.append("target_role", targetRole);
-    if (githubUsername) {
-      formData.append("github_username", githubUsername);
-    }
+    formData.append("github_username", githubUsername);
     if (leetcodeUsername) {
       formData.append("leetcode_username", leetcodeUsername);
     }
