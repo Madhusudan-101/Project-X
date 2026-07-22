@@ -21,6 +21,6 @@ export const useCompanyStore = create<CompanyState>()(
       setCompany: (company) => set({ company }),
       clearCompany: () => set({ company: null }),
     }),
-    { name: "projectx.company" },
+    { name: "mirracle.company" },
   ),
 );

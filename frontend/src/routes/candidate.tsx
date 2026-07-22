@@ -46,7 +46,9 @@ import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useAuthStore } from "@/store/auth";
+import { useResumeAnalysisStore } from "@/store/resumeAnalysis";
 import { ProfileAnalyzerPanel } from "@/components/dashboard/ProfileSyncPanel";
+import { computeDnaBreakdown, computeDnaScore, computeSkillDna } from "@/lib/skillDna";
 
 export const Route = createFileRoute("/candidate")({
   component: CandidatePortal,
@@ -57,17 +59,6 @@ export const Route = createFileRoute("/candidate")({
 // Wire these to the API / per-user store later.
 
 const learningCurve: { week: string; score: number; hours: number }[] = [];
-
-const skillDna: { skill: string; value: number }[] = [
-  { skill: "DSA", value: 0 },
-  { skill: "System Design", value: 0 },
-  { skill: "Backend", value: 0 },
-  { skill: "Frontend", value: 0 },
-  { skill: "DevOps", value: 0 },
-  { skill: "ML/AI", value: 0 },
-];
-
-const dnaBreakdown: { label: string; value: number; note: string }[] = [];
 
 const companyTracks: {
   company: string;
@@ -86,6 +77,7 @@ function CandidatePortal() {
   const navigate = useNavigate();
   const session = useAuthStore((s) => s.session);
   const logout = useAuthStore((s) => s.logout);
+  const clearResumeAnalysis = useResumeAnalysisStore((s) => s.clear);
 
   const displayName = useMemo(() => {
     const u = session?.user;
@@ -109,6 +101,7 @@ function CandidatePortal() {
 
   const signOut = () => {
     logout();
+    clearResumeAnalysis();
     navigate({ to: "/" });
   };
 
@@ -122,7 +115,7 @@ function CandidatePortal() {
               <Sparkles className="h-4 w-4 text-primary-foreground" />
             </div>
             <div className="hidden sm:block leading-tight">
-              <div className="font-display text-sm font-semibold">Project X</div>
+              <div className="font-display text-sm font-semibold">Mirracle</div>
               <div className="text-[11px] text-muted-foreground">Candidate</div>
             </div>
           </Link>
@@ -142,7 +135,7 @@ function CandidatePortal() {
             </Button>
             <div className="ml-2 hidden text-right text-xs md:block">
               <div className="font-medium">{displayName || "New candidate"}</div>
-              <div className="text-muted-foreground">{session?.user?.email ?? "you@projectx.ai"}</div>
+              <div className="text-muted-foreground">{session?.user?.email ?? "you@mirracle.ai"}</div>
             </div>
             <div className="ml-2 grid h-8 w-8 place-items-center rounded-full bg-primary/10 text-xs font-semibold text-primary">
               {initials}
@@ -451,18 +444,30 @@ function PracticeTab() {
 // ---------- Skill DNA ----------
 
 function TechDnaTab() {
-  const hasData = skillDna.some((s) => s.value > 0);
+  const resumeResult = useResumeAnalysisStore((s) => s.result);
+  const analyzedRole = useResumeAnalysisStore((s) => s.role);
+  const matchedSkills = useMemo(
+    () => resumeResult?.role_fit.matched_skills ?? [],
+    [resumeResult],
+  );
+  const skillDna = useMemo(() => computeSkillDna(matchedSkills), [matchedSkills]);
+  const dnaBreakdown = useMemo(() => computeDnaBreakdown(matchedSkills), [matchedSkills]);
+  const dnaScore = useMemo(() => computeDnaScore(matchedSkills), [matchedSkills]);
+  const hasData = matchedSkills.length > 0;
+
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="font-display text-2xl font-semibold">Skill DNA</h1>
           <p className="text-sm text-muted-foreground">
-            The mix of skills in your DNA — pulled from LeetCode, GitHub, and your resume, weighted by recency.
+            {hasData
+              ? `Computed from the skills your resume matched against ${analyzedRole || "your target role"}.`
+              : "The mix of skills in your DNA — pulled from your resume, weighted by role fit."}
           </p>
         </div>
         <Badge className="bg-primary/10 text-primary border-primary/20">
-          DNA score {hasData ? "—/100" : "—/100"}
+          DNA score {dnaScore !== null ? `${dnaScore}/100` : "—/100"}
         </Badge>
       </div>
 
@@ -524,9 +529,16 @@ function TechDnaTab() {
           </div>
           <Award className="h-5 w-5 text-primary" />
         </div>
-        <div className="rounded-lg border border-dashed border-border/70 bg-surface/60 p-6 text-center text-sm text-muted-foreground">
-          Your personal DNA read-out appears here after your first analyzer run.
-        </div>
+        {hasData && resumeResult ? (
+          <div className="space-y-3 rounded-lg border border-border/60 bg-surface/60 p-5 text-sm leading-relaxed text-foreground/90">
+            <p>{resumeResult.role_fit.fit_summary}</p>
+            <p className="text-muted-foreground">{resumeResult.overall_rating.summary}</p>
+          </div>
+        ) : (
+          <div className="rounded-lg border border-dashed border-border/70 bg-surface/60 p-6 text-center text-sm text-muted-foreground">
+            Your personal DNA read-out appears here after your first resume analysis — run one from the Analyzer tab.
+          </div>
+        )}
       </Card>
     </div>
   );

@@ -1,5 +1,5 @@
 -- ============================================================
--- Company Migration — Project X
+-- Company Migration — Mirracle
 -- Run AFTER the base migrations.sql (trigger_set_updated_at must exist)
 -- ============================================================
 

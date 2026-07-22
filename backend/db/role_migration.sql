@@ -1,5 +1,5 @@
 -- ============================================================
--- Role Posting Migration — Project X (Feature 2: Company Dashboard)
+-- Role Posting Migration — Mirracle (Feature 2: Company Dashboard)
 -- Run AFTER company_migration.sql (companies table + trigger_set_updated_at must exist)
 -- ============================================================
 

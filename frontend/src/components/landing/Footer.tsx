@@ -21,7 +21,7 @@ export function Footer() {
               <div className="grid h-9 w-9 place-items-center rounded-xl bg-gradient-brand shadow-glow">
                 <Sparkles className="h-5 w-5 text-primary-foreground" />
               </div>
-              <span className="font-display text-lg font-bold">Project X</span>
+              <span className="font-display text-lg font-bold">Mirracle</span>
             </Link>
             <p className="mt-4 max-w-xs text-sm text-muted-foreground">
               The AI-powered hiring ecosystem for candidates, companies, and colleges.
@@ -55,7 +55,7 @@ export function Footer() {
         </div>
         <div className="mt-12 flex flex-col items-start justify-between gap-4 border-t border-border/60 pt-6 md:flex-row md:items-center">
           <p className="text-xs text-muted-foreground">
-            © {new Date().getFullYear()} Project X. All rights reserved.
+            © {new Date().getFullYear()} Mirracle. All rights reserved.
           </p>
           <div className="flex gap-4 text-xs text-muted-foreground">
             <a href="#">Privacy</a>

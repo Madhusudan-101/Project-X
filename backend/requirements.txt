@@ -5,3 +5,4 @@ supabase
 pydantic
 httpx
 python-multipart
+google-genai

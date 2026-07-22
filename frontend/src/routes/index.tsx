@@ -59,7 +59,7 @@ const STEPS = [
 
 const TESTIMONIALS = [
   {
-    quote: "Project X replaced three separate tools. Our time-to-hire dropped 42% in a single quarter.",
+    quote: "Mirracle replaced three separate tools. Our time-to-hire dropped 42% in a single quarter.",
     name: "Aditi Rao",
     role: "Head of Talent, Northwind",
   },
@@ -106,7 +106,7 @@ const PLANS = [
 ];
 
 const FAQS = [
-  { q: "Is Project X available for individual candidates?", a: "Yes — sign up on the Candidate portal to access AI interviews, resume analysis, and code portfolio insights for free." },
+  { q: "Is Mirracle available for individual candidates?", a: "Yes — sign up on the Candidate portal to access AI interviews, resume analysis, and code portfolio insights for free." },
   { q: "Can we bring our own question banks?", a: "Absolutely. Companies and colleges can import CSV/JSON banks or build them visually in the studio." },
   { q: "Which languages does the AI interviewer support?", a: "The interviewer supports 12+ languages including English, Hindi, Spanish, French, German, and Japanese." },
   { q: "How is candidate data handled?", a: "SOC2-aligned controls, region-pinned storage, and per-tenant encryption keys are standard on Growth and above." },
@@ -136,7 +136,7 @@ function LandingPage() {
               Place better.
             </h1>
             <p className="mt-5 max-w-xl text-lg text-muted-foreground">
-              Project X connects candidates, companies, and colleges in one AI-powered hiring
+              Mirracle connects candidates, companies, and colleges in one AI-powered hiring
               platform — interviews, assessments, analytics, and placement in a single workspace.
             </p>
             <div className="mt-8 flex flex-wrap gap-3">

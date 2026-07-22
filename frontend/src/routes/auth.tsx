@@ -29,7 +29,7 @@ function AuthLayout() {
             <div className="grid h-10 w-10 place-items-center rounded-xl bg-gradient-brand shadow-glow">
               <Sparkles className="h-5 w-5 text-primary-foreground" />
             </div>
-            <span className="font-display text-xl font-bold">Project X</span>
+            <span className="font-display text-xl font-bold">Mirracle</span>
           </Link>
 
           <div className="max-w-md">
@@ -57,7 +57,7 @@ function AuthLayout() {
           </div>
 
           <div className="text-xs text-muted-foreground">
-            © {new Date().getFullYear()} Project X. All rights reserved.
+            © {new Date().getFullYear()} Mirracle. All rights reserved.
           </div>
         </div>
       </div>
@@ -70,7 +70,7 @@ function AuthLayout() {
               <div className="grid h-9 w-9 place-items-center rounded-xl bg-gradient-brand">
                 <Sparkles className="h-4 w-4 text-primary-foreground" />
               </div>
-              <span className="font-display text-lg font-bold">Project X</span>
+              <span className="font-display text-lg font-bold">Mirracle</span>
             </Link>
           </div>
           <Outlet />

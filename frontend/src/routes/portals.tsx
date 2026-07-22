@@ -9,8 +9,8 @@ import type { UserRole } from "@/types";
 export const Route = createFileRoute("/portals")({
   head: () => ({
     meta: [
-      { title: "Choose your portal — Project X" },
-      { name: "description", content: "Sign in as a Candidate, Company, College or Admin to enter Project X." },
+      { title: "Choose your portal — Mirracle" },
+      { name: "description", content: "Sign in as a Candidate, Company, College or Admin to enter Mirracle." },
     ],
   }),
   component: PortalsPage,
@@ -40,7 +40,7 @@ function PortalsPage() {
             <div className="grid h-10 w-10 place-items-center rounded-xl bg-gradient-brand shadow-glow">
               <Sparkles className="h-5 w-5 text-primary-foreground" />
             </div>
-            <span className="font-display text-xl font-bold">Project X</span>
+            <span className="font-display text-xl font-bold">Mirracle</span>
           </Link>
           <h1 className="mx-auto mt-8 max-w-2xl font-display text-4xl font-bold md:text-5xl">
             Choose your <span className="text-gradient">portal</span>

@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from .routers import auth, students, drives, dashboard, shortlist, departments, sync, analyze
 
-app = FastAPI(title="Project-X API")
+app = FastAPI(title="Mirracle API")
 
 # Add CORS middleware
 app.add_middleware(
@@ -32,4 +32,4 @@ app.include_router(analyze.router)
 
 @app.get("/")
 def root():
-    return {"ok": True, "msg": "Project-X backend"}
+    return {"ok": True, "msg": "Mirracle backend"}
