@@ -14,6 +14,7 @@ import json
 import logging
 import os
 import re
+from datetime import date
 from typing import Any, Dict, List
 
 from google import genai
@@ -110,7 +111,11 @@ class ResumeAnalysisResult(BaseModel):
     )
     weaknesses: List[str] = Field(
         ...,
-        description="Formatting, structure, or technical depth issues found in the resume layout itself."
+        description=(
+            "Formatting, structure, or technical depth issues in the resume itself — including "
+            "fundamental craft hygiene like page length for the candidate's experience level, "
+            "claim density vs. a stated timeframe, and sloppy-editing artifacts."
+        )
     )
     resume_corrections: List[str] = Field(
         ...,
@@ -192,7 +197,11 @@ _RESPONSE_SCHEMA = {
         "weaknesses": {
             "type": "array",
             "items": {"type": "string"},
-            "description": "Resume formatting or technical weaknesses."
+            "description": (
+                "Resume formatting or technical weaknesses, including fundamental craft hygiene: "
+                "page length for the candidate's experience level, claim density vs. stated "
+                "timeframe, and sloppy-editing artifacts."
+            )
         },
         "resume_corrections": {
             "type": "array",
@@ -281,6 +290,13 @@ async def analyze_resume(
         ),
         f"Here are the candidate's actual verified coding metrics:\n{portfolio.model_dump_json()}",
         f"The candidate's target tech role is: {target_role}",
+        f"Today's real-world date is {date.today().isoformat()}. Use this as the ONLY ground "
+        "truth for any date/timeline reasoning in the resume (internship dates, graduation year, "
+        "project dates, etc.) — do not assume any other 'current date' from your own training. "
+        "Only flag a date as future-dated, impossible, or chronologically anomalous if it is "
+        "genuinely after this real date or otherwise logically inconsistent (e.g. an end date "
+        "before its start date); a date that is simply in the past or present relative to this "
+        "real date is NOT an anomaly.",
     ]
 
     config = genai_types.GenerateContentConfig(
@@ -310,6 +326,19 @@ async def analyze_resume(
             "of the candidate's ability (e.g. a top-5 hackathon finish among 50+ teams IS evidence of "
             "applied engineering ability; a podium finish in a CP contest IS evidence of DSA ability) "
             "even with zero linked GitHub/LeetCode profile behind them.\n\n"
+            "For `weaknesses`: ALWAYS check fundamental resume-craft hygiene, independent of "
+            "portfolio verification — recruiters spend seconds per resume, so these matter a lot:\n"
+            "(a) Length/conciseness — for a student or a candidate with under ~2-3 years of "
+            "experience, a resume longer than one page is a real weakness recruiters penalize, not "
+            "a stylistic choice. If the resume runs onto a second page, flag it explicitly and name "
+            "which sections/bullets look cuttable or condensable to fit one page.\n"
+            "(b) Claim density vs. stated timeframe — for any role/internship/project with a short "
+            "duration (e.g. a few weeks), check whether the claimed deliverables and quantified "
+            "impact are unusually dense for that timeframe. If so, flag it as needing interview "
+            "verification rather than taking it at face value — this is the same scrutiny you'd "
+            "apply to a suspicious date range, just applied to workload density instead.\n"
+            "(c) Sloppy-editing artifacts — stray unexplained symbols/asterisks, footnote markers "
+            "with no matching footnote, inconsistent date formats, typos — flag these too.\n\n"
             "For `role_fit`: first privately determine, from general industry hiring standards, "
             "the skills, tools, and experience typically required for the candidate's stated "
             "target role (e.g. an AI/ML role expects things like model training, data pipelines, "
@@ -354,7 +383,7 @@ async def analyze_resume(
         response_mime_type="application/json",
         response_schema=_RESPONSE_SCHEMA,
         temperature=0.2,
-        max_output_tokens=4096,
+        max_output_tokens=8192,
         http_options=genai_types.HttpOptions(timeout=60_000),
     )
 
