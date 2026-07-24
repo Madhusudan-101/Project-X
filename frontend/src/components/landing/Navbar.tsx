@@ -34,7 +34,7 @@ export function Navbar() {
             <div className="grid h-9 w-9 place-items-center rounded-xl bg-gradient-brand shadow-glow">
               <Sparkles className="h-5 w-5 text-primary-foreground" />
             </div>
-            <span className="font-display text-lg font-bold tracking-tight">Project X</span>
+            <span className="font-display text-lg font-bold tracking-tight">Mirracle</span>
           </Link>
 
           <nav className="hidden items-center gap-1 lg:flex">

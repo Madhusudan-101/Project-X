@@ -16,7 +16,7 @@ import type { Role } from "@/types/role";
 
 export const Route = createFileRoute("/company-roles/$roleId")({
   head: ({ params }) => ({
-    meta: [{ title: `Role — ${params.roleId} — Project X` }],
+    meta: [{ title: `Role — ${params.roleId} — Mirracle` }],
   }),
   component: RoleDetailPage,
 });

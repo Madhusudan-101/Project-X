@@ -1,8 +1,8 @@
 You are a Senior Full Stack Engineer.
 
-We are working on an existing production repository named Project X.
+We are working on an existing production repository named Mirracle.
 
-Project X is an AI-powered campus recruitment platform similar to HackerRank and HackerEarth.
+Mirracle is an AI-powered campus recruitment platform similar to HackerRank and HackerEarth.
 
 My responsibility is ONLY the Company Dashboard.
 

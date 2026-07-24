@@ -151,7 +151,7 @@ export function EngagingDashboard({
               <Sparkles className="h-4 w-4 text-primary-foreground" />
             </div>
             <div className="hidden sm:block">
-              <div className="font-display text-sm font-bold leading-none">Project X</div>
+              <div className="font-display text-sm font-bold leading-none">Mirracle</div>
               <div className="mt-0.5 text-xs text-muted-foreground">{role} Portal</div>
             </div>
           </Link>
@@ -174,7 +174,7 @@ export function EngagingDashboard({
             </Button>
             <div className="hidden text-right text-xs md:block">
               <div className="font-medium text-foreground">{displayName || `${role} user`}</div>
-              <div className="text-muted-foreground">{session?.user?.email ?? "preview@projectx.ai"}</div>
+              <div className="text-muted-foreground">{session?.user?.email ?? "preview@mirracle.ai"}</div>
             </div>
             <div className="grid h-9 w-9 place-items-center rounded-full bg-gradient-brand text-xs font-semibold text-primary-foreground">
               {initials}

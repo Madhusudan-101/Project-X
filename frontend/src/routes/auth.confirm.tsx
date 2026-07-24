@@ -91,7 +91,7 @@ function AuthConfirmPage() {
         });
 
         setStatus("success");
-        toast.success("Email confirmed! Welcome to Project X.");
+        toast.success("Email confirmed! Welcome to Mirracle.");
 
         // Redirect to the correct portal based on role
         setTimeout(() => {

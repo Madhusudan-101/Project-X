@@ -18,6 +18,6 @@ export const useAuthStore = create<AuthState>()(
         set((s) => (s.session ? { session: { ...s.session, user: { ...s.session.user, ...patch } } } : s)),
       logout: () => set({ session: null }),
     }),
-    { name: "projectx.auth" },
+    { name: "mirracle.auth" },
   ),
 );

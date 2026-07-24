@@ -53,12 +53,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   syncService,
   extractGitHubUsername,
   extractLeetCodeUsername,
   extractCodeforcesHandle,
 } from "@/services/api/sync";
+import { useResumeAnalysisStore } from "@/store/resumeAnalysis";
 import { TECH_ROLES } from "@/types/sync";
 import type {
   GitHubProfileData,
@@ -325,6 +327,230 @@ function AIAnalysisResultCard({ result }: { result: AnalysisResult }) {
           {result.actionable_feedback}
         </p>
       </Card>
+    </div>
+  );
+}
+
+// ── Resume Analysis Result ────────────────────────────────────────────
+
+function verdictTone(score: number) {
+  if (score >= 85) return { text: "text-emerald-500", ring: "from-emerald-500/15" };
+  if (score >= 65) return { text: "text-primary", ring: "from-primary/15" };
+  if (score >= 40) return { text: "text-amber-500", ring: "from-amber-500/15" };
+  return { text: "text-destructive", ring: "from-destructive/15" };
+}
+
+function ResumeAnalysisResultView({
+  result,
+  role,
+}: {
+  result: ResumeAnalysisResult;
+  role: string;
+}) {
+  const { overall_rating, role_fit, detected_discrepancies, strengths, weaknesses, resume_corrections, next_week_action_plan } =
+    result;
+  const tone = verdictTone(overall_rating.score);
+
+  return (
+    <div className="space-y-5 pt-5 border-t border-border/60 animate-in fade-in slide-in-from-bottom-2 duration-300">
+      {/* Hero — the headline verdict, front and center */}
+      <div className={`relative overflow-hidden rounded-2xl border border-primary/20 bg-gradient-to-br ${tone.ring} via-surface to-surface p-6`}>
+        <div className="flex flex-col gap-5 sm:flex-row sm:items-center">
+          <ScoreRing score={overall_rating.score} />
+          <div className="flex-1 space-y-2.5">
+            <div className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              <Award className="h-3.5 w-3.5 text-primary" />
+              Overall Resume Rating
+            </div>
+            <Badge className={`${tone.text} border-current/30 bg-current/10 text-sm font-semibold px-3 py-1`}>
+              {overall_rating.verdict}
+            </Badge>
+            <p className="text-base leading-relaxed text-foreground/90">
+              {overall_rating.summary}
+            </p>
+          </div>
+        </div>
+      </div>
+
+      {/* Chunked, tabbed detail — easier to read than one long wall of text */}
+      <Tabs defaultValue="fit" className="w-full">
+        <TabsList className="h-auto w-full flex-wrap justify-start gap-1 bg-surface/60 p-1.5">
+          <TabsTrigger value="fit" className="text-sm">
+            <Target className="mr-1.5 h-3.5 w-3.5" />
+            Role Fit
+          </TabsTrigger>
+          <TabsTrigger value="discrepancies" className="text-sm">
+            <ShieldAlert className="mr-1.5 h-3.5 w-3.5" />
+            Discrepancies
+            {detected_discrepancies.length > 0 && (
+              <Badge className="ml-1.5 h-4 min-w-4 justify-center rounded-full border-rose-500/30 bg-rose-500/10 px-1 text-[10px] text-rose-500">
+                {detected_discrepancies.length}
+              </Badge>
+            )}
+          </TabsTrigger>
+          <TabsTrigger value="feedback" className="text-sm">
+            <ShieldCheck className="mr-1.5 h-3.5 w-3.5" />
+            Strengths & Fixes
+          </TabsTrigger>
+          <TabsTrigger value="plan" className="text-sm">
+            <Sparkles className="mr-1.5 h-3.5 w-3.5" />
+            7-Day Plan
+          </TabsTrigger>
+        </TabsList>
+
+        {/* Role fit */}
+        <TabsContent value="fit" className="space-y-4 pt-4">
+          <div className="rounded-xl border border-violet-500/20 bg-violet-500/5 p-4">
+            <h4 className="mb-2 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-violet-500">
+              <Target className="h-3.5 w-3.5" />
+              Fit for {role || "your target role"}
+            </h4>
+            <p className="text-sm leading-relaxed text-foreground/90">{role_fit.fit_summary}</p>
+          </div>
+
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="space-y-2">
+              <span className="block text-xs font-semibold uppercase tracking-wider text-emerald-500">
+                Skills you have
+              </span>
+              <div className="flex flex-wrap gap-2">
+                {role_fit.matched_skills.length > 0 ? (
+                  role_fit.matched_skills.map((skill, i) => (
+                    <span
+                      key={i}
+                      className="inline-flex items-center gap-1.5 rounded-full border border-emerald-500/20 bg-emerald-500/10 px-3 py-1.5 text-sm text-emerald-600 dark:text-emerald-400"
+                    >
+                      <CheckCircle2 className="h-3.5 w-3.5" />
+                      {skill}
+                    </span>
+                  ))
+                ) : (
+                  <span className="text-sm text-muted-foreground">None identified yet.</span>
+                )}
+              </div>
+            </div>
+            <div className="space-y-2">
+              <span className="block text-xs font-semibold uppercase tracking-wider text-amber-500">
+                Skills you're missing
+              </span>
+              <div className="flex flex-wrap gap-2">
+                {role_fit.missing_skills.length > 0 ? (
+                  role_fit.missing_skills.map((skill, i) => (
+                    <span
+                      key={i}
+                      className="inline-flex items-center gap-1.5 rounded-full border border-amber-500/20 bg-amber-500/10 px-3 py-1.5 text-sm text-amber-600 dark:text-amber-400"
+                    >
+                      <AlertCircle className="h-3.5 w-3.5" />
+                      {skill}
+                    </span>
+                  ))
+                ) : (
+                  <span className="text-sm text-muted-foreground">No gaps found — great fit!</span>
+                )}
+              </div>
+            </div>
+          </div>
+        </TabsContent>
+
+        {/* Discrepancies */}
+        <TabsContent value="discrepancies" className="space-y-3 pt-4">
+          {detected_discrepancies.length > 0 ? (
+            detected_discrepancies.map((disc, i) => (
+              <div key={i} className="space-y-2 rounded-xl border border-rose-500/20 bg-rose-500/5 p-4">
+                <div className="flex items-start gap-2 text-sm">
+                  <span className="mt-0.5 shrink-0 rounded bg-rose-500/15 px-1.5 py-0.5 text-[11px] font-bold uppercase tracking-wider text-rose-500">
+                    Claim
+                  </span>
+                  <span className="font-medium text-foreground leading-relaxed">{disc.resume_claim}</span>
+                </div>
+                <div className="flex items-start gap-2 text-sm">
+                  <span className="mt-0.5 shrink-0 rounded bg-emerald-500/15 px-1.5 py-0.5 text-[11px] font-bold uppercase tracking-wider text-emerald-500">
+                    Reality
+                  </span>
+                  <span className="text-muted-foreground leading-relaxed">{disc.portfolio_reality}</span>
+                </div>
+              </div>
+            ))
+          ) : (
+            <div className="flex items-center gap-2 rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-4 text-sm text-emerald-600 dark:text-emerald-400">
+              <CheckCircle2 className="h-4 w-4 shrink-0" />
+              No discrepancies detected — your resume claims match your verified coding profiles perfectly.
+            </div>
+          )}
+        </TabsContent>
+
+        {/* Strengths, weaknesses & edits */}
+        <TabsContent value="feedback" className="space-y-5 pt-4">
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="space-y-2">
+              <h4 className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-emerald-500">
+                <ShieldCheck className="h-3.5 w-3.5" />
+                Resume Strengths
+              </h4>
+              <ul className="space-y-2">
+                {strengths.map((str, i) => (
+                  <li key={i} className="flex items-start gap-2 rounded-lg border border-emerald-500/10 bg-emerald-500/5 p-3 text-sm leading-relaxed text-foreground/90">
+                    <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-500" />
+                    <span>{str}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+
+            <div className="space-y-2">
+              <h4 className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-amber-500">
+                <AlertCircle className="h-3.5 w-3.5" />
+                Formatting & Layout Weaknesses
+              </h4>
+              <ul className="space-y-2">
+                {weaknesses.map((weak, i) => (
+                  <li key={i} className="flex items-start gap-2 rounded-lg border border-amber-500/10 bg-amber-500/5 p-3 text-sm leading-relaxed text-foreground/90">
+                    <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-amber-500/80" />
+                    <span>{weak}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </div>
+
+          {resume_corrections.length > 0 && (
+            <div className="space-y-2">
+              <h4 className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-sky-500">
+                <PenLine className="h-3.5 w-3.5" />
+                Recommended Resume Edits
+              </h4>
+              <ul className="space-y-2">
+                {resume_corrections.map((fix, i) => (
+                  <li key={i} className="flex items-start gap-2 rounded-lg border border-sky-500/10 bg-sky-500/5 p-3 text-sm leading-relaxed text-foreground/90">
+                    <PenLine className="mt-0.5 h-4 w-4 shrink-0 text-sky-500" />
+                    <span>{fix}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </TabsContent>
+
+        {/* 7-day plan — vertical timeline, easier to scan than a squeezed 7-column grid */}
+        <TabsContent value="plan" className="pt-4">
+          <div className="relative space-y-3">
+            <div className="absolute left-[15px] top-2 bottom-2 w-px bg-border" aria-hidden="true" />
+            {next_week_action_plan.map((task, i) => (
+              <div key={i} className="relative flex gap-4 pl-10">
+                <div className="absolute left-0 top-0.5 grid h-8 w-8 shrink-0 place-items-center rounded-full bg-gradient-brand text-xs font-bold text-primary-foreground ring-4 ring-background">
+                  {i + 1}
+                </div>
+                <div className="flex-1 rounded-lg border border-primary/15 bg-primary/5 p-3.5">
+                  <div className="mb-1 text-[11px] font-bold uppercase tracking-wider text-primary">
+                    Day {i + 1}
+                  </div>
+                  <p className="text-sm leading-relaxed text-foreground/90">{task}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }
@@ -632,6 +858,7 @@ export function ProfileAnalyzerPanel() {
   const [resumeResult, setResumeResult] = useState<ResumeAnalysisResult | null>(null);
   const [analyzedRole, setAnalyzedRole] = useState<string>("");
   const [resumeError, setResumeError] = useState<string | null>(null);
+  const setResumeAnalysisResult = useResumeAnalysisStore((s) => s.setResult);
 
   const canAnalyze = ghUsername !== null || lcUsername !== null || cfUsername !== null;
 
@@ -658,6 +885,7 @@ export function ProfileAnalyzerPanel() {
       const res = await syncService.analyzeResume(resumeFile, githubUsername, lcUsername, targetRole, cfUsername);
       setResumeResult(res);
       setAnalyzedRole(targetRole);
+      setResumeAnalysisResult(res, targetRole);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Resume analysis failed.";
       setResumeError(msg);
@@ -837,178 +1065,7 @@ export function ProfileAnalyzerPanel() {
           )}
 
           {/* Resume Analysis Output */}
-          {resumeResult && (
-            <div className="space-y-4 pt-4 border-t border-border/60 animate-in fade-in duration-300">
-              {/* Discrepancies */}
-              <div className="space-y-2">
-                <h4 className="text-xs font-semibold text-rose-500 uppercase tracking-wider flex items-center gap-1.5">
-                  <ShieldAlert className="h-3.5 w-3.5" />
-                  Detected Discrepancies (Resume Claims vs Portfolio Reality)
-                </h4>
-                {resumeResult.detected_discrepancies.length > 0 ? (
-                  <div className="grid gap-2">
-                    {resumeResult.detected_discrepancies.map((disc, i) => (
-                      <div key={i} className="rounded-lg border border-rose-500/20 bg-rose-500/5 p-3 text-xs space-y-1">
-                        <div className="font-semibold text-foreground flex items-center gap-1 text-[11px]">
-                          <span className="text-rose-500 font-bold">CLAIM:</span> {disc.resume_claim}
-                        </div>
-                        <div className="text-muted-foreground flex items-start gap-1 leading-relaxed">
-                          <span className="text-emerald-500 font-bold">REALITY:</span> {disc.portfolio_reality}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="text-xs text-muted-foreground bg-emerald-500/5 border border-emerald-500/20 rounded-lg p-3">
-                    No discrepancies detected! Your resume claims perfectly match your verified coding profiles.
-                  </div>
-                )}
-              </div>
-
-              {/* Role fit */}
-              <div className="space-y-2 rounded-lg border border-violet-500/20 bg-violet-500/5 p-3">
-                <h4 className="text-xs font-semibold text-violet-500 uppercase tracking-wider flex items-center gap-1.5">
-                  <Target className="h-3.5 w-3.5" />
-                  Role Fit — {analyzedRole}
-                </h4>
-                <p className="text-xs text-muted-foreground leading-relaxed">
-                  {resumeResult.role_fit.fit_summary}
-                </p>
-                <div className="grid gap-3 sm:grid-cols-2 pt-1">
-                  <div className="space-y-1.5">
-                    <span className="text-[11px] font-semibold text-emerald-500 uppercase tracking-wider">
-                      Skills you have
-                    </span>
-                    <div className="flex flex-wrap gap-1.5">
-                      {resumeResult.role_fit.matched_skills.length > 0 ? (
-                        resumeResult.role_fit.matched_skills.map((skill, i) => (
-                          <span
-                            key={i}
-                            className="inline-flex items-center gap-1 rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2.5 py-1 text-[11px] text-emerald-600 dark:text-emerald-400"
-                          >
-                            <CheckCircle2 className="h-3 w-3" />
-                            {skill}
-                          </span>
-                        ))
-                      ) : (
-                        <span className="text-[11px] text-muted-foreground">None identified yet.</span>
-                      )}
-                    </div>
-                  </div>
-                  <div className="space-y-1.5">
-                    <span className="text-[11px] font-semibold text-amber-500 uppercase tracking-wider">
-                      Skills you're missing
-                    </span>
-                    <div className="flex flex-wrap gap-1.5">
-                      {resumeResult.role_fit.missing_skills.length > 0 ? (
-                        resumeResult.role_fit.missing_skills.map((skill, i) => (
-                          <span
-                            key={i}
-                            className="inline-flex items-center gap-1 rounded-full border border-amber-500/20 bg-amber-500/10 px-2.5 py-1 text-[11px] text-amber-600 dark:text-amber-400"
-                          >
-                            <AlertCircle className="h-3 w-3" />
-                            {skill}
-                          </span>
-                        ))
-                      ) : (
-                        <span className="text-[11px] text-muted-foreground">No gaps found — great fit!</span>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Strengths & Weaknesses side-by-side */}
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div className="space-y-2">
-                  <h4 className="text-xs font-semibold text-emerald-500 uppercase tracking-wider flex items-center gap-1.5">
-                    <ShieldCheck className="h-3.5 w-3.5" />
-                    Resume Strengths
-                  </h4>
-                  <ul className="space-y-1.5 text-xs text-muted-foreground">
-                    {resumeResult.strengths.map((str, i) => (
-                      <li key={i} className="flex items-start gap-1.5 bg-emerald-500/5 p-2 rounded-md border border-emerald-500/10">
-                        <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500 shrink-0 mt-0.5" />
-                        <span>{str}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-
-                <div className="space-y-2">
-                  <h4 className="text-xs font-semibold text-amber-500 uppercase tracking-wider flex items-center gap-1.5">
-                    <AlertCircle className="h-3.5 w-3.5 text-amber-500/80" />
-                    Formatting & Layout Weaknesses
-                  </h4>
-                  <ul className="space-y-1.5 text-xs text-muted-foreground">
-                    {resumeResult.weaknesses.map((weak, i) => (
-                      <li key={i} className="flex items-start gap-1.5 bg-amber-500/5 p-2 rounded-md border border-amber-500/10">
-                        <AlertCircle className="h-3.5 w-3.5 text-amber-500/80 shrink-0 mt-0.5" />
-                        <span>{weak}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              </div>
-
-              {/* Resume text corrections — one-off edits, not a daily plan */}
-              {resumeResult.resume_corrections.length > 0 && (
-                <div className="space-y-2 pt-2">
-                  <h4 className="text-xs font-semibold text-sky-500 uppercase tracking-wider flex items-center gap-1.5">
-                    <PenLine className="h-3.5 w-3.5" />
-                    Recommended Resume Edits
-                  </h4>
-                  <ul className="space-y-1.5 text-xs text-muted-foreground">
-                    {resumeResult.resume_corrections.map((fix, i) => (
-                      <li key={i} className="flex items-start gap-1.5 bg-sky-500/5 p-2 rounded-md border border-sky-500/10">
-                        <PenLine className="h-3.5 w-3.5 text-sky-500 shrink-0 mt-0.5" />
-                        <span>{fix}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-
-              {/* 7-day skill-building plan */}
-              <div className="space-y-2 pt-2">
-                <h4 className="text-xs font-semibold text-primary uppercase tracking-wider flex items-center gap-1.5">
-                  <Sparkles className="h-3.5 w-3.5" />
-                  7-Day Skill Improvement Plan
-                </h4>
-                <div className="grid gap-2 sm:grid-cols-7">
-                  {resumeResult.next_week_action_plan.map((task, i) => (
-                    <div key={i} className="rounded-lg border border-primary/20 bg-primary/5 p-3 text-[11px] leading-relaxed flex flex-col justify-between">
-                      <div>
-                        <div className="font-bold text-primary mb-1 uppercase tracking-wider text-[10px]">
-                          Day {i + 1}
-                        </div>
-                        <p className="text-muted-foreground">{task}</p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* Overall rating — final synthesis */}
-              <div className="rounded-xl border border-border/60 bg-surface/60 p-4 pt-5 mt-2">
-                <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
-                  <ScoreRing score={resumeResult.overall_rating.score} />
-                  <div className="flex-1 space-y-1.5">
-                    <div className="flex items-center gap-1.5 text-xs font-semibold text-foreground uppercase tracking-wider">
-                      <Award className="h-3.5 w-3.5 text-primary" />
-                      Overall Rating
-                    </div>
-                    <Badge className="border-primary/30 bg-primary/10 text-primary text-xs font-semibold">
-                      {resumeResult.overall_rating.verdict}
-                    </Badge>
-                    <p className="text-sm text-muted-foreground leading-relaxed pt-1">
-                      {resumeResult.overall_rating.summary}
-                    </p>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
+          {resumeResult && <ResumeAnalysisResultView result={resumeResult} role={analyzedRole} />}
         </div>
       </Card>
 

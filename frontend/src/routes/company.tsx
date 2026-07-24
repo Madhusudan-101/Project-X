@@ -117,7 +117,7 @@ function CompanyPortal() {
               <Sparkles className="h-4 w-4 text-primary-foreground" />
             </div>
             <div className="hidden sm:block leading-tight">
-              <div className="font-display text-sm font-semibold">Project X</div>
+              <div className="font-display text-sm font-semibold">Mirracle</div>
               <div className="text-[11px] text-muted-foreground">
                 {companyLoading ? (
                   <Skeleton className="h-3 w-20" />

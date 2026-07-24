@@ -56,7 +56,7 @@ function LoginPage() {
   return (
     <div>
       <h1 className="font-display text-3xl font-bold">Welcome back</h1>
-      <p className="mt-2 text-sm text-muted-foreground">Sign in to continue to Project X.</p>
+      <p className="mt-2 text-sm text-muted-foreground">Sign in to continue to Mirracle.</p>
 
       <form onSubmit={form.handleSubmit(onSubmit)} className="mt-8 space-y-4">
         <div className="space-y-2">

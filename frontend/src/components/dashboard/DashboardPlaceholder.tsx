@@ -29,7 +29,7 @@ export function DashboardPlaceholder({ role, modules }: Props) {
               <Sparkles className="h-4 w-4 text-primary-foreground" />
             </div>
             <div>
-              <div className="font-display text-sm font-bold leading-none">Project X</div>
+              <div className="font-display text-sm font-bold leading-none">Mirracle</div>
               <div className="mt-0.5 text-xs text-muted-foreground">{role} Portal</div>
             </div>
           </Link>

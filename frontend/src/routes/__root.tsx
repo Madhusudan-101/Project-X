@@ -79,14 +79,14 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "Project X — AI-Powered Hiring Ecosystem" },
+      { title: "Mirracle — AI-Powered Hiring Ecosystem" },
       {
         name: "description",
         content:
-          "Project X connects candidates, companies, colleges, and admins in one AI-powered hiring platform — interviews, assessments, analytics, and placement in a single workspace.",
+          "Mirracle connects candidates, companies, colleges, and admins in one AI-powered hiring platform — interviews, assessments, analytics, and placement in a single workspace.",
       },
-      { name: "author", content: "Project X" },
-      { property: "og:title", content: "Project X — AI-Powered Hiring Ecosystem" },
+      { name: "author", content: "Mirracle" },
+      { property: "og:title", content: "Mirracle — AI-Powered Hiring Ecosystem" },
       {
         property: "og:description",
         content:
@@ -94,7 +94,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
-      { name: "twitter:title", content: "Project X — AI-Powered Hiring Ecosystem" },
+      { name: "twitter:title", content: "Mirracle — AI-Powered Hiring Ecosystem" },
       {
         name: "twitter:description",
         content:

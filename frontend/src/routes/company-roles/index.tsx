@@ -26,7 +26,7 @@ import type { Role, RoleStatus } from "@/types/role";
 export const Route = createFileRoute("/company-roles/")({
   head: () => ({
     meta: [
-      { title: "Roles — Project X" },
+      { title: "Roles — Mirracle" },
       { name: "description", content: "Create, publish and manage the roles you're hiring for." },
     ],
   }),
