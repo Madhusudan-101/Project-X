@@ -39,6 +39,7 @@ import {
   PenLine,
   Target,
   Award,
+  Swords,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -56,11 +57,13 @@ import {
   syncService,
   extractGitHubUsername,
   extractLeetCodeUsername,
+  extractCodeforcesHandle,
 } from "@/services/api/sync";
 import { TECH_ROLES } from "@/types/sync";
 import type {
   GitHubProfileData,
   LeetCodeProfileData,
+  CodeforcesProfileData,
   AnalysisResult,
   FormattedMetrics,
   ResumeAnalysisResult,
@@ -158,7 +161,7 @@ function AIAnalysisResultCard({ result }: { result: AnalysisResult }) {
         </div>
       </Card>
 
-      {/* 2. LeetCode Skill & Topic Distribution */}
+      {/* 2. DSA Skill & Topic Distribution (LeetCode + Codeforces) */}
       <Card className="p-5 space-y-4">
         <div className="flex items-center gap-2 text-sm font-semibold text-foreground border-b border-border/40 pb-2">
           <Trophy className="h-4 w-4 text-primary" />
@@ -169,7 +172,7 @@ function AIAnalysisResultCard({ result }: { result: AnalysisResult }) {
           <div className="space-y-2">
             <div className="text-xs font-semibold text-emerald-500 uppercase tracking-wider">Strong Topics</div>
             <div className="flex flex-wrap gap-1.5">
-              {result.leetcode_skills.strong_topics.map((tag) => (
+              {result.dsa_skills.strong_topics.map((tag) => (
                 <Badge
                   key={tag}
                   className="bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 border-emerald-500/20 text-xs px-2.5 py-1"
@@ -183,7 +186,7 @@ function AIAnalysisResultCard({ result }: { result: AnalysisResult }) {
           <div className="space-y-2">
             <div className="text-xs font-semibold text-amber-500 uppercase tracking-wider">Growth Areas</div>
             <div className="flex flex-wrap gap-1.5">
-              {result.leetcode_skills.growth_areas.map((tag) => (
+              {result.dsa_skills.growth_areas.map((tag) => (
                 <Badge
                   key={tag}
                   className="bg-amber-500/10 hover:bg-amber-500/20 text-amber-600 dark:text-amber-400 border-amber-500/20 text-xs px-2.5 py-1"
@@ -197,7 +200,7 @@ function AIAnalysisResultCard({ result }: { result: AnalysisResult }) {
 
         <div className="text-sm text-muted-foreground pt-1 bg-surface-2/20 p-3 rounded-lg border border-border/40">
           <span className="font-semibold block mb-0.5 text-foreground text-xs uppercase tracking-wider">DSA Depth Summary:</span>
-          {result.leetcode_skills.algorithmic_depth_summary}
+          {result.dsa_skills.algorithmic_depth_summary}
         </div>
       </Card>
 
@@ -517,11 +520,106 @@ export function LeetCodeSyncCard({
   );
 }
 
+// ── Codeforces Sync Card ──────────────────────────────────────────────
+
+export function CodeforcesSyncCard({
+  onSynced,
+}: {
+  onSynced?: (handle: string) => void;
+}) {
+  const [input, setInput] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [data, setData] = useState<CodeforcesProfileData | null>(null);
+
+  const handleSync = useCallback(async () => {
+    const handle = extractCodeforcesHandle(input);
+    if (!handle) {
+      setError("Please enter a valid Codeforces handle or profile URL.");
+      return;
+    }
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await syncService.codeforces(handle);
+      if (res.ok && res.data) {
+        setData(res.data);
+        onSynced?.(handle);
+      } else {
+        setError(res.error ?? "Something went wrong.");
+      }
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Failed to reach the server.";
+      setError(msg);
+    } finally {
+      setLoading(false);
+    }
+  }, [input, onSynced]);
+
+  return (
+    <Card className="overflow-hidden">
+      <div className="flex items-center gap-3 border-b border-border/60 px-5 py-4">
+        <div className="grid h-10 w-10 place-items-center rounded-xl bg-[#1F8ACB]/15 text-[#1F8ACB]">
+          <Swords className="h-5 w-5" />
+        </div>
+        <div className="flex-1">
+          <h3 className="font-display text-base font-semibold">Codeforces Analyzer</h3>
+          <p className="text-xs text-muted-foreground">
+            Paste your Codeforces profile link to import your rating and contest history.
+          </p>
+        </div>
+        {data && (
+          <Badge className="border-success/30 bg-success/10 text-success">
+            <CheckCircle2 className="mr-1 h-3 w-3" /> Synced
+          </Badge>
+        )}
+      </div>
+
+      <div className="px-5 py-4">
+        <div className="flex gap-2">
+          <Input
+            id="codeforces-url-input"
+            placeholder="https://codeforces.com/profile/handle"
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && handleSync()}
+            className="flex-1"
+            disabled={loading}
+          />
+          <Button
+            id="codeforces-sync-btn"
+            onClick={handleSync}
+            disabled={loading || !input.trim()}
+            className="bg-gradient-brand text-primary-foreground min-w-[100px]"
+          >
+            {loading ? (
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            ) : (
+              <ArrowRight className="mr-2 h-4 w-4" />
+            )}
+            {loading ? "Syncing…" : "Sync"}
+          </Button>
+        </div>
+
+        {error && (
+          <div className="mt-3 flex items-start gap-2 rounded-lg bg-destructive/10 p-3 text-sm text-destructive">
+            <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+            {error}
+          </div>
+        )}
+
+        {data && <CodeforcesResultCard data={data} />}
+      </div>
+    </Card>
+  );
+}
+
 // ── Composite panel with AI CTA ───────────────────────────────────────
 
 export function ProfileAnalyzerPanel() {
   const [ghUsername, setGhUsername] = useState<string | null>(null);
   const [lcUsername, setLcUsername] = useState<string | null>(null);
+  const [cfUsername, setCfUsername] = useState<string | null>(null);
   const [analyzing, setAnalyzing] = useState(false);
   const [analysisResult, setAnalysisResult] = useState<AnalysisResult | null>(null);
   const [formattedMetrics, setFormattedMetrics] = useState<FormattedMetrics | null>(null);
@@ -535,7 +633,7 @@ export function ProfileAnalyzerPanel() {
   const [analyzedRole, setAnalyzedRole] = useState<string>("");
   const [resumeError, setResumeError] = useState<string | null>(null);
 
-  const canAnalyze = ghUsername !== null || lcUsername !== null;
+  const canAnalyze = ghUsername !== null || lcUsername !== null || cfUsername !== null;
 
   const onFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
@@ -557,7 +655,7 @@ export function ProfileAnalyzerPanel() {
     setResumeError(null);
     setResumeResult(null);
     try {
-      const res = await syncService.analyzeResume(resumeFile, githubUsername, lcUsername, targetRole);
+      const res = await syncService.analyzeResume(resumeFile, githubUsername, lcUsername, targetRole, cfUsername);
       setResumeResult(res);
       setAnalyzedRole(targetRole);
     } catch (err: unknown) {
@@ -574,7 +672,7 @@ export function ProfileAnalyzerPanel() {
     setAnalysisResult(null);
     setFormattedMetrics(null);
     try {
-      const res = await syncService.analyze(ghUsername, lcUsername);
+      const res = await syncService.analyze(ghUsername, lcUsername, cfUsername);
       if (res.ok && res.analysis) {
         setAnalysisResult(res.analysis);
         setFormattedMetrics(res.formatted_metrics ?? null);
@@ -587,14 +685,15 @@ export function ProfileAnalyzerPanel() {
     } finally {
       setAnalyzing(false);
     }
-  }, [ghUsername, lcUsername]);
+  }, [ghUsername, lcUsername, cfUsername]);
 
   return (
     <div className="space-y-6">
       {/* Sync cards — GitHub sync is required before Resume Analysis below */}
-      <div className="grid gap-4 md:grid-cols-2">
+      <div className="grid gap-4 md:grid-cols-3">
         <GitHubSyncCard onSynced={setGhUsername} />
         <LeetCodeSyncCard onSynced={setLcUsername} />
+        <CodeforcesSyncCard onSynced={setCfUsername} />
       </div>
 
       {/* ── Resume Analyzer Card ── */}
@@ -926,11 +1025,16 @@ export function ProfileAnalyzerPanel() {
               </h3>
               <p className="mt-0.5 text-sm text-muted-foreground">
                 Gemini will score your consistency, detect fake activity, and summarise your strengths.
-                {ghUsername && lcUsername
-                  ? " Both GitHub and LeetCode are connected."
-                  : ghUsername
-                    ? " Add LeetCode for a fuller picture."
-                    : " Add GitHub for a fuller picture."}
+                {(() => {
+                  const missing = [
+                    !ghUsername && "GitHub",
+                    !lcUsername && "LeetCode",
+                    !cfUsername && "Codeforces",
+                  ].filter(Boolean) as string[];
+                  return missing.length === 0
+                    ? " GitHub, LeetCode, and Codeforces are all connected."
+                    : ` Add ${missing.join(" and ")} for a fuller picture.`;
+                })()}
               </p>
             </div>
             <Button
@@ -981,8 +1085,9 @@ interface DeepMetricsResultCardProps {
 export function DeepMetricsResultCard({ metrics }: DeepMetricsResultCardProps) {
   const gh = metrics.github;
   const lc = metrics.leetcode;
-  const [activeTab, setActiveTab] = useState<"github" | "leetcode">(
-    gh ? "github" : "leetcode"
+  const cf = metrics.codeforces;
+  const [activeTab, setActiveTab] = useState<"github" | "leetcode" | "codeforces">(
+    gh ? "github" : lc ? "leetcode" : "codeforces"
   );
   const [expandedRepo, setExpandedRepo] = useState<string | null>(null);
 
@@ -990,7 +1095,7 @@ export function DeepMetricsResultCard({ metrics }: DeepMetricsResultCardProps) {
     setExpandedRepo(expandedRepo === repoName ? null : repoName);
   };
 
-  if (!gh && !lc) return null;
+  if (!gh && !lc && !cf) return null;
 
   return (
     <Card className="overflow-hidden mt-4">
@@ -1020,6 +1125,19 @@ export function DeepMetricsResultCard({ metrics }: DeepMetricsResultCardProps) {
           >
             <Code2 className="h-4 w-4" />
             LeetCode Algorithmic Insights
+          </button>
+        )}
+        {cf && (
+          <button
+            onClick={() => setActiveTab("codeforces")}
+            className={`flex-1 py-3 px-4 font-display text-sm font-semibold flex items-center justify-center gap-2 border-b-2 transition-all ${
+              activeTab === "codeforces"
+                ? "border-primary text-primary bg-background/50"
+                : "border-transparent text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            <Swords className="h-4 w-4" />
+            Codeforces Insights
           </button>
         )}
       </div>
@@ -1223,6 +1341,97 @@ export function DeepMetricsResultCard({ metrics }: DeepMetricsResultCardProps) {
             </div>
           </div>
         )}
+
+        {activeTab === "codeforces" && cf && (
+          <div className="grid gap-6 md:grid-cols-2">
+            {/* Top Tags */}
+            <div className="space-y-4">
+              <h4 className="font-display text-sm font-semibold flex items-center gap-2 text-foreground">
+                <Tag className="h-4 w-4 text-primary" />
+                Most-Solved Tags
+              </h4>
+
+              {cf.top_tags.length > 0 ? (
+                <div className="flex flex-wrap gap-1.5">
+                  {cf.top_tags.map((tag) => (
+                    <Badge
+                      key={tag}
+                      className="bg-[#1F8ACB]/10 hover:bg-[#1F8ACB]/20 text-[#1F8ACB] border-[#1F8ACB]/20 text-xs px-2.5 py-1"
+                    >
+                      {tag}
+                    </Badge>
+                  ))}
+                </div>
+              ) : (
+                <div className="rounded-lg border border-dashed border-border/70 bg-surface/40 p-6 text-center text-xs text-muted-foreground">
+                  No tag data found.
+                </div>
+              )}
+
+              {cf.avg_problem_rating != null && (
+                <div className="text-sm text-muted-foreground pt-1 bg-surface-2/20 p-3 rounded-lg border border-border/40">
+                  <span className="font-semibold block mb-0.5 text-foreground text-xs uppercase tracking-wider">
+                    Avg. Problem Difficulty:
+                  </span>
+                  {cf.avg_problem_rating} rating
+                </div>
+              )}
+
+              {cf.rating_history.length > 0 && (
+                <div className="space-y-2">
+                  <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                    Recent Contests
+                  </div>
+                  <div className="rounded-lg border border-border/60 bg-surface/20 divide-y divide-border/60 max-h-[180px] overflow-y-auto">
+                    {cf.rating_history.slice(-10).reverse().map((r, i) => (
+                      <div key={i} className="px-3 py-2 flex items-center justify-between gap-3 text-xs">
+                        <span className="truncate text-foreground">{r.contest_name}</span>
+                        <span className={r.new_rating >= r.old_rating ? "text-emerald-500" : "text-destructive"}>
+                          {r.old_rating} → {r.new_rating}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Recently Solved */}
+            <div className="space-y-4">
+              <h4 className="font-display text-sm font-semibold flex items-center gap-2 text-foreground">
+                <Clock className="h-4 w-4 text-primary" />
+                Recently Solved
+              </h4>
+
+              {cf.solved_problems.length > 0 ? (
+                <div className="rounded-lg border border-border/60 bg-surface/20 divide-y divide-border/60 max-h-[360px] overflow-y-auto">
+                  {cf.solved_problems.map((p, i) => (
+                    <div
+                      key={i}
+                      className="px-4 py-3 flex items-center justify-between gap-4 text-xs hover:bg-surface/40 transition-colors"
+                    >
+                      <div className="min-w-0">
+                        <span className="font-semibold text-foreground truncate block">
+                          {p.name}
+                        </span>
+                        <span className="text-[10px] text-muted-foreground">
+                          {p.tags.slice(0, 3).join(", ")}
+                        </span>
+                      </div>
+                      <span className="text-muted-foreground whitespace-nowrap shrink-0">
+                        {p.rating ? `${p.rating}` : "—"}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="rounded-lg border border-dashed border-border/70 bg-surface/40 p-6 text-center text-xs text-muted-foreground">
+                  No solved problems found.
+                </div>
+              )}
+            </div>
+          </div>
+        )}
       </div>
     </Card>
   );
@@ -1356,6 +1565,52 @@ function LeetCodeResultCard({ data }: { data: LeetCodeProfileData }) {
         <MiniStat icon={Flame}    label="Current streak"  value={`${streak.current_streak}d`} />
         <MiniStat icon={Trophy}   label="Longest streak"  value={`${streak.longest_streak}d`} />
         <MiniStat icon={Calendar} label="Active days"     value={String(streak.total_active_days)} />
+      </div>
+    </div>
+  );
+}
+
+function CodeforcesResultCard({ data }: { data: CodeforcesProfileData }) {
+  const { streak } = data;
+
+  return (
+    <div className="mt-4 space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
+      <div className="flex items-center gap-3">
+        <div className="grid h-12 w-12 shrink-0 place-items-center rounded-full border-2 border-border bg-[#1F8ACB]/10 text-[#1F8ACB]">
+          <Swords className="h-5 w-5" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2">
+            <span className="font-display font-semibold truncate">{data.handle}</span>
+            <a
+              href={`https://codeforces.com/profile/${data.handle}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-muted-foreground hover:text-primary transition-colors"
+            >
+              <ExternalLink className="h-3.5 w-3.5" />
+            </a>
+          </div>
+          <div className="text-xs text-muted-foreground capitalize">
+            {data.rank ?? "Unrated"}
+            {data.contests_participated > 0 && ` · ${data.contests_participated} contests`}
+          </div>
+        </div>
+        <div className="text-right">
+          <div className="font-display text-2xl font-bold text-primary">{data.total_solved}</div>
+          <div className="text-[11px] text-muted-foreground">Total Solved</div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-3 gap-2">
+        <MiniStat icon={Trophy} label="Rating" value={data.rating != null ? String(data.rating) : "—"} />
+        <MiniStat icon={Star} label="Max rating" value={data.max_rating != null ? String(data.max_rating) : "—"} />
+        <MiniStat icon={Flame} label="Current streak" value={`${streak.current_streak}d`} />
+      </div>
+      <div className="grid grid-cols-3 gap-2">
+        <MiniStat icon={Calendar} label="Longest streak" value={`${streak.longest_streak}d`} />
+        <MiniStat icon={Calendar} label="Active days" value={String(streak.total_active_days)} />
+        <MiniStat icon={Users} label="Contribution" value={String(data.contribution)} />
       </div>
     </div>
   );

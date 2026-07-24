@@ -42,6 +42,24 @@ export interface LeetCodeProfileData {
   streak: LeetCodeStreakInfo;
 }
 
+export interface CodeforcesStreakInfo {
+  current_streak: number;
+  longest_streak: number;
+  total_active_days: number;
+}
+
+export interface CodeforcesProfileData {
+  handle: string;
+  rating: number | null;
+  max_rating: number | null;
+  rank: string | null;
+  max_rank: string | null;
+  contribution: number;
+  contests_participated: number;
+  total_solved: number;
+  streak: CodeforcesStreakInfo;
+}
+
 export interface RepoSummary {
   name: string;
   is_fork: boolean;
@@ -112,9 +130,40 @@ export interface LeetCodeMetrics {
   topic_tags: TopicTagBreakdown | null;
 }
 
+export interface CodeforcesRatingChange {
+  contest_name: string;
+  date: string;
+  old_rating: number;
+  new_rating: number;
+  rank: number;
+}
+
+export interface CodeforcesSolvedProblem {
+  name: string;
+  rating: number | null;
+  tags: string[];
+  solved_at: string;
+}
+
+export interface CodeforcesMetrics {
+  handle: string;
+  rating: number | null;
+  max_rating: number | null;
+  rank: string | null;
+  max_rank: string | null;
+  total_solved: number;
+  contests_participated: number;
+  avg_problem_rating: number | null;
+  top_tags: string[];
+  submission_activity: ActivityMetrics;
+  rating_history: CodeforcesRatingChange[];
+  solved_problems: CodeforcesSolvedProblem[];
+}
+
 export interface FormattedMetrics {
   github: GitHubMetrics | null;
   leetcode: LeetCodeMetrics | null;
+  codeforces: CodeforcesMetrics | null;
 }
 
 export interface SyncResponse<T> {
@@ -129,7 +178,7 @@ export interface ConsistencyAnalysis {
   evaluation: string;
 }
 
-export interface LeetCodeSkills {
+export interface DsaSkills {
   strong_topics: string[];
   growth_areas: string[];
   algorithmic_depth_summary: string;
@@ -151,7 +200,7 @@ export interface CareerAlignment {
 export interface AnalysisResult {
   overall_score: number;
   consistency_analysis: ConsistencyAnalysis;
-  leetcode_skills: LeetCodeSkills;
+  dsa_skills: DsaSkills;
   project_rigor: ProjectRigorEntry[];
   career_alignment: CareerAlignment;
   actionable_feedback: string;

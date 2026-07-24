@@ -40,7 +40,7 @@ class ConsistencyAnalysis(BaseModel):
     )
 
 
-class LeetCodeSkills(BaseModel):
+class DsaSkills(BaseModel):
     strong_topics: List[str] = Field(
         ...,
         description="Key algorithmic topic areas where the candidate exhibits solid proficiency."
@@ -51,7 +51,11 @@ class LeetCodeSkills(BaseModel):
     )
     algorithmic_depth_summary: str = Field(
         ...,
-        description="1-2 sentence summary of their DSA capabilities based on their tag problem counts mapping."
+        description=(
+            "1-2 sentence summary of their DSA capabilities, synthesizing LeetCode topic/difficulty "
+            "data AND Codeforces rating/tag data together when both are available — do not analyze "
+            "them as separate, disconnected signals."
+        )
     )
 
 
@@ -100,9 +104,9 @@ class AnalysisResult(BaseModel):
         ...,
         description="Long-term activity distribution analysis."
     )
-    leetcode_skills: LeetCodeSkills = Field(
+    dsa_skills: DsaSkills = Field(
         ...,
-        description="Topic-wise algorithmic proficiency breakdown."
+        description="Topic-wise algorithmic proficiency breakdown, from LeetCode and/or Codeforces."
     )
     project_rigor: List[ProjectRigorEntry] = Field(
         ...,
@@ -122,7 +126,7 @@ class AnalysisResult(BaseModel):
 
 _SYSTEM_INSTRUCTION: str = """\
 You are an expert technical evaluator, seasoned engineering hiring manager, and engineering mentor. \
-You will be provided with an expanded JSON payload containing deep technical signals from a candidate's GitHub and LeetCode profiles.
+You will be provided with an expanded JSON payload containing deep technical signals from a candidate's GitHub, LeetCode, and (optionally) Codeforces profiles.
 
 Your objective is to analyze this data thoroughly and output a strict JSON object that conforms exactly to the required output schema. \
 Do NOT wrap your output in conversational filler.
@@ -131,11 +135,12 @@ Do NOT wrap your output in conversational filler.
 
 ### 1. Consistency & Pacing (Sustained over Streaks)
 - Do NOT penalize candidates strictly for missing a few days or having a broken "streak." Students and professionals have exams, health concerns, or legitimate breaks.
-- Instead, measure "Sustained Consistency": evaluate the density and distribution of GitHub commit timestamps and LeetCode submission calendars over trailing 30, 90, and 180-day windows.
+- Instead, measure "Sustained Consistency": evaluate the density and distribution of GitHub commit timestamps, LeetCode submission calendars, and Codeforces submission/contest dates (when present) over trailing 30, 90, and 180-day windows.
 - Look at the "Frequency Vector": Is work distributed reasonably across weeks/months, or is there a single-day massive dump of 50+ commits/submissions (which indicates script/tutorial copying)?
 
-### 2. LeetCode Skill & Topic Distribution (The Circle Cloud Analysis)
-- Analyze the user's LeetCode topic-wise solving breakdown (extracted from their profile's tag-based problem-solving cloud).
+### 2. DSA Skill & Topic Distribution (The Circle Cloud Analysis)
+- Analyze the user's algorithmic solving breakdown from whichever of LeetCode/Codeforces data is present — LeetCode's tag-based problem-solving cloud, and/or Codeforces' problem tags plus its numeric difficulty ratings and rating trajectory across contests.
+- When BOTH LeetCode and Codeforces data are present, synthesize them into ONE unified assessment — treat a Codeforces rating/rank as at least as strong a DSA signal as LeetCode's easy/medium/hard split, since Codeforces ratings are contest-calibrated and harder to game.
 - Map their stats (e.g., Dynamic Programming, Arrays, Graphs, Trees, Strings) to identify core structural competencies.
 - Pinpoint specific high-level target topics that need more attention or practice based on low problem count relative to their overall tier.
 
@@ -175,7 +180,7 @@ _RESPONSE_SCHEMA: Dict[str, Any] = {
             },
             "required": ["rating", "evaluation"],
         },
-        "leetcode_skills": {
+        "dsa_skills": {
             "type": "object",
             "properties": {
                 "strong_topics": {
@@ -190,7 +195,10 @@ _RESPONSE_SCHEMA: Dict[str, Any] = {
                 },
                 "algorithmic_depth_summary": {
                     "type": "string",
-                    "description": "Overview of DSA capabilities based on their tag data cloud.",
+                    "description": (
+                        "Overview of DSA capabilities, synthesizing LeetCode tag data AND "
+                        "Codeforces rating/tag data together when both are present."
+                    ),
                 },
             },
             "required": ["strong_topics", "growth_areas", "algorithmic_depth_summary"],
@@ -252,7 +260,7 @@ _RESPONSE_SCHEMA: Dict[str, Any] = {
     "required": [
         "overall_score",
         "consistency_analysis",
-        "leetcode_skills",
+        "dsa_skills",
         "project_rigor",
         "career_alignment",
         "actionable_feedback",

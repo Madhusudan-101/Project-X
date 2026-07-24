@@ -22,6 +22,7 @@ from pydantic import BaseModel
 
 from ..services.github_service import GitHubProfileData, fetch_github_profile
 from ..services.leetcode_service import LeetCodeProfileData, fetch_leetcode_profile
+from ..services.codeforces_service import CodeforcesProfileData, fetch_codeforces_profile
 
 logger = logging.getLogger(__name__)
 
@@ -34,7 +35,7 @@ class SyncResponse(BaseModel):
     """Wrapper so every sync endpoint returns a consistent shape."""
     ok: bool
     platform: str
-    data: Union[GitHubProfileData, LeetCodeProfileData, None] = None
+    data: Union[GitHubProfileData, LeetCodeProfileData, CodeforcesProfileData, None] = None
     error: str | None = None
 
 
@@ -133,6 +134,54 @@ async def sync_leetcode(username: str) -> SyncResponse:
 
     except Exception as exc:
         logger.exception("Unexpected error syncing LeetCode user %s", username)
+        raise HTTPException(
+            status_code=500,
+            detail=f"Internal error: {exc}",
+        )
+
+
+# ── Codeforces ───────────────────────────────────────────────────────
+
+
+@router.post(
+    "/codeforces/{handle}",
+    response_model=SyncResponse,
+    summary="Sync a Codeforces profile",
+    responses={
+        404: {"description": "Codeforces handle not found"},
+        504: {"description": "Codeforces API timed out"},
+        502: {"description": "Upstream Codeforces error"},
+    },
+)
+async def sync_codeforces(handle: str) -> SyncResponse:
+    """Fetch Codeforces rating, rank, and solve/consistency stats for *handle*."""
+    try:
+        profile: CodeforcesProfileData = await fetch_codeforces_profile(handle)
+        return SyncResponse(ok=True, platform="codeforces", data=profile)
+
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=404,
+            detail=str(exc) or f"Codeforces handle '{handle}' not found.",
+        )
+
+    except httpx.HTTPStatusError as exc:
+        status: int = exc.response.status_code
+        logger.error("Codeforces API error for %s: %s", handle, exc)
+        raise HTTPException(
+            status_code=502,
+            detail=f"Codeforces API returned {status}.",
+        )
+
+    except httpx.TimeoutException:
+        logger.warning("Codeforces API timeout for %s", handle)
+        raise HTTPException(
+            status_code=504,
+            detail="Codeforces API timed out. Please try again later.",
+        )
+
+    except Exception as exc:
+        logger.exception("Unexpected error syncing Codeforces handle %s", handle)
         raise HTTPException(
             status_code=500,
             detail=f"Internal error: {exc}",

@@ -20,6 +20,7 @@ from pydantic import BaseModel, Field
 
 from ..services.github_service import fetch_github_raw_for_analysis
 from ..services.leetcode_service import fetch_leetcode_raw_for_analysis
+from ..services.codeforces_service import fetch_codeforces_raw_for_analysis
 from ..services.formatter import format_for_analysis, FormattedMetrics
 from ..services.analyzer_agent import run_analysis, AnalysisResult
 from ..services.resume_analyzer_agent import analyze_resume, ResumeAnalysisResult
@@ -39,6 +40,9 @@ class AnalyzeRequest(BaseModel):
     )
     leetcode_username: Optional[str] = Field(
         None, description="Override LeetCode username (if different from path)."
+    )
+    codeforces_username: Optional[str] = Field(
+        None, description="Codeforces handle, if the candidate linked one."
     )
 
 
@@ -74,10 +78,12 @@ async def analyze_user(
     """
     gh_user: str = (body.github_username if body and body.github_username else username)
     lc_user: str = (body.leetcode_username if body and body.leetcode_username else username)
+    cf_user: Optional[str] = body.codeforces_username if body else None
 
     warnings: list[str] = []
     github_raw = None
     leetcode_raw = None
+    codeforces_raw = None
 
     # ── 1. Fetch raw data (tolerant — partial data is OK) ──
 
@@ -112,9 +118,24 @@ async def analyze_user(
         warnings.append(f"LeetCode fetch error: {exc}")
         logger.exception("Unexpected LeetCode error for %s", lc_user)
 
+    if cf_user:
+        try:
+            codeforces_raw = await fetch_codeforces_raw_for_analysis(cf_user)
+            logger.info("Fetched Codeforces data for %s", cf_user)
+        except ValueError:
+            warnings.append(f"Codeforces handle '{cf_user}' not found — skipping.")
+        except httpx.HTTPStatusError as exc:
+            warnings.append(f"Codeforces API error ({exc.response.status_code}).")
+            logger.warning("Codeforces fetch failed for %s: %s", cf_user, exc)
+        except httpx.TimeoutException:
+            warnings.append("Codeforces API timed out — skipping Codeforces data.")
+        except Exception as exc:
+            warnings.append(f"Codeforces fetch error: {exc}")
+            logger.exception("Unexpected Codeforces error for %s", cf_user)
+
     # ── Guard: need at least one platform ──
 
-    if github_raw is None and leetcode_raw is None:
+    if github_raw is None and leetcode_raw is None and codeforces_raw is None:
         raise HTTPException(
             status_code=404,
             detail=(
@@ -128,6 +149,7 @@ async def analyze_user(
     formatted: FormattedMetrics = format_for_analysis(
         github_raw=github_raw,
         leetcode_raw=leetcode_raw,
+        codeforces_raw=codeforces_raw,
     )
 
     # ── 3. Run Gemini analysis ──
@@ -180,6 +202,7 @@ async def analyze_resume_endpoint(
     target_role: str = Form(...),
     github_username: str = Form(...),
     leetcode_username: Optional[str] = Form(None),
+    codeforces_username: Optional[str] = Form(None),
 ) -> ResumeAnalysisResult:
     """
     Accepts a PDF resume upload, a target tech role, and a synced GitHub username
@@ -214,6 +237,7 @@ async def analyze_resume_endpoint(
         )
 
     leetcode_raw = None
+    codeforces_raw = None
 
     # Fetch LeetCode metrics if username provided
     if leetcode_username:
@@ -222,8 +246,15 @@ async def analyze_resume_endpoint(
         except Exception as exc:
             logger.warning("Failed to fetch LeetCode raw metrics for resume analysis: %s", exc)
 
+    # Fetch Codeforces metrics if handle provided
+    if codeforces_username:
+        try:
+            codeforces_raw = await fetch_codeforces_raw_for_analysis(codeforces_username)
+        except Exception as exc:
+            logger.warning("Failed to fetch Codeforces raw metrics for resume analysis: %s", exc)
+
     # Format the metrics
-    formatted = format_for_analysis(github_raw, leetcode_raw)
+    formatted = format_for_analysis(github_raw, leetcode_raw, codeforces_raw)
 
     # Run analysis
     try:

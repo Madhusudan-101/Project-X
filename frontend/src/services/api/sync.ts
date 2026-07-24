@@ -2,6 +2,7 @@
  * Sync API service — talks to:
  *   - POST /api/sync/github/:username
  *   - POST /api/sync/leetcode/:username
+ *   - POST /api/sync/codeforces/:handle
  *   - POST /api/v1/analyze/:username
  */
 
@@ -9,6 +10,7 @@ import { request } from "./client";
 import type {
   GitHubProfileData,
   LeetCodeProfileData,
+  CodeforcesProfileData,
   SyncResponse,
   AnalyzeApiResponse,
   ResumeAnalysisResult,
@@ -70,6 +72,33 @@ export function extractLeetCodeUsername(input: string): string {
   return segments[segments.length - 1] ?? trimmed;
 }
 
+/**
+ * Extract a Codeforces handle from a profile URL **or** a bare handle.
+ *
+ * Accepted formats:
+ *   https://codeforces.com/profile/tourist
+ *   codeforces.com/profile/tourist
+ *   tourist
+ */
+export function extractCodeforcesHandle(input: string): string {
+  const trimmed = input.trim().replace(/\/+$/, "");
+  try {
+    const url = new URL(
+      trimmed.startsWith("http") ? trimmed : `https://${trimmed}`,
+    );
+    if (url.hostname === "codeforces.com" || url.hostname === "www.codeforces.com") {
+      const parts = url.pathname.split("/").filter(Boolean);
+      // handle /profile/handle or /handle
+      if (parts.length >= 2 && parts[0] === "profile") return parts[1];
+      if (parts.length >= 1) return parts[parts.length - 1];
+    }
+  } catch {
+    // not a URL — fall through
+  }
+  const segments = trimmed.split("/").filter(Boolean);
+  return segments[segments.length - 1] ?? trimmed;
+}
+
 // ── API calls ────────────────────────────────────────────────────────
 
 export const syncService = {
@@ -85,9 +114,19 @@ export const syncService = {
       { method: "POST" },
     ),
 
-  analyze: (githubUsername: string | null, leetcodeUsername: string | null) => {
+  codeforces: (handle: string) =>
+    request<SyncResponse<CodeforcesProfileData>>(
+      `/api/sync/codeforces/${encodeURIComponent(handle)}`,
+      { method: "POST" },
+    ),
+
+  analyze: (
+    githubUsername: string | null,
+    leetcodeUsername: string | null,
+    codeforcesUsername: string | null = null,
+  ) => {
     // We can use either as the path parameter or use a dummy/fallback one.
-    const pathUsername = githubUsername ?? leetcodeUsername ?? "user";
+    const pathUsername = githubUsername ?? leetcodeUsername ?? codeforcesUsername ?? "user";
     return request<AnalyzeApiResponse>(
       `/api/v1/analyze/${encodeURIComponent(pathUsername)}`,
       {
@@ -95,6 +134,7 @@ export const syncService = {
         body: {
           github_username: githubUsername,
           leetcode_username: leetcodeUsername,
+          codeforces_username: codeforcesUsername,
         },
       },
     );
@@ -105,6 +145,7 @@ export const syncService = {
     githubUsername: string,
     leetcodeUsername: string | null,
     targetRole: string,
+    codeforcesUsername: string | null = null,
   ) => {
     const formData = new FormData();
     formData.append("file", file);
@@ -112,6 +153,9 @@ export const syncService = {
     formData.append("github_username", githubUsername);
     if (leetcodeUsername) {
       formData.append("leetcode_username", leetcodeUsername);
+    }
+    if (codeforcesUsername) {
+      formData.append("codeforces_username", codeforcesUsername);
     }
 
     return request<ResumeAnalysisResult>(

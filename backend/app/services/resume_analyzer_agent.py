@@ -37,7 +37,7 @@ class Discrepancy(BaseModel):
         ...,
         description=(
             "The verified metrics/repositories that ACTIVELY CONTRADICT the resume claim. Never "
-            "use this for a claim that simply has no GitHub/LeetCode data behind it — absence of "
+            "use this for a claim that simply has no GitHub/LeetCode/Codeforces data behind it — absence of "
             "data is not a contradiction."
         )
     )
@@ -49,7 +49,7 @@ class RoleFitAssessment(BaseModel):
         description=(
             "Skills/tools/knowledge areas typically expected for the candidate's target role that "
             "are demonstrated by ANY credible signal in the resume + verified portfolio — including "
-            "hackathon rankings, contest placements, and academic honors, not just GitHub/LeetCode."
+            "hackathon rankings, contest placements, and academic honors, not just GitHub/LeetCode/Codeforces."
         )
     )
     missing_skills: List[str] = Field(
@@ -95,7 +95,7 @@ class ResumeAnalysisResult(BaseModel):
         ...,
         description=(
             "List of resume claims that ACTIVELY CONTRADICT verified profile data. Empty if none — "
-            "a missing/thin GitHub or LeetCode profile is NOT a discrepancy, only a real conflict is."
+            "a missing/thin GitHub, LeetCode, or Codeforces profile is NOT a discrepancy, only a real conflict is."
         )
     )
     role_fit: RoleFitAssessment = Field(
@@ -303,10 +303,10 @@ async def analyze_resume(
         system_instruction=(
             "You are an expert technical recruiter conducting a resume-authenticity audit for a "
             "candidate applying to a specific target tech role. Analyze the resume file against "
-            "the verified portfolio metrics JSON (GitHub + LeetCode) to detect fake claims, "
+            "the verified portfolio metrics JSON (GitHub, LeetCode, and Codeforces) to detect fake claims, "
             "formatting weaknesses, and produce a strict JSON output matching the schema.\n\n"
-            "CRITICAL — how to treat resume content that has no GitHub/LeetCode data behind it:\n"
-            "The verified metrics JSON only ever covers GitHub and LeetCode activity. It says "
+            "CRITICAL — how to treat resume content that has no GitHub/LeetCode/Codeforces data behind it:\n"
+            "The verified metrics JSON only ever covers GitHub, LeetCode, and Codeforces activity. It says "
             "NOTHING about competition results, hackathon placements, academic honors, positions "
             "of responsibility, coursework, or teaching/leadership roles — those are independently "
             "verifiable by their own nature (an organizer-ranked hackathon podium, a university gold "
@@ -314,9 +314,9 @@ async def analyze_resume(
             "never flagged as unverifiable 'claims'. Only use `detected_discrepancies` for a resume "
             "statement that ACTIVELY CONTRADICTS something the verified metrics JSON shows (wrong "
             "language, wrong library, inflated numbers that conflict with real activity — like the "
-            "classic 'claims C++, repo is pure C' case). The mere ABSENCE of a GitHub/LeetCode "
+            "classic 'claims C++, repo is pure C' case). The mere ABSENCE of a GitHub/LeetCode/Codeforces "
             "profile, or of profile data for a specific framework, is NOT a discrepancy — never "
-            "invent one for it. If GitHub/LeetCode data is missing or thin, mention that at most "
+            "invent one for it. If GitHub/LeetCode/Codeforces data is missing or thin, mention that at most "
             "once as a general observation in `weaknesses` (e.g. 'resume claims aren't backed by a "
             "linked public code portfolio') — do not repeat it as a discrepancy for every skill "
             "claim in the resume.\n\n"
@@ -325,7 +325,7 @@ async def analyze_resume(
             "academic honors/medals, named leadership or PoR titles — treat these as real evidence "
             "of the candidate's ability (e.g. a top-5 hackathon finish among 50+ teams IS evidence of "
             "applied engineering ability; a podium finish in a CP contest IS evidence of DSA ability) "
-            "even with zero linked GitHub/LeetCode profile behind them.\n\n"
+            "even with zero linked GitHub/LeetCode/Codeforces profile behind them.\n\n"
             "For `weaknesses`: ALWAYS check fundamental resume-craft hygiene, independent of "
             "portfolio verification — recruiters spend seconds per resume, so these matter a lot:\n"
             "(a) Length/conciseness — for a student or a candidate with under ~2-3 years of "
@@ -347,10 +347,10 @@ async def analyze_resume(
             "given, do not assume it is always a generalist software role). Then evaluate the "
             "resume AND verified portfolio together against that inferred requirement set — "
             "weighing resume-stated achievements/awards/placements as real signal exactly like "
-            "above, not just GitHub/LeetCode data — and split it into `matched_skills` "
+            "above, not just GitHub/LeetCode/Codeforces data — and split it into `matched_skills` "
             "(demonstrated, by any credible signal) and `missing_skills` (genuinely absent or weak), "
             "plus a `fit_summary` verdict grounded in the specific target role. Do not pad "
-            "`missing_skills` with generic 'go verify on LeetCode/GitHub' items when the resume "
+            "`missing_skills` with generic 'go verify on LeetCode/GitHub/Codeforces' items when the resume "
             "already contains strong, independently-credible proof of that exact ability.\n\n"
             "Keep two other things strictly separate:\n"
             "1. `resume_corrections` — concrete, ready-to-use text edits that fix the discrepancies "
@@ -364,7 +364,7 @@ async def analyze_resume(
             "(e.g. add tests, add a missing subsystem, deploy it), learn or practice a specific "
             "concept/tool the role needs, replicate a relevant paper or technique, write technical "
             "documentation, or contribute to an open-source project in the relevant ecosystem. Only "
-            "prescribe a LeetCode/GitHub-specific task on a day where that is genuinely the best "
+            "prescribe a LeetCode/GitHub/Codeforces-specific task on a day where that is genuinely the best "
             "lever for the gap being addressed that day — not as filler. Never put a resume-editing "
             "task in here. Every task must be derived from this candidate's real data and target "
             "role — never generic, unconnected advice.\n\n"
@@ -377,7 +377,7 @@ async def analyze_resume(
             "positive signal; (d) resume quality issues in `weaknesses`. This is a recruiter's "
             "overall competitiveness rating for this candidate against this target role — not a "
             "keyword-matching score — so a candidate with strong verified/independent achievements "
-            "but no GitHub/LeetCode should NOT be penalized as if they were dishonest; a candidate "
+            "but no GitHub/LeetCode/Codeforces should NOT be penalized as if they were dishonest; a candidate "
             "with real contradictions should score notably lower even with good achievements."
         ),
         response_mime_type="application/json",

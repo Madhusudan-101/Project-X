@@ -109,10 +109,50 @@ class LeetCodeMetrics(BaseModel):
     )
 
 
+class CodeforcesRatingChange(BaseModel):
+    """A single rated-contest result."""
+    contest_name: str
+    date: str  # YYYY-MM-DD
+    old_rating: int = 0
+    new_rating: int = 0
+    rank: int = 0
+
+
+class CodeforcesSolvedProblem(BaseModel):
+    """A single unique solved problem."""
+    name: str
+    rating: Optional[int] = Field(None, description="Codeforces difficulty rating of the problem (e.g. 800-3500).")
+    tags: List[str] = Field(default_factory=list)
+    solved_at: str = ""  # ISO-8601
+
+
+class CodeforcesMetrics(BaseModel):
+    handle: str = ""
+    rating: Optional[int] = None
+    max_rating: Optional[int] = None
+    rank: Optional[str] = None
+    max_rank: Optional[str] = None
+    total_solved: int = 0
+    contests_participated: int = 0
+    avg_problem_rating: Optional[int] = Field(
+        None, description="Average difficulty rating across unique solved problems."
+    )
+    top_tags: List[str] = Field(
+        default_factory=list, description="Most-solved problem tags/topics, most frequent first."
+    )
+    submission_activity: ActivityMetrics = ActivityMetrics()
+    rating_history: List[CodeforcesRatingChange] = Field(default_factory=list)
+    solved_problems: List[CodeforcesSolvedProblem] = Field(
+        default_factory=list,
+        description="Unique solved problems, most recent first (capped for token efficiency).",
+    )
+
+
 class FormattedMetrics(BaseModel):
     """Token-efficient summary consumed by the Gemini agent."""
     github: Optional[GitHubMetrics] = None
     leetcode: Optional[LeetCodeMetrics] = None
+    codeforces: Optional[CodeforcesMetrics] = None
 
 
 # ── Internal helpers ──────────────────────────────────────────────────
@@ -364,18 +404,87 @@ def _format_leetcode(raw: Dict[str, Any]) -> LeetCodeMetrics:
     )
 
 
+# ── Codeforces formatting ────────────────────────────────────────────
+
+
+def _format_codeforces(raw: Dict[str, Any]) -> CodeforcesMetrics:
+    info: Dict[str, Any] = raw.get("info", {})
+    solved_raw: List[Dict[str, Any]] = raw.get("solved_problems", [])
+    submission_dates_raw: List[str] = raw.get("submission_dates", [])
+    rating_history_raw: List[Dict[str, Any]] = raw.get("rating_history", [])
+
+    # ── Activity metrics from submission dates ──
+    day_counts: Dict[date, int] = {}
+    for iso in submission_dates_raw:
+        d = _iso_to_date(iso)
+        if d:
+            day_counts[d] = day_counts.get(d, 0) + 1
+    activity = _compute_activity_metrics(day_counts)
+
+    # ── Tag frequency across unique solved problems ──
+    tag_counter: Counter[str] = Counter()
+    ratings: List[int] = []
+    for p in solved_raw:
+        for tag in p.get("tags", []):
+            tag_counter[tag] += 1
+        if p.get("rating"):
+            ratings.append(p["rating"])
+    top_tags = [t for t, _ in tag_counter.most_common(10)]
+    avg_rating = round(sum(ratings) / len(ratings)) if ratings else None
+
+    # Most-recent 40 solved problems, for token efficiency
+    solved_sorted = sorted(solved_raw, key=lambda p: p.get("solved_at", ""), reverse=True)[:40]
+    solved_problems = [
+        CodeforcesSolvedProblem(
+            name=p.get("name", ""),
+            rating=p.get("rating"),
+            tags=p.get("tags", []),
+            solved_at=p.get("solved_at", ""),
+        )
+        for p in solved_sorted
+    ]
+
+    rating_history = [
+        CodeforcesRatingChange(
+            contest_name=r.get("contestName", ""),
+            date=(_iso_to_date(r.get("ratingUpdateTimeSeconds", "")) or date.today()).isoformat(),
+            old_rating=r.get("oldRating", 0),
+            new_rating=r.get("newRating", 0),
+            rank=r.get("rank", 0),
+        )
+        for r in rating_history_raw
+    ]
+
+    return CodeforcesMetrics(
+        handle=info.get("handle", raw.get("handle", "")),
+        rating=info.get("rating"),
+        max_rating=info.get("maxRating"),
+        rank=info.get("rank"),
+        max_rank=info.get("maxRank"),
+        total_solved=len(solved_raw),
+        contests_participated=len(rating_history_raw),
+        avg_problem_rating=avg_rating,
+        top_tags=top_tags,
+        submission_activity=activity,
+        rating_history=rating_history,
+        solved_problems=solved_problems,
+    )
+
+
 # ── Public entry point ────────────────────────────────────────────────
 
 
 def format_for_analysis(
     github_raw: Optional[Dict[str, Any]] = None,
     leetcode_raw: Optional[Dict[str, Any]] = None,
+    codeforces_raw: Optional[Dict[str, Any]] = None,
 ) -> FormattedMetrics:
     """
-    Distil raw GitHub + LeetCode payloads into a compact,
+    Distil raw GitHub + LeetCode + Codeforces payloads into a compact,
     token-efficient ``FormattedMetrics`` object.
     """
     return FormattedMetrics(
         github=_format_github(github_raw) if github_raw else None,
         leetcode=_format_leetcode(leetcode_raw) if leetcode_raw else None,
+        codeforces=_format_codeforces(codeforces_raw) if codeforces_raw else None,
     )
