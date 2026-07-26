@@ -269,6 +269,21 @@ async def _fetch_repo_readme(
     return text[:max_chars] if len(text) > max_chars else text
 
 
+async def check_github_repo_exists(owner: str, repo: str) -> bool:
+    """
+    GET /repos/{owner}/{repo}
+
+    Returns True only if the repo exists and is publicly accessible.
+    Treats 403 (rate limit) and 404 (not found/private) as False rather
+    than raising, since callers use this for a best-effort existence check.
+    """
+    headers = _build_headers()
+    url = f"{GITHUB_API_BASE}/repos/{owner}/{repo}"
+    async with httpx.AsyncClient(headers=headers) as client:
+        resp = await client.get(url, timeout=_REQUEST_TIMEOUT)
+    return resp.status_code == 200
+
+
 async def fetch_github_raw_for_analysis(username: str) -> Dict[str, Any]:
     """
     Fetch *all* raw GitHub data needed by the formatter / analyzer.

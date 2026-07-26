@@ -258,7 +258,7 @@ async def analyze_resume_endpoint(
 
     # Run analysis
     try:
-        result = await analyze_resume(resume_bytes, formatted, target_role)
+        result = await analyze_resume(resume_bytes, formatted, target_role, github_username)
         return result
     except Exception as exc:
         logger.exception("Resume analysis failed")

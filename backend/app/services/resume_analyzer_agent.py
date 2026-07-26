@@ -10,6 +10,7 @@ SDK    : google-genai (the new, supported SDK)
 
 from __future__ import annotations
 
+import io
 import json
 import logging
 import os
@@ -20,10 +21,123 @@ from typing import Any, Dict, List
 from google import genai
 from google.genai import types as genai_types
 from pydantic import BaseModel, Field
+from pypdf import PdfReader
 
 from .formatter import FormattedMetrics
+from .github_service import check_github_repo_exists
 
 logger = logging.getLogger(__name__)
+
+_GITHUB_REPO_URL_RE = re.compile(
+    r"^https?://(?:www\.)?github\.com/([^/?#]+)/([^/?#]+)/?"
+)
+
+# Cap how many distinct GitHub repo links embedded in a resume we'll verify
+# per analysis, so a PDF stuffed with link annotations can't trigger an
+# unbounded number of outbound GitHub API calls.
+_MAX_HYPERLINK_REPOS_TO_VERIFY = 10
+
+
+def _extract_pdf_hyperlinks(resume_bytes: bytes) -> List[str]:
+    """
+    Extract the actual href targets of every clickable link annotation in the
+    PDF (e.g. the URL behind a "[GitHub]" icon), which Gemini's document
+    understanding cannot see on its own — it only reads the visible anchor
+    text, not the underlying `/URI` action stored in the PDF's link
+    annotations.
+    """
+    urls: List[str] = []
+    try:
+        reader = PdfReader(io.BytesIO(resume_bytes))
+        for page in reader.pages:
+            annotations = page.get("/Annots")
+            if not annotations:
+                continue
+            for annot_ref in annotations:
+                try:
+                    annot = annot_ref.get_object()
+                    action = annot.get("/A")
+                    uri = action.get("/URI") if action else None
+                except Exception:
+                    continue
+                if uri and uri not in urls:
+                    urls.append(str(uri))
+    except Exception:
+        logger.warning("Failed to extract hyperlinks from resume PDF.", exc_info=True)
+    return urls
+
+
+def _extract_github_repo_links(urls: List[str]) -> List[tuple[str, str]]:
+    """Parse (owner, repo) pairs out of any github.com/OWNER/REPO hyperlinks."""
+    repos: List[tuple[str, str]] = []
+    seen: set[str] = set()
+    for url in urls:
+        match = _GITHUB_REPO_URL_RE.match(url.strip())
+        if not match:
+            continue
+        owner, repo = match.group(1), match.group(2)
+        repo = re.sub(r"\.git$", "", repo)
+        # Skip non-repo GitHub paths that happen to match the 2-segment pattern.
+        if owner.lower() in {"orgs", "sponsors", "settings", "notifications", "marketplace"}:
+            continue
+        key = f"{owner.lower()}/{repo.lower()}"
+        if key in seen:
+            continue
+        seen.add(key)
+        repos.append((owner, repo))
+    return repos
+
+
+async def _build_hyperlink_context(resume_bytes: bytes, declared_github_username: str) -> str | None:
+    """
+    Find GitHub repo links embedded in the resume PDF that point to an
+    account OTHER than the one the candidate declared for portfolio
+    verification, and confirm via the GitHub API whether each actually
+    exists. Returns a text block for the Gemini prompt, or None if there's
+    nothing relevant to report.
+    """
+    all_links = _extract_pdf_hyperlinks(resume_bytes)
+    repo_links = _extract_github_repo_links(all_links)
+
+    other_account_repos = [
+        (owner, repo) for owner, repo in repo_links
+        if owner.lower() != declared_github_username.lower()
+    ][:_MAX_HYPERLINK_REPOS_TO_VERIFY]
+
+    if not other_account_repos:
+        return None
+
+    lines: List[str] = []
+    for owner, repo in other_account_repos:
+        try:
+            exists = await check_github_repo_exists(owner, repo)
+        except Exception:
+            logger.warning("GitHub existence check failed for %s/%s", owner, repo, exc_info=True)
+            exists = None
+        url = f"https://github.com/{owner}/{repo}"
+        if exists is True:
+            lines.append(f'- {url} — CONFIRMED to exist and be publicly accessible on GitHub, under the account "{owner}".')
+        elif exists is False:
+            lines.append(f'- {url} — could NOT be confirmed on GitHub (404/private/rate-limited) as of this analysis.')
+        else:
+            lines.append(f"- {url} — existence could not be checked (network error).")
+
+    return (
+        "IMPORTANT — hyperlinks embedded in this resume's PDF (invisible to plain text/OCR reading, "
+        "extracted separately from the PDF's link annotations):\n"
+        f'The candidate\'s portfolio was verified against the GitHub account "{declared_github_username}". '
+        "This resume also contains hyperlinks (e.g. a '[GitHub]' icon next to a project) pointing to "
+        f"GitHub repositories under DIFFERENT accounts:\n" + "\n".join(lines) + "\n\n"
+        "Use this to avoid a false discrepancy: if a project's linked repo is CONFIRMED to exist under "
+        "a different account, do NOT report 'no such repository exists' in detected_discrepancies for "
+        "that project — the repo is real, it's simply not on the account provided for verification. "
+        "Instead, note it once in weaknesses as: the project's linked repo lives under a different "
+        "GitHub account than the one provided for verification, and the candidate should either confirm "
+        "this is a secondary/personal account (worth noting in the resume) or move/re-link the repo under "
+        "their primary declared account so recruiters and this analyzer can verify it directly. Only "
+        "treat it as a genuine discrepancy if the link is NOT confirmed to exist AND nothing in the "
+        "verified portfolio backs up the claim either."
+    )
 
 # ── Response Schema (Pydantic V2) ─────────────────────────────────────
 
@@ -276,14 +390,18 @@ async def analyze_resume(
     resume_bytes: bytes,
     portfolio: FormattedMetrics,
     target_role: str,
+    github_username: str,
 ) -> ResumeAnalysisResult:
     """
     Send the resume PDF and formatted portfolio metrics to Gemini and return a
     structured ``ResumeAnalysisResult`` evaluated against ``target_role``.
+    ``github_username`` is the account the candidate declared for portfolio
+    verification — used to cross-check any OTHER GitHub accounts linked from
+    hyperlinks embedded in the resume PDF (see ``_build_hyperlink_context``).
     """
     client = _get_client()
 
-    contents = [
+    contents: List[Any] = [
         genai_types.Part.from_bytes(
             data=resume_bytes,
             mime_type="application/pdf"
@@ -298,6 +416,10 @@ async def analyze_resume(
         "before its start date); a date that is simply in the past or present relative to this "
         "real date is NOT an anomaly.",
     ]
+
+    hyperlink_context = await _build_hyperlink_context(resume_bytes, github_username)
+    if hyperlink_context:
+        contents.append(hyperlink_context)
 
     config = genai_types.GenerateContentConfig(
         system_instruction=(
@@ -316,7 +438,11 @@ async def analyze_resume(
             "language, wrong library, inflated numbers that conflict with real activity — like the "
             "classic 'claims C++, repo is pure C' case). The mere ABSENCE of a GitHub/LeetCode/Codeforces "
             "profile, or of profile data for a specific framework, is NOT a discrepancy — never "
-            "invent one for it. If GitHub/LeetCode/Codeforces data is missing or thin, mention that at most "
+            "invent one for it. Before ever concluding a project's repository 'does not exist', check "
+            "whether a hyperlink-evidence block is present later in this prompt (extracted from the "
+            "PDF's own link annotations, which you cannot see just from reading the page) — a project "
+            "can be real and simply linked to a different GitHub account than the one verified; follow "
+            "that block's instructions instead of flagging it as fabricated. If GitHub/LeetCode/Codeforces data is missing or thin, mention that at most "
             "once as a general observation in `weaknesses` (e.g. 'resume claims aren't backed by a "
             "linked public code portfolio') — do not repeat it as a discrepancy for every skill "
             "claim in the resume.\n\n"

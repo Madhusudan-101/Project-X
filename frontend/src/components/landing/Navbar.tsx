@@ -7,12 +7,9 @@ import { cn } from "@/lib/utils";
 const NAV = [
   { label: "Home", to: "/" as const },
   { label: "Features", to: "/#features" as const },
-  { label: "Candidates", to: "/#candidates" as const },
-  { label: "Companies", to: "/#companies" as const },
-  { label: "Colleges", to: "/#colleges" as const },
+  { label: "Solutions", to: "/#solutions" as const },
   { label: "Pricing", to: "/#pricing" as const },
-  { label: "About", to: "/#about" as const },
-  { label: "Contact", to: "/#contact" as const },
+  { label: "FAQ", to: "/#faq" as const },
 ];
 
 export function Navbar() {

@@ -16,7 +16,6 @@ import {
   Star,
   Zap,
   Brain,
-  Video,
 } from "lucide-react";
 import { Navbar } from "@/components/landing/Navbar";
 import { Footer } from "@/components/landing/Footer";
@@ -43,36 +42,10 @@ const FEATURES = [
   { icon: BarChart3, title: "Placement Analytics", desc: "Department-level dashboards, rankings, and campus drive reporting." },
 ];
 
-const STATS = [
-  { value: "50K+", label: "Interviews conducted" },
-  { value: "1.2K", label: "Partner companies" },
-  { value: "320", label: "Colleges onboarded" },
-  { value: "97%", label: "Recruiter satisfaction" },
-];
-
-const STEPS = [
-  { icon: Sparkles, title: "Sign up", desc: "Pick your portal — Candidate, Company, College or Admin." },
-  { icon: Zap, title: "Configure", desc: "Upload resumes, create interviews, or import your placement cell." },
-  { icon: Video, title: "Interview", desc: "Run AI, peer, or expert interviews with rich, real-time evaluation." },
-  { icon: BarChart3, title: "Analyze", desc: "Ship data-backed hiring and placement decisions faster." },
-];
-
-const TESTIMONIALS = [
-  {
-    quote: "Mirracle replaced three separate tools. Our time-to-hire dropped 42% in a single quarter.",
-    name: "Aditi Rao",
-    role: "Head of Talent, Northwind",
-  },
-  {
-    quote: "The AI interviewer feels like our best senior engineer — consistent, unbiased, and thorough.",
-    name: "Marcus Lee",
-    role: "VP Engineering, Helios",
-  },
-  {
-    quote: "Placement analytics across departments finally gave us the visibility we lacked for years.",
-    name: "Dr. Priya Menon",
-    role: "Placement Director, BITS",
-  },
+const SOLUTIONS = [
+  { id: "candidates", icon: GraduationCap, title: "For Candidates", desc: "Interview practice, code portfolio and OA prep — all AI-powered." },
+  { id: "companies", icon: Building2, title: "For Companies", desc: "Custom AI interviews, ranking, and end-to-end applicant tracking." },
+  { id: "colleges", icon: GraduationCap, title: "For Colleges", desc: "Placement analytics, campus drives and department dashboards." },
 ];
 
 const PLANS = [
@@ -216,18 +189,6 @@ function LandingPage() {
         </div>
       </section>
 
-      {/* STATS */}
-      <section className="border-y border-border/60 bg-surface">
-        <div className="mx-auto grid max-w-7xl grid-cols-2 gap-6 px-4 py-10 md:grid-cols-4 md:px-6">
-          {STATS.map((s) => (
-            <div key={s.label} className="text-center">
-              <div className="font-display text-3xl font-bold text-gradient md:text-4xl">{s.value}</div>
-              <div className="mt-1 text-sm text-muted-foreground">{s.label}</div>
-            </div>
-          ))}
-        </div>
-      </section>
-
       {/* FEATURES */}
       <section id="features" className="mx-auto max-w-7xl scroll-mt-20 px-4 py-24 md:px-6">
         <div className="max-w-2xl">
@@ -259,80 +220,33 @@ function LandingPage() {
         </div>
       </section>
 
-      {/* PORTALS ANCHORS */}
-      <section className="mx-auto max-w-7xl px-4 pb-12 md:px-6">
-        <div className="grid gap-6 md:grid-cols-3">
-          {[
-            { id: "candidates", icon: GraduationCap, title: "For Candidates", desc: "Interview practice, code portfolio and OA prep — all AI-powered." },
-            { id: "companies", icon: Building2, title: "For Companies", desc: "Custom AI interviews, ranking, and end-to-end applicant tracking." },
-            { id: "colleges", icon: GraduationCap, title: "For Colleges", desc: "Placement analytics, campus drives and department dashboards." },
-          ].map((p) => (
-            <Card key={p.id} id={p.id} className="scroll-mt-24 border-border/60 p-6">
-              <div className="grid h-12 w-12 place-items-center rounded-xl bg-gradient-brand text-primary-foreground">
-                <p.icon className="h-6 w-6" />
-              </div>
-              <h3 className="mt-4 text-lg font-semibold">{p.title}</h3>
-              <p className="mt-2 text-sm text-muted-foreground">{p.desc}</p>
-              <Button asChild variant="link" className="mt-3 h-auto p-0 text-primary">
-                <Link to="/portals">
-                  Explore portal <ArrowRight className="ml-1 h-4 w-4" />
-                </Link>
-              </Button>
-            </Card>
-          ))}
-        </div>
-      </section>
-
-      {/* HOW IT WORKS */}
-      <section id="about" className="scroll-mt-20 bg-mesh py-24">
+      {/* SOLUTIONS */}
+      <section id="solutions" className="scroll-mt-20 bg-mesh py-24">
         <div className="mx-auto max-w-7xl px-4 md:px-6">
           <div className="max-w-2xl">
-            <Badge className="border border-primary/20 bg-primary-soft text-primary hover:bg-primary-soft">How it works</Badge>
-            <h2 className="mt-3 font-display text-4xl font-bold">From signup to signed offer — in one flow.</h2>
+            <Badge className="border border-primary/20 bg-primary-soft text-primary hover:bg-primary-soft">Solutions</Badge>
+            <h2 className="mt-3 font-display text-4xl font-bold">Built for every side of hiring.</h2>
+            <p className="mt-3 text-muted-foreground">
+              One workspace, three tailored experiences — candidates, companies and colleges all
+              working off the same live data.
+            </p>
           </div>
-          <div className="mt-12 grid gap-6 md:grid-cols-2 lg:grid-cols-4">
-            {STEPS.map((s, i) => (
-              <Card key={s.title} className="relative border-border/60 p-6">
-                <div className="absolute right-4 top-4 font-display text-4xl font-bold text-primary/10">
-                  0{i + 1}
+          <div className="mt-12 grid gap-6 md:grid-cols-3">
+            {SOLUTIONS.map((p) => (
+              <Card key={p.id} id={p.id} className="scroll-mt-24 border-border/60 p-6">
+                <div className="grid h-12 w-12 place-items-center rounded-xl bg-gradient-brand text-primary-foreground">
+                  <p.icon className="h-6 w-6" />
                 </div>
-                <div className="grid h-11 w-11 place-items-center rounded-xl bg-gradient-brand text-primary-foreground">
-                  <s.icon className="h-5 w-5" />
-                </div>
-                <div className="mt-4 font-semibold">{s.title}</div>
-                <p className="mt-1 text-sm text-muted-foreground">{s.desc}</p>
+                <h3 className="mt-4 text-lg font-semibold">{p.title}</h3>
+                <p className="mt-2 text-sm text-muted-foreground">{p.desc}</p>
+                <Button asChild variant="link" className="mt-3 h-auto p-0 text-primary">
+                  <Link to="/portals">
+                    Explore portal <ArrowRight className="ml-1 h-4 w-4" />
+                  </Link>
+                </Button>
               </Card>
             ))}
           </div>
-        </div>
-      </section>
-
-      {/* TESTIMONIALS */}
-      <section className="mx-auto max-w-7xl px-4 py-24 md:px-6">
-        <div className="max-w-2xl">
-          <Badge className="border border-primary/20 bg-primary-soft text-primary hover:bg-primary-soft">Loved by teams</Badge>
-          <h2 className="mt-3 font-display text-4xl font-bold">Trusted by recruiters, engineers and placement cells.</h2>
-        </div>
-        <div className="mt-12 grid gap-6 md:grid-cols-3">
-          {TESTIMONIALS.map((t) => (
-            <Card key={t.name} className="border-border/60 p-6">
-              <div className="flex gap-1 text-primary">
-                {Array.from({ length: 5 }).map((_, i) => (
-                  <Star key={i} className="h-4 w-4 fill-current" />
-                ))}
-              </div>
-              <p className="mt-4 text-sm leading-relaxed text-foreground">"{t.quote}"</p>
-              <div className="mt-5 flex items-center gap-3">
-                <div className="grid h-10 w-10 place-items-center rounded-full bg-gradient-brand text-sm font-semibold text-primary-foreground">
-                  {t.name[0]}
-                </div>
-                <div>
-                  <div className="text-sm font-semibold">{t.name}</div>
-                  <div className="text-xs text-muted-foreground">{t.role}</div>
-                </div>
-              </div>
-            </Card>
-          ))}
         </div>
       </section>
 
@@ -382,25 +296,24 @@ function LandingPage() {
         </div>
       </section>
 
-      {/* FAQ */}
-      <section className="mx-auto max-w-4xl px-4 py-24 md:px-6">
-        <div className="text-center">
-          <Badge className="border border-primary/20 bg-primary-soft text-primary hover:bg-primary-soft">FAQ</Badge>
-          <h2 className="mt-3 font-display text-4xl font-bold">Answers to common questions.</h2>
+      {/* FAQ + CTA */}
+      <section id="faq" className="scroll-mt-20 mx-auto max-w-7xl px-4 py-24 md:px-6">
+        <div className="mx-auto max-w-4xl">
+          <div className="text-center">
+            <Badge className="border border-primary/20 bg-primary-soft text-primary hover:bg-primary-soft">FAQ</Badge>
+            <h2 className="mt-3 font-display text-4xl font-bold">Answers to common questions.</h2>
+          </div>
+          <Accordion type="single" collapsible className="mt-10">
+            {FAQS.map((f, i) => (
+              <AccordionItem key={i} value={`item-${i}`}>
+                <AccordionTrigger className="text-left font-medium">{f.q}</AccordionTrigger>
+                <AccordionContent className="text-muted-foreground">{f.a}</AccordionContent>
+              </AccordionItem>
+            ))}
+          </Accordion>
         </div>
-        <Accordion type="single" collapsible className="mt-10">
-          {FAQS.map((f, i) => (
-            <AccordionItem key={i} value={`item-${i}`}>
-              <AccordionTrigger className="text-left font-medium">{f.q}</AccordionTrigger>
-              <AccordionContent className="text-muted-foreground">{f.a}</AccordionContent>
-            </AccordionItem>
-          ))}
-        </Accordion>
-      </section>
 
-      {/* CTA */}
-      <section className="mx-auto max-w-7xl px-4 pb-24 md:px-6">
-        <div className="relative overflow-hidden rounded-3xl bg-gradient-brand p-10 shadow-glow md:p-16">
+        <div className="relative mt-16 overflow-hidden rounded-3xl bg-gradient-brand p-10 shadow-glow md:p-16">
           <div className="absolute -right-24 -top-24 h-72 w-72 rounded-full bg-white/10 blur-3xl" />
           <div className="absolute -bottom-24 -left-24 h-72 w-72 rounded-full bg-white/10 blur-3xl" />
           <div className="relative flex flex-col items-start justify-between gap-6 md:flex-row md:items-center">
