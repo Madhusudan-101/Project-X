@@ -11,8 +11,9 @@ Returns the final ``AnalysisResult`` to the client.
 
 from __future__ import annotations
 
+import asyncio
 import logging
-from typing import Optional
+from typing import Dict, List, Optional
 
 import httpx
 from fastapi import APIRouter, HTTPException, UploadFile, File, Form
@@ -23,7 +24,8 @@ from ..services.leetcode_service import fetch_leetcode_raw_for_analysis
 from ..services.codeforces_service import fetch_codeforces_raw_for_analysis
 from ..services.formatter import format_for_analysis, FormattedMetrics
 from ..services.analyzer_agent import run_analysis, AnalysisResult
-from ..services.resume_analyzer_agent import analyze_resume, ResumeAnalysisResult
+from ..services.resume_analyzer_agent import analyze_resume, extract_pdf_hyperlinks, ResumeAnalysisResult
+from ..services.link_extraction import detect_profile_links
 
 logger = logging.getLogger(__name__)
 
@@ -53,6 +55,57 @@ class AnalyzeResponse(BaseModel):
     formatted_metrics: Optional[FormattedMetrics] = None
     warnings: list[str] = Field(default_factory=list)
     error: Optional[str] = None
+
+
+class CombinedAnalysisResponse(BaseModel):
+    """
+    One unified analysis of a candidate: the resume-authenticity audit is
+    always present; the profile/employability analysis is present only if
+    at least one of GitHub/LeetCode/Codeforces resolved to real data.
+    ``detected_profiles``/``missing_platforms`` drive the frontend's
+    sequential "we didn't find your X — want to add it?" follow-up.
+    """
+    resume_analysis: ResumeAnalysisResult
+    profile_analysis: Optional[AnalysisResult] = None
+    detected_profiles: Dict[str, str] = Field(default_factory=dict)
+    missing_platforms: List[str] = Field(default_factory=list)
+    warnings: List[str] = Field(default_factory=list)
+
+
+async def _fetch_platforms_tolerant(
+    github_username: Optional[str],
+    leetcode_username: Optional[str],
+    codeforces_username: Optional[str],
+) -> tuple[Optional[dict], Optional[dict], Optional[dict], List[str]]:
+    """
+    Best-effort fetch of whichever of the three platforms have a username —
+    a failure on any one platform is recorded as a warning, never fatal.
+    """
+    warnings: List[str] = []
+    github_raw = leetcode_raw = codeforces_raw = None
+
+    if github_username:
+        try:
+            github_raw = await fetch_github_raw_for_analysis(github_username)
+        except Exception as exc:
+            warnings.append(f"Could not fetch GitHub data for '{github_username}': {exc}")
+            logger.warning("GitHub fetch failed for %s: %s", github_username, exc)
+
+    if leetcode_username:
+        try:
+            leetcode_raw = await fetch_leetcode_raw_for_analysis(leetcode_username)
+        except Exception as exc:
+            warnings.append(f"Could not fetch LeetCode data for '{leetcode_username}': {exc}")
+            logger.warning("LeetCode fetch failed for %s: %s", leetcode_username, exc)
+
+    if codeforces_username:
+        try:
+            codeforces_raw = await fetch_codeforces_raw_for_analysis(codeforces_username)
+        except Exception as exc:
+            warnings.append(f"Could not fetch Codeforces data for '{codeforces_username}': {exc}")
+            logger.warning("Codeforces fetch failed for %s: %s", codeforces_username, exc)
+
+    return github_raw, leetcode_raw, codeforces_raw, warnings
 
 
 # ── Endpoint ──────────────────────────────────────────────────────────
@@ -194,21 +247,25 @@ async def analyze_user(
 
 @router.post(
     "/analyze-resume",
-    response_model=ResumeAnalysisResult,
-    summary="Upload and analyze a PDF resume against coding metrics",
+    response_model=CombinedAnalysisResponse,
+    summary="Upload a resume and get one unified authenticity + employability analysis",
 )
 async def analyze_resume_endpoint(
     file: UploadFile = File(...),
     target_role: str = Form(...),
-    github_username: str = Form(...),
+    github_username: Optional[str] = Form(None),
     leetcode_username: Optional[str] = Form(None),
     codeforces_username: Optional[str] = Form(None),
-) -> ResumeAnalysisResult:
+) -> CombinedAnalysisResponse:
     """
-    Accepts a PDF resume upload, a target tech role, and a synced GitHub username
-    (required so the analyzer always has real portfolio data to verify the resume
-    against), plus an optional LeetCode username, and runs the resume
-    authenticity + role-fit analyzer.
+    Accepts a PDF resume upload and a target tech role. GitHub/LeetCode/
+    Codeforces usernames are all optional — whichever aren't explicitly
+    provided are auto-detected from the resume's own embedded hyperlinks
+    (e.g. a "GitHub" icon linking to the candidate's profile). Runs the
+    resume-authenticity audit and the profile/employability analysis
+    together and returns one combined result, plus which platforms
+    (if any) had no username either provided or detected — the frontend
+    uses this to ask the candidate to add them one at a time.
     """
     # Verify file is a PDF
     if not file.filename or not file.filename.lower().endswith(".pdf"):
@@ -225,43 +282,43 @@ async def analyze_resume_endpoint(
             detail=f"Failed to read uploaded resume file: {exc}"
         )
 
-    # GitHub is required — fetch failure here is fatal, not silently swallowed,
-    # since the whole point of requiring it is to guarantee real data to verify against.
-    try:
-        github_raw = await fetch_github_raw_for_analysis(github_username)
-    except Exception as exc:
-        logger.warning("Failed to fetch GitHub raw metrics for resume analysis: %s", exc)
-        raise HTTPException(
-            status_code=404,
-            detail=f"Could not fetch GitHub data for '{github_username}'. Please re-sync your GitHub profile and try again.",
-        )
+    # An explicitly-provided username always wins over one auto-detected from
+    # the resume — this matters once the frontend's "add a missing platform"
+    # follow-up starts resubmitting with a manually-entered username.
+    links = extract_pdf_hyperlinks(resume_bytes)
+    detected = detect_profile_links(links)
 
-    leetcode_raw = None
-    codeforces_raw = None
+    gh_user = github_username or detected.get("github")
+    lc_user = leetcode_username or detected.get("leetcode")
+    cf_user = codeforces_username or detected.get("codeforces")
 
-    # Fetch LeetCode metrics if username provided
-    if leetcode_username:
-        try:
-            leetcode_raw = await fetch_leetcode_raw_for_analysis(leetcode_username)
-        except Exception as exc:
-            logger.warning("Failed to fetch LeetCode raw metrics for resume analysis: %s", exc)
+    detected_profiles: Dict[str, str] = {
+        platform: user
+        for platform, user in (("github", gh_user), ("leetcode", lc_user), ("codeforces", cf_user))
+        if user
+    }
+    missing_platforms = [
+        platform for platform in ("github", "leetcode", "codeforces")
+        if platform not in detected_profiles
+    ]
 
-    # Fetch Codeforces metrics if handle provided
-    if codeforces_username:
-        try:
-            codeforces_raw = await fetch_codeforces_raw_for_analysis(codeforces_username)
-        except Exception as exc:
-            logger.warning("Failed to fetch Codeforces raw metrics for resume analysis: %s", exc)
-
-    # Format the metrics
+    github_raw, leetcode_raw, codeforces_raw, fetch_warnings = await _fetch_platforms_tolerant(
+        gh_user, lc_user, cf_user
+    )
     formatted = format_for_analysis(github_raw, leetcode_raw, codeforces_raw)
+    has_any_profile_data = bool(github_raw or leetcode_raw or codeforces_raw)
 
-    # Run analysis
     try:
-        result = await analyze_resume(resume_bytes, formatted, target_role, github_username)
-        return result
+        if has_any_profile_data:
+            resume_result, profile_result = await asyncio.gather(
+                analyze_resume(resume_bytes, formatted, target_role, gh_user),
+                run_analysis(formatted),
+            )
+        else:
+            resume_result = await analyze_resume(resume_bytes, formatted, target_role, gh_user)
+            profile_result = None
     except Exception as exc:
-        logger.exception("Resume analysis failed")
+        logger.exception("Combined resume analysis failed")
         err_msg = str(exc)
         if "timeout" in err_msg.lower() or "timed out" in err_msg.lower() or "deadline_exceeded" in err_msg.lower():
             raise HTTPException(
@@ -277,4 +334,12 @@ async def analyze_resume_endpoint(
             status_code=500,
             detail=f"Resume analysis failed: {exc}"
         )
+
+    return CombinedAnalysisResponse(
+        resume_analysis=resume_result,
+        profile_analysis=profile_result,
+        detected_profiles=detected_profiles,
+        missing_platforms=missing_platforms,
+        warnings=fetch_warnings,
+    )
 

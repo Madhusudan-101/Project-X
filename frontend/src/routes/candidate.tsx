@@ -5,17 +5,16 @@ import {
   ArrowUpRight,
   Award,
   Bell,
-  BookOpen,
   Brain,
   Briefcase,
   Building2,
-  ChevronRight,
   Code2,
   Dna,
   FileText,
   Filter,
   Flame,
   Github,
+  Loader2,
   LogOut,
   Play,
   Search,
@@ -45,10 +44,15 @@ import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { useAuthStore } from "@/store/auth";
 import { useResumeAnalysisStore } from "@/store/resumeAnalysis";
-import { ProfileAnalyzerPanel } from "@/components/dashboard/ProfileSyncPanel";
+import { ProfileAnalyzerPanel, ScoreRing, verdictTone } from "@/components/dashboard/ProfileSyncPanel";
 import { computeDnaBreakdown, computeDnaScore, computeSkillDna } from "@/lib/skillDna";
+import { practiceService } from "@/services/api/practice";
+import { extractLeetCodeUsername } from "@/services/api/sync";
+import { ApiClientError } from "@/services/api/client";
+import type { PracticeRecommendations } from "@/types/practice";
 
 export const Route = createFileRoute("/candidate")({
   component: CandidatePortal,
@@ -67,8 +71,6 @@ const companyTracks: {
   focus: string;
   difficulty: "Easy" | "Medium" | "Hard";
 }[] = [];
-
-const practiceQueue: { title: string; diff: "Easy" | "Medium" | "Hard"; topic: string; mins: number }[] = [];
 
 // ---------- component ----------
 
@@ -177,16 +179,16 @@ function CandidatePortal() {
 
             {/* Tab bodies */}
             <div className="pt-6 pb-12">
-              <TabsContent value="overview" className="mt-0">
+              <TabsContent value="overview" className="mt-0" forceMount>
                 <OverviewTab />
               </TabsContent>
-              <TabsContent value="analyzer" className="mt-0">
+              <TabsContent value="analyzer" className="mt-0" forceMount>
                 <AnalyzerTab />
               </TabsContent>
-              <TabsContent value="practice" className="mt-0">
+              <TabsContent value="practice" className="mt-0" forceMount>
                 <PracticeTab />
               </TabsContent>
-              <TabsContent value="dna" className="mt-0">
+              <TabsContent value="dna" className="mt-0" forceMount>
                 <TechDnaTab />
               </TabsContent>
             </div>
@@ -284,6 +286,10 @@ function OverviewTab() {
 // ---------- Analyzer ----------
 
 function AnalyzerTab() {
+  const resumeResult = useResumeAnalysisStore((s) => s.result);
+  const analyzedRole = useResumeAnalysisStore((s) => s.role);
+  const tone = resumeResult ? verdictTone(resumeResult.overall_rating.score) : null;
+
   return (
     <div className="space-y-6">
       <div className="flex items-end justify-between">
@@ -298,18 +304,38 @@ function AnalyzerTab() {
       {/* Sync + AI analysis */}
       <ProfileAnalyzerPanel />
 
-      <Card className="p-5">
-        <div className="mb-4 flex items-center justify-between">
-          <div>
-            <h2 className="font-display text-lg font-semibold">What the last runs agreed on</h2>
-            <p className="text-sm text-muted-foreground">Cross-signal — pulled from all three analyzers.</p>
+      {resumeResult && tone ? (
+        <div className={`relative overflow-hidden rounded-2xl border border-primary/20 bg-gradient-to-br ${tone.ring} via-surface to-surface p-6`}>
+          <div className="flex flex-col gap-5 sm:flex-row sm:items-center">
+            <ScoreRing score={resumeResult.overall_rating.score} />
+            <div className="flex-1 space-y-2">
+              <div className="flex items-center gap-1.5 text-base font-semibold uppercase tracking-wider text-muted-foreground">
+                <Award className="h-3.5 w-3.5 text-primary" />
+                Latest Analysis{analyzedRole ? ` · ${analyzedRole}` : ""}
+              </div>
+              <Badge className={`${tone.text} border-current/30 bg-current/10 text-base font-semibold px-3 py-1`}>
+                {resumeResult.overall_rating.verdict}
+              </Badge>
+              <p className="text-lg leading-relaxed text-foreground/90">
+                {resumeResult.overall_rating.summary}
+              </p>
+            </div>
           </div>
-          <Badge variant="outline">No runs yet</Badge>
         </div>
-        <div className="rounded-lg border border-dashed border-border/70 bg-surface/60 p-6 text-center text-sm text-muted-foreground">
-          Run any analyzer above — insights show here once we have signal from at least one source.
-        </div>
-      </Card>
+      ) : (
+        <Card className="p-5">
+          <div className="mb-4 flex items-center justify-between">
+            <div>
+              <h2 className="font-display text-xl font-semibold">No analysis yet</h2>
+              <p className="text-base text-muted-foreground">Your latest results will be summarized here.</p>
+            </div>
+            <Badge variant="outline">No runs yet</Badge>
+          </div>
+          <div className="rounded-lg border border-dashed border-border/70 bg-surface/60 p-6 text-center text-base text-muted-foreground">
+            Upload your resume above — insights show here once your first analysis completes.
+          </div>
+        </Card>
+      )}
     </div>
   );
 }
@@ -319,6 +345,26 @@ function AnalyzerTab() {
 function PracticeTab() {
   const [filter, setFilter] = useState<"All" | "FAANG" | "Product" | "India">("All");
   const list = companyTracks.filter((c) => (filter === "All" ? true : c.tag === filter));
+
+  const [lcInput, setLcInput] = useState("");
+  const [recommendations, setRecommendations] = useState<PracticeRecommendations | null>(null);
+  const [syncing, setSyncing] = useState(false);
+  const [syncError, setSyncError] = useState<string | null>(null);
+
+  const handleSyncLeetCode = async () => {
+    const username = extractLeetCodeUsername(lcInput);
+    if (!username) return;
+    setSyncing(true);
+    setSyncError(null);
+    try {
+      const data = await practiceService.getRecommendations(username);
+      setRecommendations(data);
+    } catch (err: unknown) {
+      setSyncError(err instanceof ApiClientError ? err.message : "Could not reach the server.");
+    } finally {
+      setSyncing(false);
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -380,7 +426,7 @@ function PracticeTab() {
                     c.difficulty === "Hard"
                       ? "text-destructive"
                       : c.difficulty === "Medium"
-                        ? "text-warning-foreground"
+                        ? "text-warning"
                         : "text-success"
                   }
                 >
@@ -398,43 +444,91 @@ function PracticeTab() {
       <Card className="p-5">
         <div className="mb-3 flex items-center justify-between">
           <div>
-            <h2 className="font-display text-lg font-semibold">Your practice queue</h2>
-            <p className="text-sm text-muted-foreground">Auto-picked from your weakest topics this week.</p>
+            <h2 className="font-display text-lg font-semibold">Prioritized practice</h2>
+            <p className="text-sm text-muted-foreground">
+              Ranked by your weakest LeetCode topics — click any question to solve it on leetcode.com.
+            </p>
           </div>
-          <Button size="sm" variant="outline">
-            <BookOpen className="mr-2 h-4 w-4" /> Open editor
-          </Button>
         </div>
-        {practiceQueue.length === 0 ? (
-          <div className="rounded-md border border-dashed border-border/70 bg-surface/60 p-6 text-center text-sm text-muted-foreground">
-            Your queue fills up after your first LeetCode sync or mock round.
+
+        {!recommendations && !syncing && (
+          <div className="flex flex-col gap-3 rounded-md border border-dashed border-border/70 bg-surface/60 p-6 sm:flex-row sm:items-center">
+            <Input
+              placeholder="https://leetcode.com/u/username"
+              value={lcInput}
+              onChange={(e) => setLcInput(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && lcInput.trim() && handleSyncLeetCode()}
+              className="flex-1"
+            />
+            <Button
+              onClick={handleSyncLeetCode}
+              disabled={!lcInput.trim()}
+              className="bg-gradient-brand text-primary-foreground"
+            >
+              <Play className="mr-2 h-4 w-4" /> Sync LeetCode
+            </Button>
           </div>
-        ) : (
-          <ul className="divide-y divide-border">
-            {practiceQueue.map((p) => (
-              <li key={p.title} className="flex items-center justify-between gap-3 py-3">
-                <div>
-                  <div className="text-sm font-medium">{p.title}</div>
-                  <div className="text-xs text-muted-foreground">{p.topic} · ~{p.mins} min</div>
-                </div>
-                <div className="flex items-center gap-3">
-                  <Badge
-                    variant="outline"
-                    className={
-                      p.diff === "Hard"
-                        ? "border-destructive/30 text-destructive"
-                        : "border-warning/40 text-warning-foreground"
-                    }
-                  >
-                    {p.diff}
-                  </Badge>
-                  <Button size="sm" variant="ghost" className="text-primary">
-                    Solve <ChevronRight className="ml-1 h-4 w-4" />
-                  </Button>
-                </div>
-              </li>
+        )}
+
+        {syncing && (
+          <div className="flex items-center justify-center gap-2 rounded-md border border-dashed border-border/70 bg-surface/60 p-6 text-sm text-muted-foreground">
+            <Loader2 className="h-4 w-4 animate-spin" /> Analyzing your LeetCode topic strengths…
+          </div>
+        )}
+
+        {syncError && (
+          <p className="mt-2 text-sm text-destructive">{syncError}</p>
+        )}
+
+        {recommendations && (
+          <div className="space-y-3">
+            {recommendations.weak_topics.map((topic) => (
+              <Collapsible key={topic.tag_slug} defaultOpen className="rounded-md border border-border/70">
+                <CollapsibleTrigger className="flex w-full items-center justify-between gap-3 p-4 text-left">
+                  <div className="flex items-center gap-2">
+                    <Badge variant="outline" className="text-xs capitalize">{topic.tier}</Badge>
+                    <span className="text-sm font-semibold">{topic.tag_name}</span>
+                  </div>
+                  <span className="text-xs text-muted-foreground">{topic.problems_solved} solved</span>
+                </CollapsibleTrigger>
+                <CollapsibleContent className="border-t border-border/70 px-4">
+                  {topic.fetch_warning ? (
+                    <p className="py-3 text-sm text-muted-foreground">{topic.fetch_warning}</p>
+                  ) : (
+                    <ul className="divide-y divide-border">
+                      {topic.questions.map((q) => (
+                        <li key={q.title_slug} className="flex items-center justify-between gap-3 py-3">
+                          <a
+                            href={q.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-sm font-medium text-primary hover:underline"
+                          >
+                            {q.title}
+                          </a>
+                          <Badge
+                            variant="outline"
+                            className={
+                              q.difficulty === "Hard"
+                                ? "border-destructive/30 text-destructive"
+                                : q.difficulty === "Medium"
+                                  ? "border-warning/40 text-warning"
+                                  : "border-success/40 text-success"
+                            }
+                          >
+                            {q.difficulty}
+                          </Badge>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </CollapsibleContent>
+              </Collapsible>
             ))}
-          </ul>
+            {recommendations.warnings.length > 0 && (
+              <p className="text-xs text-muted-foreground">{recommendations.warnings.join(" ")}</p>
+            )}
+          </div>
         )}
       </Card>
     </div>

@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from .routers import auth, students, drives, dashboard, shortlist, departments, sync, analyze
+from .routers import auth, students, drives, dashboard, shortlist, departments, sync, analyze, practice
 
 app = FastAPI(title="Mirracle API")
 
@@ -29,6 +29,7 @@ app.include_router(shortlist.router)
 app.include_router(departments.router)
 app.include_router(sync.router)
 app.include_router(analyze.router)
+app.include_router(practice.router)
 
 @app.get("/")
 def root():

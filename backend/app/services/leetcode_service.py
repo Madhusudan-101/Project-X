@@ -94,6 +94,31 @@ query userProblemsSolved($username: String!) {
 }
 """
 
+_QUESTION_LIST_QUERY: str = """
+query problemsetQuestionList(
+    $categorySlug: String,
+    $limit: Int,
+    $skip: Int,
+    $filters: QuestionListFilterInput
+) {
+    problemsetQuestionList: questionList(
+        categorySlug: $categorySlug
+        limit: $limit
+        skip: $skip
+        filters: $filters
+    ) {
+        total: totalNum
+        questions: data {
+            title
+            titleSlug
+            difficulty
+            isPaidOnly
+            acRate
+        }
+    }
+}
+"""
+
 # ── Response Models ───────────────────────────────────────────────────
 
 
@@ -127,6 +152,33 @@ class LeetCodeProfileData(BaseModel):
     total_solved: int = 0
     breakdown: LeetCodeDifficultyBreakdown = LeetCodeDifficultyBreakdown()
     streak: LeetCodeStreakInfo = LeetCodeStreakInfo()
+
+
+class LeetCodeQuestionSummary(BaseModel):
+    """A single real LeetCode problem, hyperlinkable straight to leetcode.com."""
+    title: str
+    title_slug: str
+    difficulty: str
+    is_paid_only: bool = False
+    ac_rate: Optional[float] = None
+    url: str = ""
+
+
+class WeakTopic(BaseModel):
+    """One of the candidate's weakest topic tags, with sample problems to practice."""
+    tag_name: str
+    tag_slug: str
+    tier: str
+    problems_solved: int
+    questions: list[LeetCodeQuestionSummary] = Field(default_factory=list)
+    fetch_warning: Optional[str] = None
+
+
+class PracticeRecommendations(BaseModel):
+    """Response of the practice-recommendations endpoint."""
+    username: str
+    weak_topics: list[WeakTopic] = Field(default_factory=list)
+    warnings: list[str] = Field(default_factory=list)
 
 
 # ── Streak Calculation ────────────────────────────────────────────────
@@ -372,4 +424,122 @@ async def fetch_leetcode_raw_for_analysis(username: str) -> Dict[str, Any]:
         "recent_submissions": recent_submissions,
         "topic_tags": topic_tags,
     }
+
+
+# ── Practice recommendations ──────────────────────────────────────────
+
+
+async def fetch_leetcode_topic_tags(username: str) -> Dict[str, list]:
+    """
+    Lightweight standalone fetch of just ``tagProblemCounts`` — used by the
+    Practice tab, which doesn't need the full analyzer payload (profile,
+    calendar, recent submissions) that ``fetch_leetcode_raw_for_analysis``
+    also fetches.
+
+    Returns ``{"advanced": [...], "intermediate": [...], "fundamental": [...]}``,
+    each a list of ``{"tagName": str, "tagSlug": str, "problemsSolved": int}``.
+
+    Raises
+    ------
+    httpx.HTTPStatusError   – non-2xx from LeetCode.
+    httpx.TimeoutException  – endpoint timed out.
+    ValueError              – user not found (``matchedUser`` is null).
+    """
+    async with httpx.AsyncClient(headers=_HEADERS) as client:
+        resp = await client.post(
+            LEETCODE_GRAPHQL_URL,
+            json={"query": _TOPIC_TAGS_QUERY, "variables": {"username": username}},
+            timeout=_REQUEST_TIMEOUT,
+        )
+        resp.raise_for_status()
+
+    body: Dict[str, Any] = resp.json()
+    data: Optional[Dict[str, Any]] = body.get("data", {}).get("matchedUser")
+
+    if data is None:
+        raise ValueError(f"LeetCode user '{username}' not found.")
+
+    raw_tag_counts = data.get("tagProblemCounts", {}) or {}
+    return {
+        "advanced": raw_tag_counts.get("advanced", []) or [],
+        "intermediate": raw_tag_counts.get("intermediate", []) or [],
+        "fundamental": raw_tag_counts.get("fundamental", []) or [],
+    }
+
+
+async def fetch_questions_by_tag(
+    tag_slug: str,
+    limit: int = 5,
+    exclude_paid: bool = True,
+) -> list[LeetCodeQuestionSummary]:
+    """
+    Fetch real LeetCode problems tagged with ``tag_slug`` via the public
+    ``questionList`` query, and return a BALANCED spread across Easy/Medium/
+    Hard (round-robin across difficulty buckets) rather than just the
+    easiest ones, so a candidate practicing a weak topic gets exposed to
+    the full difficulty range, not only the softest problems.
+
+    Fetches a large pool (100, LeetCode's typical page-size ceiling) so each
+    difficulty bucket has enough candidates to draw from, and filters out
+    ``isPaidOnly`` client-side, since the public ``filters`` input doesn't
+    reliably combine a tag filter with a paid-only exclusion server-side.
+    """
+    payload: Dict[str, Any] = {
+        "query": _QUESTION_LIST_QUERY,
+        "variables": {
+            "categorySlug": "",
+            "limit": 100,
+            "skip": 0,
+            "filters": {"tags": [tag_slug]},
+        },
+    }
+
+    async with httpx.AsyncClient(headers=_HEADERS) as client:
+        resp = await client.post(
+            LEETCODE_GRAPHQL_URL,
+            json=payload,
+            timeout=_REQUEST_TIMEOUT,
+        )
+        resp.raise_for_status()
+
+    body: Dict[str, Any] = resp.json()
+    raw_questions: list = (
+        body.get("data", {}).get("problemsetQuestionList", {}).get("questions") or []
+    )
+
+    buckets: Dict[str, list[LeetCodeQuestionSummary]] = {"Easy": [], "Medium": [], "Hard": []}
+    for q in raw_questions:
+        if exclude_paid and q.get("isPaidOnly"):
+            continue
+        difficulty = q.get("difficulty", "")
+        if difficulty not in buckets:
+            continue
+        slug = q.get("titleSlug", "")
+        buckets[difficulty].append(LeetCodeQuestionSummary(
+            title=q.get("title", ""),
+            title_slug=slug,
+            difficulty=difficulty,
+            is_paid_only=bool(q.get("isPaidOnly")),
+            ac_rate=q.get("acRate"),
+            url=f"https://leetcode.com/problems/{slug}/",
+        ))
+
+    # Round-robin across Easy/Medium/Hard so the result is a genuine mix,
+    # not whichever difficulty happens to have the most problems for this tag.
+    ordered_buckets = [buckets["Easy"], buckets["Medium"], buckets["Hard"]]
+    picked: list[LeetCodeQuestionSummary] = []
+    indices = [0, 0, 0]
+    while len(picked) < limit:
+        progressed = False
+        for i, bucket in enumerate(ordered_buckets):
+            if indices[i] < len(bucket):
+                picked.append(bucket[indices[i]])
+                indices[i] += 1
+                progressed = True
+                if len(picked) >= limit:
+                    break
+        if not progressed:
+            break
+
+    return picked
 

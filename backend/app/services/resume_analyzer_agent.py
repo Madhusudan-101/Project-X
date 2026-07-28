@@ -16,7 +16,7 @@ import logging
 import os
 import re
 from datetime import date
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 from google import genai
 from google.genai import types as genai_types
@@ -38,7 +38,7 @@ _GITHUB_REPO_URL_RE = re.compile(
 _MAX_HYPERLINK_REPOS_TO_VERIFY = 10
 
 
-def _extract_pdf_hyperlinks(resume_bytes: bytes) -> List[str]:
+def extract_pdf_hyperlinks(resume_bytes: bytes) -> List[str]:
     """
     Extract the actual href targets of every clickable link annotation in the
     PDF (e.g. the URL behind a "[GitHub]" icon), which Gemini's document
@@ -88,21 +88,25 @@ def _extract_github_repo_links(urls: List[str]) -> List[tuple[str, str]]:
     return repos
 
 
-async def _build_hyperlink_context(resume_bytes: bytes, declared_github_username: str) -> str | None:
+async def _build_hyperlink_context(resume_bytes: bytes, declared_github_username: Optional[str]) -> str | None:
     """
     Find GitHub repo links embedded in the resume PDF that point to an
     account OTHER than the one the candidate declared for portfolio
-    verification, and confirm via the GitHub API whether each actually
-    exists. Returns a text block for the Gemini prompt, or None if there's
-    nothing relevant to report.
+    verification (or, if no account was declared at all, every repo link
+    found), and confirm via the GitHub API whether each actually exists.
+    Returns a text block for the Gemini prompt, or None if there's nothing
+    relevant to report.
     """
-    all_links = _extract_pdf_hyperlinks(resume_bytes)
+    all_links = extract_pdf_hyperlinks(resume_bytes)
     repo_links = _extract_github_repo_links(all_links)
 
-    other_account_repos = [
-        (owner, repo) for owner, repo in repo_links
-        if owner.lower() != declared_github_username.lower()
-    ][:_MAX_HYPERLINK_REPOS_TO_VERIFY]
+    if declared_github_username:
+        other_account_repos = [
+            (owner, repo) for owner, repo in repo_links
+            if owner.lower() != declared_github_username.lower()
+        ][:_MAX_HYPERLINK_REPOS_TO_VERIFY]
+    else:
+        other_account_repos = repo_links[:_MAX_HYPERLINK_REPOS_TO_VERIFY]
 
     if not other_account_repos:
         return None
@@ -122,22 +126,42 @@ async def _build_hyperlink_context(resume_bytes: bytes, declared_github_username
         else:
             lines.append(f"- {url} — existence could not be checked (network error).")
 
-    return (
-        "IMPORTANT — hyperlinks embedded in this resume's PDF (invisible to plain text/OCR reading, "
-        "extracted separately from the PDF's link annotations):\n"
-        f'The candidate\'s portfolio was verified against the GitHub account "{declared_github_username}". '
-        "This resume also contains hyperlinks (e.g. a '[GitHub]' icon next to a project) pointing to "
-        f"GitHub repositories under DIFFERENT accounts:\n" + "\n".join(lines) + "\n\n"
-        "Use this to avoid a false discrepancy: if a project's linked repo is CONFIRMED to exist under "
-        "a different account, do NOT report 'no such repository exists' in detected_discrepancies for "
-        "that project — the repo is real, it's simply not on the account provided for verification. "
-        "Instead, note it once in weaknesses as: the project's linked repo lives under a different "
-        "GitHub account than the one provided for verification, and the candidate should either confirm "
-        "this is a secondary/personal account (worth noting in the resume) or move/re-link the repo under "
-        "their primary declared account so recruiters and this analyzer can verify it directly. Only "
-        "treat it as a genuine discrepancy if the link is NOT confirmed to exist AND nothing in the "
-        "verified portfolio backs up the claim either."
-    )
+    if declared_github_username:
+        intro = (
+            "IMPORTANT — hyperlinks embedded in this resume's PDF (invisible to plain text/OCR reading, "
+            "extracted separately from the PDF's link annotations):\n"
+            f'The candidate\'s portfolio was verified against the GitHub account "{declared_github_username}". '
+            "This resume also contains hyperlinks (e.g. a '[GitHub]' icon next to a project) pointing to "
+            "GitHub repositories under DIFFERENT accounts:\n"
+        )
+        guidance = (
+            "Use this to avoid a false discrepancy: if a project's linked repo is CONFIRMED to exist under "
+            "a different account, do NOT report 'no such repository exists' in detected_discrepancies for "
+            "that project — the repo is real, it's simply not on the account provided for verification. "
+            "Instead, note it once in weaknesses as: the project's linked repo lives under a different "
+            "GitHub account than the one provided for verification, and the candidate should either confirm "
+            "this is a secondary/personal account (worth noting in the resume) or move/re-link the repo under "
+            "their primary declared account so recruiters and this analyzer can verify it directly. Only "
+            "treat it as a genuine discrepancy if the link is NOT confirmed to exist AND nothing in the "
+            "verified portfolio backs up the claim either."
+        )
+    else:
+        intro = (
+            "IMPORTANT — hyperlinks embedded in this resume's PDF (invisible to plain text/OCR reading, "
+            "extracted separately from the PDF's link annotations):\n"
+            "No GitHub profile was found for this candidate, so there is no verified GitHub portfolio to "
+            "cross-check against. However, this resume's PDF contains the following project hyperlinks "
+            "pointing to GitHub repositories:\n"
+        )
+        guidance = (
+            "Use this to avoid a false discrepancy: if a project's linked repo is CONFIRMED to exist, treat "
+            "it as independently-verified evidence for that project claim — do NOT report 'no such "
+            "repository exists' in detected_discrepancies just because there is no declared GitHub account "
+            "to compare it against. Only treat a project as a genuine discrepancy if its linked repo is NOT "
+            "confirmed to exist."
+        )
+
+    return intro + "\n".join(lines) + "\n\n" + guidance
 
 # ── Response Schema (Pydantic V2) ─────────────────────────────────────
 
@@ -390,7 +414,7 @@ async def analyze_resume(
     resume_bytes: bytes,
     portfolio: FormattedMetrics,
     target_role: str,
-    github_username: str,
+    github_username: Optional[str] = None,
 ) -> ResumeAnalysisResult:
     """
     Send the resume PDF and formatted portfolio metrics to Gemini and return a
@@ -509,12 +533,12 @@ async def analyze_resume(
         response_mime_type="application/json",
         response_schema=_RESPONSE_SCHEMA,
         temperature=0.2,
-        max_output_tokens=8192,
+        max_output_tokens=16384,
         http_options=genai_types.HttpOptions(timeout=60_000),
     )
 
     last_error: Exception | None = None
-    response = None
+    result: ResumeAnalysisResult | None = None
     for model_name in _MODEL_CANDIDATES:
         try:
             logger.info("Trying resume analysis with model: %s", model_name)
@@ -523,6 +547,26 @@ async def analyze_resume(
                 contents=contents,
                 config=config,
             )
+
+            finish_reason = (
+                response.candidates[0].finish_reason if response.candidates else None
+            )
+            if finish_reason is not None and str(finish_reason).upper().endswith("MAX_TOKENS"):
+                raise ValueError(
+                    f"Gemini response was truncated (finish_reason={finish_reason}) "
+                    "before completing the JSON output."
+                )
+
+            # Parse the structured JSON response
+            raw_text: str = response.text or ""
+            logger.debug("Gemini resume analysis raw response: %s", raw_text[:500])
+
+            # Clean up json formatting wrappers (e.g. ```json ... ```)
+            raw_text = re.sub(r"^```json\s*", "", raw_text, flags=re.IGNORECASE)
+            raw_text = re.sub(r"\s*```$", "", raw_text)
+            raw_text = raw_text.strip()
+
+            result = ResumeAnalysisResult.model_validate_json(raw_text)
             logger.info("Success with model: %s", model_name)
             break
         except Exception as exc:
@@ -532,28 +576,18 @@ async def analyze_resume(
                 "429" in err_str or "503" in err_str or "504" in err_str
                 or "UNAVAILABLE" in err_str or "RESOURCE_EXHAUSTED" in err_str
                 or "DEADLINE_EXCEEDED" in err_str
+                or "truncated" in err_str.lower()
+                or "json_invalid" in err_str.lower()
+                or "validation error" in err_str.lower()
             ):
                 logger.warning(
-                    "Model %s unavailable (%s), trying next fallback…",
+                    "Model %s failed (%s) — trying next fallback…",
                     model_name,
                     type(exc).__name__
                 )
                 continue
             raise
     else:
-        raise last_error  # type: ignore[misc]
+        raise ValueError(f"Gemini output failed validation: {last_error}") from last_error
 
-    # Parse the structured JSON response
-    raw_text: str = response.text or ""
-    logger.debug("Gemini resume analysis raw response: %s", raw_text[:500])
-
-    # Clean up json formatting wrappers (e.g. ```json ... ```)
-    raw_text = re.sub(r"^```json\s*", "", raw_text, flags=re.IGNORECASE)
-    raw_text = re.sub(r"\s*```$", "", raw_text)
-    raw_text = raw_text.strip()
-
-    try:
-        return ResumeAnalysisResult.model_validate_json(raw_text)
-    except Exception as exc:
-        logger.error("Gemini output failed validation: %s. Raw text: %s", exc, raw_text)
-        raise ValueError(f"Gemini output failed validation: {exc}") from exc
+    return result

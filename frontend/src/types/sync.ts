@@ -1,177 +1,4 @@
-// ── Types for the /api/sync/* endpoints ──────────────────────────────
-
-export interface GitHubLanguageStat {
-  language: string;
-  bytes: number;
-  percentage: number;
-}
-
-export interface GitHubProfileData {
-  username: string;
-  name: string | null;
-  avatar_url: string | null;
-  bio: string | null;
-  public_repos: number;
-  followers: number;
-  following: number;
-  created_at: string;
-  account_age_days: number;
-  top_languages: GitHubLanguageStat[];
-}
-
-export interface LeetCodeDifficultyBreakdown {
-  all: number;
-  easy: number;
-  medium: number;
-  hard: number;
-}
-
-export interface LeetCodeStreakInfo {
-  current_streak: number;
-  longest_streak: number;
-  total_active_days: number;
-}
-
-export interface LeetCodeProfileData {
-  username: string;
-  real_name: string | null;
-  ranking: number | null;
-  avatar_url: string | null;
-  total_solved: number;
-  breakdown: LeetCodeDifficultyBreakdown;
-  streak: LeetCodeStreakInfo;
-}
-
-export interface CodeforcesStreakInfo {
-  current_streak: number;
-  longest_streak: number;
-  total_active_days: number;
-}
-
-export interface CodeforcesProfileData {
-  handle: string;
-  rating: number | null;
-  max_rating: number | null;
-  rank: string | null;
-  max_rank: string | null;
-  contribution: number;
-  contests_participated: number;
-  total_solved: number;
-  streak: CodeforcesStreakInfo;
-}
-
-export interface RepoSummary {
-  name: string;
-  is_fork: boolean;
-  stars: number;
-  size_kb: number;
-  primary_language: string | null;
-  created: string;
-  last_push: string;
-  days_since_last_push: number;
-  commit_dates: string[];
-  readme_snippet: string | null;
-}
-
-export interface ActivityMetrics {
-  total_events: number;
-  total_commits: number;
-  unique_active_days: number;
-  avg_per_active_day: number;
-  longest_streak_days: number;
-  current_streak_days: number;
-  largest_gap_days: number;
-  busiest_single_day: {
-    date: string;
-    count: number;
-  };
-  days_with_10plus: number;
-  day_of_week_distribution: Record<string, number>;
-}
-
-export interface GitHubMetrics {
-  account_age_days: number;
-  total_repos: number;
-  original_repos: number;
-  forked_repos: number;
-  fork_ratio: number;
-  total_stars_received: number;
-  top_languages: string[];
-  repos: RepoSummary[];
-  recent_activity: ActivityMetrics;
-  commits_per_repo: Record<string, number>;
-}
-
-export interface RecentSubmission {
-  title: string;
-  titleSlug: string;
-  timestamp: string;
-}
-
-export interface TopicTagEntry {
-  tagName: string;
-  problemsSolved: number;
-}
-
-export interface TopicTagBreakdown {
-  advanced: TopicTagEntry[];
-  intermediate: TopicTagEntry[];
-  fundamental: TopicTagEntry[];
-}
-
-export interface LeetCodeMetrics {
-  total_solved: number;
-  easy: number;
-  medium: number;
-  hard: number;
-  easy_medium_hard_ratio: string;
-  submission_activity: ActivityMetrics;
-  recent_submissions: RecentSubmission[];
-  topic_tags: TopicTagBreakdown | null;
-}
-
-export interface CodeforcesRatingChange {
-  contest_name: string;
-  date: string;
-  old_rating: number;
-  new_rating: number;
-  rank: number;
-}
-
-export interface CodeforcesSolvedProblem {
-  name: string;
-  rating: number | null;
-  tags: string[];
-  solved_at: string;
-}
-
-export interface CodeforcesMetrics {
-  handle: string;
-  rating: number | null;
-  max_rating: number | null;
-  rank: string | null;
-  max_rank: string | null;
-  total_solved: number;
-  contests_participated: number;
-  avg_problem_rating: number | null;
-  top_tags: string[];
-  submission_activity: ActivityMetrics;
-  rating_history: CodeforcesRatingChange[];
-  solved_problems: CodeforcesSolvedProblem[];
-}
-
-export interface FormattedMetrics {
-  github: GitHubMetrics | null;
-  leetcode: LeetCodeMetrics | null;
-  codeforces: CodeforcesMetrics | null;
-}
-
-export interface SyncResponse<T> {
-  ok: boolean;
-  platform: string;
-  data: T | null;
-  error: string | null;
-}
+// ── Types for the unified resume analyzer (POST /api/v1/analyze-resume) ──
 
 export interface ConsistencyAnalysis {
   rating: "Sustained" | "Fragmented" | "Spiky";
@@ -206,15 +33,6 @@ export interface AnalysisResult {
   actionable_feedback: string;
 }
 
-export interface AnalyzeApiResponse {
-  ok: boolean;
-  username: string;
-  analysis: AnalysisResult | null;
-  formatted_metrics?: FormattedMetrics | null;
-  warnings: string[];
-  error: string | null;
-}
-
 export interface Discrepancy {
   resume_claim: string;
   portfolio_reality: string;
@@ -242,6 +60,23 @@ export interface ResumeAnalysisResult {
   overall_rating: OverallRating;
 }
 
+export type MissingPlatform = "github" | "leetcode" | "codeforces";
+
+export interface DetectedProfiles {
+  github?: string;
+  leetcode?: string;
+  codeforces?: string;
+}
+
+/** Response of POST /api/v1/analyze-resume — one unified analysis. */
+export interface CombinedAnalysisResponse {
+  resume_analysis: ResumeAnalysisResult;
+  profile_analysis: AnalysisResult | null;
+  detected_profiles: DetectedProfiles;
+  missing_platforms: MissingPlatform[];
+  warnings: string[];
+}
+
 /** Tech-only target roles a candidate can pick before running the resume analyzer. */
 export const TECH_ROLES = [
   "Software Engineer (SWE / SDE)",
@@ -255,5 +90,3 @@ export const TECH_ROLES = [
 ] as const;
 
 export type TechRole = (typeof TECH_ROLES)[number];
-
-

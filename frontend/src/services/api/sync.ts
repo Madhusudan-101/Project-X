@@ -1,20 +1,10 @@
 /**
- * Sync API service — talks to:
- *   - POST /api/sync/github/:username
- *   - POST /api/sync/leetcode/:username
- *   - POST /api/sync/codeforces/:handle
- *   - POST /api/v1/analyze/:username
+ * Sync API service — talks to POST /api/v1/analyze-resume, the sole
+ * endpoint behind the resume-first unified analyzer.
  */
 
 import { request } from "./client";
-import type {
-  GitHubProfileData,
-  LeetCodeProfileData,
-  CodeforcesProfileData,
-  SyncResponse,
-  AnalyzeApiResponse,
-  ResumeAnalysisResult,
-} from "@/types/sync";
+import type { CombinedAnalysisResponse } from "@/types/sync";
 
 // ── Username extraction helpers ──────────────────────────────────────
 
@@ -102,63 +92,25 @@ export function extractCodeforcesHandle(input: string): string {
 // ── API calls ────────────────────────────────────────────────────────
 
 export const syncService = {
-  github: (username: string) =>
-    request<SyncResponse<GitHubProfileData>>(
-      `/api/sync/github/${encodeURIComponent(username)}`,
-      { method: "POST" },
-    ),
-
-  leetcode: (username: string) =>
-    request<SyncResponse<LeetCodeProfileData>>(
-      `/api/sync/leetcode/${encodeURIComponent(username)}`,
-      { method: "POST" },
-    ),
-
-  codeforces: (handle: string) =>
-    request<SyncResponse<CodeforcesProfileData>>(
-      `/api/sync/codeforces/${encodeURIComponent(handle)}`,
-      { method: "POST" },
-    ),
-
-  analyze: (
-    githubUsername: string | null,
-    leetcodeUsername: string | null,
-    codeforcesUsername: string | null = null,
-  ) => {
-    // We can use either as the path parameter or use a dummy/fallback one.
-    const pathUsername = githubUsername ?? leetcodeUsername ?? codeforcesUsername ?? "user";
-    return request<AnalyzeApiResponse>(
-      `/api/v1/analyze/${encodeURIComponent(pathUsername)}`,
-      {
-        method: "POST",
-        body: {
-          github_username: githubUsername,
-          leetcode_username: leetcodeUsername,
-          codeforces_username: codeforcesUsername,
-        },
-      },
-    );
-  },
-
+  /**
+   * Upload a resume + target role and get one unified authenticity +
+   * employability analysis. GitHub/LeetCode/Codeforces usernames are all
+   * optional overrides — whichever aren't passed are auto-detected by the
+   * backend from the resume's own embedded hyperlinks.
+   */
   analyzeResume: (
     file: File,
-    githubUsername: string,
-    leetcodeUsername: string | null,
     targetRole: string,
-    codeforcesUsername: string | null = null,
+    usernames: { github?: string | null; leetcode?: string | null; codeforces?: string | null } = {},
   ) => {
     const formData = new FormData();
     formData.append("file", file);
     formData.append("target_role", targetRole);
-    formData.append("github_username", githubUsername);
-    if (leetcodeUsername) {
-      formData.append("leetcode_username", leetcodeUsername);
-    }
-    if (codeforcesUsername) {
-      formData.append("codeforces_username", codeforcesUsername);
-    }
+    if (usernames.github) formData.append("github_username", usernames.github);
+    if (usernames.leetcode) formData.append("leetcode_username", usernames.leetcode);
+    if (usernames.codeforces) formData.append("codeforces_username", usernames.codeforces);
 
-    return request<ResumeAnalysisResult>(
+    return request<CombinedAnalysisResponse>(
       `/api/v1/analyze-resume`,
       {
         method: "POST",
