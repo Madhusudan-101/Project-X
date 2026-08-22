@@ -49,8 +49,8 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { departmentsService } from "@/services/api/college";
-import type { Department, DepartmentDetail, DepartmentInput } from "@/types/college";
+import { departmentsService } from "@/services/api/college/college";
+import type { Department, DepartmentDetail, DepartmentInput } from "@/types/college/college";
 
 export function DepartmentsTab() {
   const [departments, setDepartments] = useState<Department[]>([]);

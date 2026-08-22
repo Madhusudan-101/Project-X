@@ -48,8 +48,8 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { PendingEndpointNotice } from "@/components/college/PendingEndpointNotice";
-import { CsvUploadError, studentsService } from "@/services/api/college";
-import type { CsvUploadInvalidRow, Student } from "@/types/college";
+import { CsvUploadError, studentsService } from "@/services/api/college/college";
+import type { CsvUploadInvalidRow, Student } from "@/types/college/college";
 
 const PAGE_SIZE = 10;
 

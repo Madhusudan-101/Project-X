@@ -4,8 +4,49 @@
  */
 
 import { useAuthStore } from "@/store/auth";
+import type { Session } from "@/types";
 
 const BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "/api";
+
+// Paths that must never trigger a refresh-and-retry (avoids infinite loops
+// and refreshing on the very endpoints that establish/replace the session).
+const NO_REFRESH_PATHS = new Set(["/auth/refresh", "/auth/login", "/auth/signup"]);
+
+// Dedupes concurrent 401s into a single in-flight refresh call.
+let refreshPromise: Promise<string | null> | null = null;
+
+/** Exchange the stored refresh_token for a new access token. Logs the user
+ * out (clearing the session) if the refresh_token itself is invalid/expired. */
+async function refreshAccessToken(): Promise<string | null> {
+  if (refreshPromise) return refreshPromise;
+
+  const refreshToken = useAuthStore.getState().session?.refreshToken;
+  if (!refreshToken) return null;
+
+  refreshPromise = (async () => {
+    try {
+      const res = await fetch(`${BASE_URL}/auth/refresh`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ refreshToken }),
+      });
+      if (!res.ok) {
+        useAuthStore.getState().logout();
+        return null;
+      }
+      const session = (await res.json()) as Session;
+      useAuthStore.getState().setSession(session);
+      return session.token;
+    } catch {
+      useAuthStore.getState().logout();
+      return null;
+    } finally {
+      refreshPromise = null;
+    }
+  })();
+
+  return refreshPromise;
+}
 
 export interface RequestOptions {
   method?: "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
@@ -29,9 +70,17 @@ export function getApiBaseUrl(): string {
   return BASE_URL;
 }
 
-/** Authorization header for services that bypass `request()` (FormData/blob calls). */
-export function getAuthHeader(): Record<string, string> {
-  const token = useAuthStore.getState().session?.token;
+/** Authorization header for services that bypass `request()` (FormData/blob calls).
+ * Proactively refreshes first if the current access token has already expired. */
+export async function getAuthHeader(): Promise<Record<string, string>> {
+  const session = useAuthStore.getState().session;
+  if (!session) return {};
+
+  let token = session.token;
+  const expiresAt = Number(session.expiresAt);
+  if (expiresAt && Date.now() / 1000 >= expiresAt) {
+    token = (await refreshAccessToken()) ?? "";
+  }
   return token ? { Authorization: `Bearer ${token}` } : {};
 }
 
@@ -50,35 +99,50 @@ export async function request<T>(
     return mockHandler();
   }
 
-  const token = useAuthStore.getState().session?.token;
-  const authHeaders: Record<string, string> = {};
-  if (token) {
-    authHeaders["Authorization"] = `Bearer ${token}`;
-  }
-
   const isFormData = options.body instanceof FormData;
-  const headers: Record<string, string> = {
-    ...authHeaders,
-    ...options.headers,
-  };
-  if (!isFormData) {
-    headers["Content-Type"] = "application/json";
-  }
+  const method = options.method ?? "GET";
+  const body = options.body
+    ? (isFormData ? (options.body as any) : JSON.stringify(options.body))
+    : undefined;
 
-  const res = await fetch(`${BASE_URL}${path}`, {
-    method: options.method ?? "GET",
-    headers,
-    body: options.body
-      ? (isFormData ? (options.body as any) : JSON.stringify(options.body))
-      : undefined,
+  const buildHeaders = (token: string | undefined): Record<string, string> => {
+    const headers: Record<string, string> = { ...options.headers };
+    if (token) headers["Authorization"] = `Bearer ${token}`;
+    if (!isFormData) headers["Content-Type"] = "application/json";
+    return headers;
+  };
+
+  const initialToken = useAuthStore.getState().session?.token;
+  let res = await fetch(`${BASE_URL}${path}`, {
+    method,
+    headers: buildHeaders(initialToken),
+    body,
     signal: options.signal,
   });
 
+  // Expired access token: refresh once and retry the same request.
+  if (res.status === 401 && initialToken && !NO_REFRESH_PATHS.has(path)) {
+    const newToken = await refreshAccessToken();
+    if (newToken) {
+      res = await fetch(`${BASE_URL}${path}`, {
+        method,
+        headers: buildHeaders(newToken),
+        body,
+        signal: options.signal,
+      });
+    } else {
+      // No (or no longer valid) refresh_token — refreshAccessToken() already
+      // logged the user out. Surface a message the UI can actually act on
+      // instead of leaking Supabase's raw "invalid JWT" string.
+      throw new ApiClientError("Your session has expired. Please log in again.", 401, "session_expired");
+    }
+  }
+
   if (!res.ok) {
-    const body = await res.json().catch(() => ({}));
+    const errBody = await res.json().catch(() => ({}));
     const message =
-      typeof body.detail === "string" ? body.detail : (body.message ?? res.statusText);
-    throw new ApiClientError(message, res.status, body.code);
+      typeof errBody.detail === "string" ? errBody.detail : (errBody.message ?? res.statusText);
+    throw new ApiClientError(message, res.status, errBody.code);
   }
   if (res.status === 204) {
     return undefined as T;

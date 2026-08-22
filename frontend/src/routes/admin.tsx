@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { DashboardPlaceholder } from "@/components/dashboard/DashboardPlaceholder";
+import { DashboardPlaceholder } from "@/components/shared/DashboardPlaceholder";
 
 export const Route = createFileRoute("/admin")({
   component: () => (

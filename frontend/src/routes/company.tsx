@@ -28,11 +28,11 @@ import { Card } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAuthStore } from "@/store/auth";
-import { useCompanyStore } from "@/store/company";
-import { companyService } from "@/services/api/company";
-import { rolesService } from "@/services/api/roles";
-import type { Company } from "@/types/company";
-import type { Role } from "@/types/role";
+import { useCompanyStore } from "@/store/company/company";
+import { companyService } from "@/services/api/company/company";
+import { rolesService } from "@/services/api/company/roles";
+import type { Company } from "@/types/company/company";
+import type { Role } from "@/types/company/role";
 
 // ── Route ──────────────────────────────────────────────────────────────
 

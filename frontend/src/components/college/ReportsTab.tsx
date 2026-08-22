@@ -12,8 +12,8 @@ import {
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { dashboardService, downloadCsvBlob, shortlistService } from "@/services/api/college";
-import type { DashboardStats, ScoreDistribution } from "@/types/college";
+import { dashboardService, downloadCsvBlob, shortlistService } from "@/services/api/college/college";
+import type { DashboardStats, ScoreDistribution } from "@/types/college/college";
 
 export function ReportsTab() {
   const [stats, setStats] = useState<DashboardStats | null>(null);

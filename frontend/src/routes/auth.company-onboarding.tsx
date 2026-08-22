@@ -12,8 +12,8 @@ import { Label } from "@/components/ui/label";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { useAuthStore } from "@/store/auth";
-import { useCompanyStore } from "@/store/company";
-import { companyService } from "@/services/api/company";
+import { useCompanyStore } from "@/store/company/company";
+import { companyService } from "@/services/api/company/company";
 
 // ── Validation ─────────────────────────────────────────────────────────
 

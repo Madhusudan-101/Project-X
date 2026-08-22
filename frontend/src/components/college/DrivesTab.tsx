@@ -38,8 +38,8 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { PendingEndpointNotice } from "@/components/college/PendingEndpointNotice";
-import { drivesService } from "@/services/api/college";
-import type { Drive, DriveStatus, Student } from "@/types/college";
+import { drivesService } from "@/services/api/college/college";
+import type { Drive, DriveStatus, Student } from "@/types/college/college";
 
 export function DrivesTab() {
   const [drives, setDrives] = useState<Drive[]>([]);

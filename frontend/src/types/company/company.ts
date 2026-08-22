@@ -71,6 +71,7 @@ export interface CompanySession {
     onboarded: boolean;
   };
   token: string;
+  refreshToken: string;
   expiresAt: string;
   company: Company | null;
 }

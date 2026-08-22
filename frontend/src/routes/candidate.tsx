@@ -46,13 +46,13 @@ import { Progress } from "@/components/ui/progress";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { useAuthStore } from "@/store/auth";
-import { useResumeAnalysisStore } from "@/store/resumeAnalysis";
-import { ProfileAnalyzerPanel, ScoreRing, verdictTone } from "@/components/dashboard/ProfileSyncPanel";
+import { useResumeAnalysisStore } from "@/store/candidate/resumeAnalysis";
+import { ProfileAnalyzerPanel, ScoreRing, verdictTone } from "@/components/candidate/ProfileSyncPanel";
 import { computeDnaBreakdown, computeDnaScore, computeSkillDna } from "@/lib/skillDna";
-import { practiceService } from "@/services/api/practice";
-import { extractLeetCodeUsername } from "@/services/api/sync";
+import { practiceService } from "@/services/api/candidate/practice";
+import { extractLeetCodeUsername } from "@/services/api/candidate/sync";
 import { ApiClientError } from "@/services/api/client";
-import type { PracticeRecommendations } from "@/types/practice";
+import type { PracticeRecommendations } from "@/types/candidate/practice";
 
 export const Route = createFileRoute("/candidate")({
   component: CandidatePortal,

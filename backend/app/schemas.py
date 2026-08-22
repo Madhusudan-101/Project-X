@@ -45,7 +45,12 @@ class UserOut(BaseModel):
 class SessionOut(BaseModel):
     user: UserOut
     token: str
+    refreshToken: str = ""
     expiresAt: str
+
+
+class RefreshIn(BaseModel):
+    refreshToken: str
 
 
 # ── Misc payloads ─────────────────────────────────────────────────────

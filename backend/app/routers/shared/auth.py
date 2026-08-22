@@ -18,7 +18,7 @@ from postgrest.exceptions import APIError
 from ...deps import supabase, get_current_user
 from ...schemas import (
     AuthIn, SignupIn, UserOut, SessionOut,
-    ForgotIn, VerifyOtpIn, ResetIn, ProfileUpdateIn,
+    ForgotIn, VerifyOtpIn, ResetIn, ProfileUpdateIn, RefreshIn,
 )
 from ...crud import upsert_profile, get_profile_by_id, update_profile
 
@@ -109,6 +109,7 @@ def signup(payload: SignupIn):
             "onboarded": False,
         },
         "token": session.access_token if session else "",
+        "refreshToken": session.refresh_token if session else "",
         "expiresAt": str(session.expires_at) if session and session.expires_at else "",
     }
 
@@ -149,6 +150,43 @@ def login(payload: AuthIn):
             "lastName": "", "onboarded": False,
         },
         "token": session.access_token,
+        "refreshToken": session.refresh_token,
+        "expiresAt": str(session.expires_at) if session.expires_at else "",
+    }
+
+
+# ── POST /auth/refresh ─────────────────────────────────────────────────
+
+@router.post("/refresh", response_model=SessionOut)
+def refresh_session_route(payload: RefreshIn):
+    """Exchange a refresh_token for a new access_token, called by the
+    frontend's request() client when an API call comes back 401 with an
+    expired-JWT error, so a stale session doesn't just die."""
+    try:
+        res = supabase.auth.refresh_session(payload.refreshToken)
+    except AuthApiError as e:
+        raise HTTPException(status_code=401, detail=e.message)
+
+    session = res.session
+    if not session:
+        raise HTTPException(status_code=401, detail="Refresh failed: no session.")
+
+    user = session.user
+    role = (user.user_metadata or {}).get("role", "candidate")
+
+    try:
+        profile = _ensure_profile(user.id, email=user.email or "", role=role)
+    except APIError as e:
+        log.warning("Profile lookup/create failed for %s: %s", user.id, e)
+        profile = None
+
+    return {
+        "user": map_profile(profile) if profile else {
+            "id": user.id, "email": user.email or "", "role": role,
+            "name": "", "firstName": "", "lastName": "", "onboarded": False,
+        },
+        "token": session.access_token,
+        "refreshToken": session.refresh_token,
         "expiresAt": str(session.expires_at) if session.expires_at else "",
     }
 

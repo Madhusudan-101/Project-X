@@ -10,8 +10,8 @@ import {
 } from "recharts";
 import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { dashboardService } from "@/services/api/college";
-import type { DashboardStats, ScoreDistribution } from "@/types/college";
+import { dashboardService } from "@/services/api/college/college";
+import type { DashboardStats, ScoreDistribution } from "@/types/college/college";
 
 export function DashboardTab() {
   const [stats, setStats] = useState<DashboardStats | null>(null);

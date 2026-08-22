@@ -6,13 +6,13 @@ import { ArrowLeft, Briefcase, Calendar, GaugeCircle, Layers } from "lucide-reac
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { useCompanyGuard } from "@/hooks/use-company-guard";
-import { rolesService } from "@/services/api/roles";
-import { RoleFormDialog } from "@/components/dashboard/roles/RoleFormDialog";
-import { RoleStatusBadge } from "@/components/dashboard/roles/RoleStatusBadge";
-import { RoleActionsMenu } from "@/components/dashboard/roles/RoleActionsMenu";
-import { DeleteRoleDialog } from "@/components/dashboard/roles/DeleteRoleDialog";
-import type { Role } from "@/types/role";
+import { useCompanyGuard } from "@/hooks/company/use-company-guard";
+import { rolesService } from "@/services/api/company/roles";
+import { RoleFormDialog } from "@/components/company/roles/RoleFormDialog";
+import { RoleStatusBadge } from "@/components/company/roles/RoleStatusBadge";
+import { RoleActionsMenu } from "@/components/company/roles/RoleActionsMenu";
+import { DeleteRoleDialog } from "@/components/company/roles/DeleteRoleDialog";
+import type { Role } from "@/types/company/role";
 
 export const Route = createFileRoute("/company-roles/$roleId")({
   head: ({ params }) => ({

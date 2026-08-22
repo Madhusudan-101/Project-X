@@ -54,6 +54,7 @@ export const companyService = {
     ).then((raw) => ({
       user: raw.user as CompanySession["user"],
       token: raw.token as string,
+      refreshToken: raw.refreshToken as string,
       expiresAt: raw.expiresAt as string,
       company: raw.company ? normalizeCompany(raw.company as Record<string, unknown>) : null,
     })),

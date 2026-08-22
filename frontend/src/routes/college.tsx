@@ -15,7 +15,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { useAuthStore } from "@/store/auth";
-import { useCollegeGuard } from "@/hooks/use-college-guard";
+import { useCollegeGuard } from "@/hooks/college/use-college-guard";
 
 export const Route = createFileRoute("/college")({
   component: CollegeLayout,

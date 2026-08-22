@@ -17,9 +17,9 @@ import {
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { useAuthStore } from "@/store/auth";
-import { useCompanyStore } from "@/store/company";
-import { companyService } from "@/services/api/company";
-import { INDUSTRIES, COMPANY_SIZES, HIRING_DOMAIN_SUGGESTIONS } from "@/types/company";
+import { useCompanyStore } from "@/store/company/company";
+import { companyService } from "@/services/api/company/company";
+import { INDUSTRIES, COMPANY_SIZES, HIRING_DOMAIN_SUGGESTIONS } from "@/types/company/company";
 
 // ── Validation schema ──────────────────────────────────────────────────
 
@@ -149,6 +149,7 @@ function CompanySignupPage() {
           companyId: result.company?.id,
         },
         token: result.token,
+        refreshToken: result.refreshToken,
         expiresAt: result.expiresAt,
       });
 

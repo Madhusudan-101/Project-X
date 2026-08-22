@@ -57,6 +57,7 @@ function AuthConfirmPage() {
 
     const params = parseHash(fragment);
     const accessToken = params["access_token"];
+    const refreshToken = params["refresh_token"];
     const tokenType = params["token_type"];
     const expiresIn = params["expires_in"];
     const errorCode = params["error"];
@@ -87,6 +88,7 @@ function AuthConfirmPage() {
         setSession({
           user,
           token: accessToken,
+          refreshToken: refreshToken ?? "",
           expiresAt,
         });
 

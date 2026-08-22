@@ -71,7 +71,7 @@ export const studentsService = {
 
     const res = await fetch(`${getApiBaseUrl()}/api/students/upload`, {
       method: "POST",
-      headers: { ...getAuthHeader() },
+      headers: { ...(await getAuthHeader()) },
       body: formData,
     });
 
@@ -117,7 +117,7 @@ export const shortlistService = {
       verificationStatus: filters.verificationStatus,
     });
     const res = await fetch(`${getApiBaseUrl()}/api/shortlist/export${query}`, {
-      headers: { ...getAuthHeader() },
+      headers: { ...(await getAuthHeader()) },
     });
     if (!res.ok) {
       throw new ApiClientError("Export failed", res.status);

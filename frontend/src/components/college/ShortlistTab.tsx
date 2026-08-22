@@ -22,8 +22,8 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { downloadCsvBlob, shortlistService } from "@/services/api/college";
-import type { ShortlistFilters, Student, VerificationStatus } from "@/types/college";
+import { downloadCsvBlob, shortlistService } from "@/services/api/college/college";
+import type { ShortlistFilters, Student, VerificationStatus } from "@/types/college/college";
 
 export function ShortlistTab() {
   const [branch, setBranch] = useState("");
