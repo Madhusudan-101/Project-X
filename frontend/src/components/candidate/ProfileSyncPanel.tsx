@@ -953,26 +953,38 @@ export function ProfileAnalyzerPanel() {
                           <span className="font-medium">{s.section}</span>
                         </div>
                       </AccordionTrigger>
-                      <AccordionContent className="space-y-2.5 text-lg">
-                        <p className="text-foreground/90">
-                          <span className="font-semibold text-muted-foreground">Now: </span>
-                          {s.current_summary}
-                        </p>
+                      <AccordionContent className="space-y-4 text-lg">
+                        <div className="space-y-1">
+                          <h5 className="flex items-center gap-1.5 text-sm font-semibold uppercase tracking-wider text-muted-foreground">
+                            <FileText className="h-3 w-3" />
+                            Current Profile
+                          </h5>
+                          <p className="text-foreground/90">{s.current_summary}</p>
+                        </div>
                         {s.gap_reason && (
-                          <p className="text-foreground/90">
-                            <span className="font-semibold text-amber-500">Gap: </span>
-                            {s.gap_reason}
-                          </p>
+                          <div className="space-y-1">
+                            <h5 className="flex items-center gap-1.5 text-sm font-semibold uppercase tracking-wider text-amber-500">
+                              <AlertCircle className="h-3 w-3" />
+                              Gaps in Profile
+                            </h5>
+                            <p className="text-foreground/90">{s.gap_reason}</p>
+                          </div>
                         )}
                         {s.suggestions.length > 0 && (
-                          <ul className="space-y-1.5">
-                            {s.suggestions.map((sugg, i) => (
-                              <li key={i} className="flex items-start gap-2 text-foreground/90">
-                                <PenLine className="mt-1 h-3.5 w-3.5 shrink-0 text-primary" />
-                                <span>{sugg}</span>
-                              </li>
-                            ))}
-                          </ul>
+                          <div className="space-y-1.5">
+                            <h5 className="flex items-center gap-1.5 text-sm font-semibold uppercase tracking-wider text-primary">
+                              <PenLine className="h-3 w-3" />
+                              Improvement Suggestions
+                            </h5>
+                            <ul className="space-y-1.5">
+                              {s.suggestions.map((sugg, i) => (
+                                <li key={i} className="flex items-start gap-2 text-foreground/90">
+                                  <span className="mt-2.5 h-1 w-1 shrink-0 rounded-full bg-primary" />
+                                  <span>{sugg}</span>
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
                         )}
                       </AccordionContent>
                     </AccordionItem>
