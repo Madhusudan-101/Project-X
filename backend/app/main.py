@@ -1,6 +1,16 @@
+import logging
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from .routers.shared import auth
+
+# Without this, every `logger.exception(...)`/`logger.warning(...)` call across
+# the whole backend is a silent no-op — the root logger has no handler
+# attached unless something configures one, and nothing did.
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+)
 from .routers.college import students, drives, dashboard, shortlist, departments
 from .routers.candidate import sync, analyze, practice
 # NOTE: routers/company/{company,roles}.py exist but are NOT wired in here —

@@ -25,11 +25,13 @@ import {
   PenLine,
   Target,
   Award,
+  Linkedin,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Select,
   SelectContent,
@@ -39,12 +41,14 @@ import {
 } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Collapsible, CollapsibleContent } from "@/components/ui/collapsible";
+import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from "@/components/ui/accordion";
 import {
   syncService,
   extractGitHubUsername,
   extractLeetCodeUsername,
   extractCodeforcesHandle,
 } from "@/services/api/candidate/sync";
+import { linkedinService } from "@/services/api/candidate/linkedin";
 import { useResumeAnalysisStore } from "@/store/candidate/resumeAnalysis";
 import { TECH_ROLES } from "@/types/candidate/sync";
 import type {
@@ -53,6 +57,7 @@ import type {
   CombinedAnalysisResponse,
   MissingPlatform,
 } from "@/types/candidate/sync";
+import type { LinkedInAnalysisResult, LinkedInSectionRating } from "@/types/candidate/linkedin";
 
 // ── Score ring (SVG donut) ────────────────────────────────────────────
 
@@ -106,6 +111,12 @@ const ratingStyle = {
   Spiky: "border-rose-500/30 bg-rose-500/10 text-rose-600 dark:text-rose-400",
 };
 
+const sectionRatingStyle: Record<LinkedInSectionRating, string> = {
+  Strong: "border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400",
+  "Needs Work": "border-amber-500/30 bg-amber-500/10 text-amber-600 dark:text-amber-400",
+  Missing: "border-rose-500/30 bg-rose-500/10 text-rose-600 dark:text-rose-400",
+};
+
 // ── Combined Analysis Result — resume authenticity + employability, as one ──
 
 export function verdictTone(score: number) {
@@ -118,16 +129,22 @@ export function verdictTone(score: number) {
 function CombinedAnalysisResultView({
   resume,
   profile,
+  linkedin,
   role,
 }: {
   resume: ResumeAnalysisResult;
   profile: AnalysisResult | null;
+  linkedin?: LinkedInAnalysisResult | null;
   role: string;
 }) {
   const { overall_rating, role_fit, detected_discrepancies, strengths, weaknesses, resume_corrections, next_week_action_plan } =
     resume;
   const resumeTone = verdictTone(overall_rating.score);
   const profileTone = profile ? verdictTone(profile.overall_score) : null;
+  // LinkedIn only ever contributes flags/improvement scope to the Employability
+  // Score section — its own score stays separate (see linkedinTone below), it
+  // never blends into profile.overall_score.
+  const linkedinUsable = linkedin && linkedin.is_valid_linkedin_export ? linkedin : null;
   const greenFlags = profile?.career_alignment?.green_flags ?? [];
   const redFlags = profile?.career_alignment?.red_flags ?? [];
   const recommendedRoles = profile?.career_alignment?.recommended_roles ?? [];
@@ -236,6 +253,17 @@ function CombinedAnalysisResultView({
             <Sparkles className="mr-1.5 h-3.5 w-3.5" />
             Roadmap
           </TabsTrigger>
+          {linkedinUsable && (
+            <TabsTrigger value="linkedin" className="text-base">
+              <Linkedin className="mr-1.5 h-3.5 w-3.5" />
+              LinkedIn Cross-Check
+              {linkedinUsable.cross_check_flags.length > 0 && (
+                <Badge className="ml-1.5 h-5 min-w-5 justify-center rounded-full border-rose-500/30 bg-rose-500/10 px-1 text-sm text-rose-500">
+                  {linkedinUsable.cross_check_flags.length}
+                </Badge>
+              )}
+            </TabsTrigger>
+          )}
         </TabsList>
 
         {/* Role fit */}
@@ -534,6 +562,37 @@ function CombinedAnalysisResultView({
             ))}
           </div>
         </TabsContent>
+
+        {/* LinkedIn Cross-Check — parallel to Discrepancies / Strengths & Fixes, self-contained */}
+        {linkedinUsable && (
+          <TabsContent value="linkedin" className="space-y-5 pt-4">
+            {linkedinUsable.cross_check_flags.length > 0 ? (
+              <div className="space-y-2">
+                <h4 className="flex items-center gap-1.5 text-base font-semibold uppercase tracking-wider text-rose-500">
+                  <ShieldAlert className="h-3.5 w-3.5" />
+                  Resume vs. LinkedIn — Cross-Check Flags
+                </h4>
+                <ul className="grid gap-3 sm:grid-cols-2">
+                  {linkedinUsable.cross_check_flags.map((flag, i) => (
+                    <li key={i} className="rounded-xl border border-rose-500/10 bg-rose-500/5 p-4 text-lg leading-relaxed text-foreground/90 space-y-1">
+                      <div className="flex items-center gap-2 font-semibold">
+                        <AlertCircle className="h-4 w-4 shrink-0 text-rose-500" />
+                        {flag.field}
+                      </div>
+                      <p className="text-base text-muted-foreground">Resume: {flag.resume_value}</p>
+                      <p className="text-base text-muted-foreground">LinkedIn: {flag.linkedin_value}</p>
+                      <p>{flag.note}</p>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : (
+              <div className="text-lg text-muted-foreground text-center py-4">
+                No contradictions found between your resume and LinkedIn export.
+              </div>
+            )}
+          </TabsContent>
+        )}
       </Tabs>
     </div>
   );
@@ -640,8 +699,47 @@ export function ProfileAnalyzerPanel() {
   const [dismissedPlatforms, setDismissedPlatforms] = useState<Set<MissingPlatform>>(new Set());
   const setResumeAnalysisResult = useResumeAnalysisStore((s) => s.setResult);
 
+  // ── LinkedIn analyzer state (independent of the resume flow above — its
+  // result feeds into CombinedAnalysisResultView once both exist) ──
+  const [linkedinFile, setLinkedinFile] = useState<File | null>(null);
+  const [linkedinConsent, setLinkedinConsent] = useState(false);
+  const [linkedinAnalyzing, setLinkedinAnalyzing] = useState(false);
+  const [linkedinResult, setLinkedinResult] = useState<LinkedInAnalysisResult | null>(null);
+  const [linkedinError, setLinkedinError] = useState<string | null>(null);
+
   const currentMissingPlatform: MissingPlatform | null =
     combined?.missing_platforms.find((p) => !dismissedPlatforms.has(p)) ?? null;
+
+  const onLinkedinFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files.length > 0) {
+      const selected = e.target.files[0];
+      if (selected.type === "application/pdf" || selected.name.toLowerCase().endsWith(".pdf")) {
+        setLinkedinFile(selected);
+        setLinkedinError(null);
+        setLinkedinResult(null);
+      } else {
+        setLinkedinError("Please select a PDF file.");
+      }
+    }
+  };
+
+  const handleAnalyzeLinkedin = async () => {
+    if (!linkedinFile || !linkedinConsent) return;
+    setLinkedinAnalyzing(true);
+    setLinkedinError(null);
+    setLinkedinResult(null);
+    try {
+      const res = await linkedinService.analyze(linkedinFile);
+      setLinkedinResult(res);
+      if (!res.is_valid_linkedin_export) {
+        setLinkedinError(res.invalid_reason ?? "This PDF doesn't look like a LinkedIn profile export.");
+      }
+    } catch (err: unknown) {
+      setLinkedinError(err instanceof Error ? err.message : "LinkedIn analysis failed.");
+    } finally {
+      setLinkedinAnalyzing(false);
+    }
+  };
 
   const onFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
@@ -699,6 +797,193 @@ export function ProfileAnalyzerPanel() {
 
   return (
     <div className="space-y-6">
+      {/* LinkedIn Analyzer — self-export PDF, analyzed the same way the resume is; no
+          legitimate API can fetch an arbitrary LinkedIn profile by URL. */}
+      <Card className="p-6">
+        <div className="flex items-center gap-3 border-b border-border/60 pb-5">
+          <div className="grid h-10 w-10 place-items-center rounded-xl bg-primary/10 text-primary">
+            <Linkedin className="h-5 w-5" />
+          </div>
+          <div className="flex-1">
+            <h3 className="font-display text-xl font-semibold">LinkedIn Analyzer</h3>
+            <p className="text-lg leading-relaxed text-muted-foreground">
+              Upload your LinkedIn profile as a PDF — we'll analyze it directly and cross-check
+              it against your resume once you've analyzed that too.
+            </p>
+          </div>
+          {linkedinResult?.is_valid_linkedin_export && (
+            <Badge className="border-success/30 bg-success/10 text-success">
+              <CheckCircle2 className="mr-1 h-3 w-3" /> Analyzed
+            </Badge>
+          )}
+        </div>
+
+        <div className="pt-5 space-y-5">
+          {/* Guidance steps */}
+          <ol className="grid gap-2 sm:grid-cols-2 text-lg leading-relaxed text-foreground/90">
+            {[
+              "Go to your LinkedIn profile page.",
+              'Click the "Resources" dropdown, just below your profile photo.',
+              'Select "Save to PDF".',
+              "Upload the downloaded PDF below.",
+            ].map((step, i) => (
+              <li key={i} className="flex items-start gap-2 rounded-xl border border-border/50 bg-surface/40 p-3">
+                <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-primary/10 text-base font-semibold text-primary">
+                  {i + 1}
+                </span>
+                <span>{step}</span>
+              </li>
+            ))}
+          </ol>
+
+          {/* Upload + consent + analyze */}
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="relative">
+              <input
+                type="file"
+                accept=".pdf"
+                onChange={onLinkedinFileChange}
+                className="hidden"
+                id="linkedin-upload-input"
+                disabled={linkedinAnalyzing}
+              />
+              <Button
+                asChild
+                variant="outline"
+                className="cursor-pointer"
+                disabled={linkedinAnalyzing}
+              >
+                <label htmlFor="linkedin-upload-input" className="flex items-center gap-2">
+                  <Linkedin className="h-4 w-4" />
+                  {linkedinFile ? "Change PDF" : "Select LinkedIn PDF"}
+                </label>
+              </Button>
+            </div>
+
+            {linkedinFile && (
+              <div className="flex items-center gap-2 bg-surface/80 px-4 py-2 rounded-xl border border-border text-lg">
+                <span className="font-medium text-foreground truncate max-w-[240px]">
+                  {linkedinFile.name}
+                </span>
+                <span className="text-base text-muted-foreground">
+                  ({(linkedinFile.size / 1024).toFixed(1)} KB)
+                </span>
+                <button
+                  onClick={() => {
+                    setLinkedinFile(null);
+                    setLinkedinResult(null);
+                    setLinkedinError(null);
+                  }}
+                  className="text-muted-foreground hover:text-destructive transition-colors ml-1"
+                  disabled={linkedinAnalyzing}
+                >
+                  &times;
+                </button>
+              </div>
+            )}
+
+            {linkedinFile && (
+              <Button
+                onClick={handleAnalyzeLinkedin}
+                disabled={linkedinAnalyzing || !linkedinConsent}
+                title={!linkedinConsent ? "Confirm consent below first" : undefined}
+                className="bg-gradient-brand text-primary-foreground flex items-center gap-2"
+              >
+                {linkedinAnalyzing ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Analyzing…
+                  </>
+                ) : (
+                  <>
+                    <Brain className="h-4 w-4" />
+                    Analyze LinkedIn
+                  </>
+                )}
+              </Button>
+            )}
+          </div>
+
+          <label className="flex items-start gap-2 text-lg leading-relaxed text-foreground/90">
+            <Checkbox
+              checked={linkedinConsent}
+              onCheckedChange={(checked) => setLinkedinConsent(checked === true)}
+              disabled={linkedinAnalyzing}
+              className="mt-0.5"
+            />
+            <span>I consent to my LinkedIn PDF export being analyzed by AI for this assessment.</span>
+          </label>
+
+          {linkedinFile && !linkedinConsent && (
+            <p className="text-base text-amber-500 flex items-center gap-1.5 leading-relaxed">
+              <AlertCircle className="h-4 w-4 shrink-0" />
+              Confirm consent above to enable analysis.
+            </p>
+          )}
+
+          {linkedinError && (
+            <div className="flex items-start gap-2 rounded-xl bg-destructive/10 p-4 text-lg leading-relaxed text-destructive animate-in fade-in duration-200">
+              <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+              {linkedinError}
+            </div>
+          )}
+
+          {/* Standalone LinkedIn summary — folds into the combined view below once the resume is also analyzed */}
+          {linkedinResult?.is_valid_linkedin_export && (
+            <div className="rounded-2xl border border-primary/20 bg-surface/40 p-5 space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
+              <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
+                <ScoreRing score={linkedinResult.overall_rating_score} />
+                <div className="flex-1 space-y-1">
+                  {linkedinResult.headline && (
+                    <p className="text-lg font-semibold text-foreground">{linkedinResult.headline}</p>
+                  )}
+                  <p className="text-lg leading-relaxed text-foreground/90">{linkedinResult.overall_rating_summary}</p>
+                </div>
+              </div>
+
+              {linkedinResult.sections.length > 0 && (
+                <Accordion type="single" collapsible className="w-full">
+                  {linkedinResult.sections.map((s) => (
+                    <AccordionItem key={s.section} value={s.section}>
+                      <AccordionTrigger className="text-lg hover:no-underline">
+                        <div className="flex items-center gap-2.5">
+                          <Badge className={`${sectionRatingStyle[s.rating]} text-sm font-semibold px-2 py-0.5`}>
+                            {s.rating}
+                          </Badge>
+                          <span className="font-medium">{s.section}</span>
+                        </div>
+                      </AccordionTrigger>
+                      <AccordionContent className="space-y-2.5 text-lg">
+                        <p className="text-foreground/90">
+                          <span className="font-semibold text-muted-foreground">Now: </span>
+                          {s.current_summary}
+                        </p>
+                        {s.gap_reason && (
+                          <p className="text-foreground/90">
+                            <span className="font-semibold text-amber-500">Gap: </span>
+                            {s.gap_reason}
+                          </p>
+                        )}
+                        {s.suggestions.length > 0 && (
+                          <ul className="space-y-1.5">
+                            {s.suggestions.map((sugg, i) => (
+                              <li key={i} className="flex items-start gap-2 text-foreground/90">
+                                <PenLine className="mt-1 h-3.5 w-3.5 shrink-0 text-primary" />
+                                <span>{sugg}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        )}
+                      </AccordionContent>
+                    </AccordionItem>
+                  ))}
+                </Accordion>
+              )}
+            </div>
+          )}
+        </div>
+      </Card>
+
       <Card className="p-6">
         <div className="flex items-center gap-3 border-b border-border/60 pb-5">
           <div className="grid h-10 w-10 place-items-center rounded-xl bg-primary/10 text-primary">
@@ -832,6 +1117,7 @@ export function ProfileAnalyzerPanel() {
             <CombinedAnalysisResultView
               resume={combined.resume_analysis}
               profile={combined.profile_analysis}
+              linkedin={linkedinResult}
               role={targetRole}
             />
           )}

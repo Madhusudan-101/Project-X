@@ -32,7 +32,7 @@ logger = logging.getLogger(__name__)
 
 # Bump this whenever SYSTEM_INSTRUCTION changes materially, so past analyses
 # stay attributable to the prompt version that actually produced them.
-_MODEL_VERSION_LABEL = "resume-analyzer-diff-v1"
+_MODEL_VERSION_LABEL = "resume-analyzer-diff-v2"
 
 
 def get_or_create_model_version_id(sb: Client = db_client) -> str:

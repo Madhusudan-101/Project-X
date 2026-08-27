@@ -34,6 +34,8 @@ from ...services.candidate.resume_analyzer_agent import (
 )
 from ...services.candidate.resume_history_service import load_previous_analysis, save_analysis
 from ...services.candidate.link_extraction import detect_profile_links
+from ...services.candidate.linkedin_analyzer_agent import analyze_linkedin, LinkedInAnalysisResult
+from ...services.candidate.linkedin_history_service import save_linkedin_analysis
 
 logger = logging.getLogger(__name__)
 
@@ -375,4 +377,64 @@ async def analyze_resume_endpoint(
         missing_platforms=missing_platforms,
         warnings=fetch_warnings,
     )
+
+
+@router.post(
+    "/analyze-linkedin",
+    response_model=LinkedInAnalysisResult,
+    summary="Upload a LinkedIn 'Save to PDF' export and get a profile analysis cross-checked against the resume",
+)
+async def analyze_linkedin_endpoint(
+    file: UploadFile = File(...),
+    current_user: dict = Depends(get_current_user),
+) -> LinkedInAnalysisResult:
+    """
+    Accepts a LinkedIn PDF export (no API/scraper — LinkedIn has no legitimate
+    profile-by-URL API, so self-export is the only ToS-compliant path). Sends
+    the PDF directly to Gemini, cross-checked against the candidate's most
+    recent resume analysis (if any) for company/role/duration/skills
+    contradictions. Never fabricates missing sections — a PDF that isn't
+    actually a LinkedIn export is flagged (`is_valid_linkedin_export=false`)
+    instead of hallucinated.
+    """
+    if not file.filename or not file.filename.lower().endswith(".pdf"):
+        raise HTTPException(status_code=400, detail="Only PDF LinkedIn exports are accepted.")
+
+    try:
+        pdf_bytes = await file.read()
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=f"Failed to read uploaded file: {exc}")
+
+    resume_context = load_previous_analysis(current_user["id"])
+
+    started_at = time.monotonic()
+    try:
+        result = await analyze_linkedin(pdf_bytes, resume_context)
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc))
+    except ValueError as exc:
+        raise HTTPException(status_code=502, detail=f"Gemini returned unparseable output: {exc}")
+    except Exception as exc:
+        logger.exception("LinkedIn analysis failed")
+        err_msg = str(exc)
+        if "timeout" in err_msg.lower() or "timed out" in err_msg.lower() or "deadline_exceeded" in err_msg.lower():
+            raise HTTPException(
+                status_code=504,
+                detail="Gemini API timed out generating the analysis. Please try again.",
+            )
+        if "429" in err_msg or "quota" in err_msg.lower() or "exhausted" in err_msg.lower():
+            raise HTTPException(
+                status_code=429,
+                detail="Gemini API rate limit or quota exceeded. Please wait a few seconds and try again.",
+            )
+        raise HTTPException(status_code=500, detail=f"LinkedIn analysis failed: {exc}")
+
+    latency_ms = int((time.monotonic() - started_at) * 1000)
+    save_linkedin_analysis(
+        candidate_id=current_user["id"],
+        result=result,
+        latency_ms=latency_ms,
+    )
+
+    return result
 

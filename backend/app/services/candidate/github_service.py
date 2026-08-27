@@ -222,15 +222,22 @@ async def _fetch_repo_commits(
     client: httpx.AsyncClient,
     owner: str,
     repo: str,
+    *,
+    author: Optional[str] = None,
 ) -> List[str]:
     """
-    GET /repos/{owner}/{repo}/commits?per_page=100
+    GET /repos/{owner}/{repo}/commits?per_page=100[&author=...]
 
-    Returns a list of ISO-8601 ``commit.author.date`` strings.
+    Returns a list of ISO-8601 ``commit.author.date`` strings. When
+    ``author`` is given, only commits by that GitHub username are returned —
+    used for forked repos, to distinguish "candidate has real commits in
+    their own fork" from "candidate forked it and changed nothing."
     Silently returns [] on 403 (rate limit), 404, or 409 (empty repo).
     """
     url = f"{GITHUB_API_BASE}/repos/{owner}/{repo}/commits"
-    params = {"per_page": 100}
+    params: Dict[str, Any] = {"per_page": 100}
+    if author:
+        params["author"] = author
     resp = await client.get(url, params=params, timeout=_REQUEST_TIMEOUT)
     if resp.status_code in (403, 404, 409):
         return []
@@ -292,7 +299,9 @@ async def fetch_github_raw_for_analysis(username: str) -> Dict[str, Any]:
       - ``profile``       – full user object
       - ``repos``         – list of repo objects (includes ``fork`` bool, sizes, timestamps)
       - ``events``        – list of recent public events (PushEvent, etc.)
-      - ``repo_commits``  – {repo_name: [ISO-8601 commit date strings]}
+      - ``repo_commits``  – {repo_name: [ISO-8601 commit date strings]}. For owned repos,
+        every commit; for forked repos, only commits authored by ``username`` — a non-empty
+        list there means real personal contribution to the fork, not just an untouched copy.
       - ``repo_readmes``  – {repo_name: raw markdown text}
     """
     headers: Dict[str, str] = _build_headers()
@@ -305,6 +314,7 @@ async def fetch_github_raw_for_analysis(username: str) -> Dict[str, Any]:
         # Deep per-repo data: commit timelines + READMEs
         # Limit to 15 most-recently-updated owner repos to conserve API calls
         owner_repos = [r for r in repos if not r.get("fork")][:15]
+        fork_repos = [r for r in repos if r.get("fork")][:15]
 
         repo_commits: Dict[str, List[str]] = {}
         repo_readmes: Dict[str, str] = {}
@@ -321,6 +331,19 @@ async def fetch_github_raw_for_analysis(username: str) -> Dict[str, Any]:
             readme = await _fetch_repo_readme(client, username, name)
             if readme:
                 repo_readmes[name] = readme
+
+        # For forks, only fetch commits AUTHORED BY the candidate — a non-empty
+        # result means real personal contribution (e.g. a team-project repo
+        # forked to their own account), not just an untouched copy. The
+        # resume analyzer relies on this to avoid flagging a genuinely
+        # contributed fork as "no original code" (see resume_analyzer_agent.py).
+        for repo in fork_repos:
+            name = repo.get("name", "")
+            if not name:
+                continue
+            commits = await _fetch_repo_commits(client, username, name, author=username)
+            if commits:
+                repo_commits[name] = commits
 
     return {
         "profile": profile,
