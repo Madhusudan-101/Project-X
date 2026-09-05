@@ -66,11 +66,97 @@ const {
   getTrackingSnapshot,
   getSocketIdForParticipant,
   getParticipantIdForSocket,
+  getIdentityForParticipant,
 } = require('./roomManager');
 const {
   createDeepgramTranscriptionManager,
 } = require('./deepgramTranscription');
 const { createInterviewAssistant } = require('./interviewAssistant');
+const jwt = require('jsonwebtoken');
+
+// ─── Dashboard integration ─────────────────────────────────────────────────────
+// Optional identity handoff. Tokens signed by the Mirracle FastAPI backend with
+// PEERMEET_SHARED_SECRET (HS256) attach the caller's student identity to
+// their participant slot. Verification is synchronous — no network round trip.
+// Missing/malformed/expired tokens fall back to anonymous behavior silently:
+// existing anonymous PeerMeet flows are never rejected.
+const PEERMEET_SHARED_SECRET = process.env.PEERMEET_SHARED_SECRET || null;
+const MIRRACLE_WEBHOOK_URL = process.env.MIRRACLE_WEBHOOK_URL || null;
+
+/**
+ * Verify a dashboard-issued identity token. Returns
+ * `{ studentId, studentName }` on success, or null on any failure
+ * (missing token, secret unconfigured, bad signature, expired, malformed).
+ * NEVER throws — a bad token must not reject room creation/join.
+ */
+function verifyPeerToken(token) {
+  if (!token || !PEERMEET_SHARED_SECRET) return null;
+  try {
+    const decoded = jwt.verify(token, PEERMEET_SHARED_SECRET, { algorithms: ['HS256'] });
+    if (!decoded || !decoded.student_id) return null;
+    return { studentId: decoded.student_id, studentName: decoded.name || null };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Fire-and-forget POST of a generated report to the FastAPI persistence
+ * webhook. MUST be called WITHOUT `await` — the caller has already emitted
+ * the live 'interview:turn-report' event to the participant, and a webhook
+ * failure (or FastAPI being down) must never delay or affect the live
+ * interview. Skipped entirely when the reporting participant is anonymous.
+ */
+function fireReportWebhook({ roomId, subjectParticipantId, partnerParticipantId, role, report }) {
+  if (!MIRRACLE_WEBHOOK_URL || !PEERMEET_SHARED_SECRET) return;
+  if (!report) return;
+
+  const subject = getIdentityForParticipant(roomId, subjectParticipantId);
+  if (!subject?.studentId) return; // anonymous subject → never persist
+
+  const partner = partnerParticipantId
+    ? getIdentityForParticipant(roomId, partnerParticipantId)
+    : null;
+
+  const payload = {
+    room_id: roomId,
+    student_id: subject.studentId,
+    partner_student_id: partner?.studentId || null,
+    role,
+    report: {
+      overall_score: report.overall_score ?? null,
+      technical_score: report.technical_score ?? null,
+      communication_score: report.communication_score ?? null,
+      confidence_score: report.confidence_score ?? null,
+      problem_solving_score: report.problem_solving_score ?? null,
+      topics_covered: report.topics_covered || [],
+      strengths: report.strengths || [],
+      weaknesses: report.weaknesses || [],
+      question_timeline: report.question_timeline || [],
+      suggestions: report.suggestions || [],
+      final_recommendation: report.final_recommendation ?? null,
+    },
+  };
+
+  // Node 18+ built-in fetch — no new dependency. `.catch()` swallows any
+  // failure into a log line; the live interview never sees it.
+  fetch(`${MIRRACLE_WEBHOOK_URL.replace(/\/+$/, '')}/internal/peer-reports`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${PEERMEET_SHARED_SECRET}`,
+    },
+    body: JSON.stringify(payload),
+  })
+    .then((res) => {
+      if (!res.ok) {
+        console.error(`[Webhook] peer-reports responded ${res.status}`);
+      }
+    })
+    .catch((err) => {
+      console.error(`[Webhook] peer-reports POST failed: ${err.message}`);
+    });
+}
 
 const app = express();
 const server = http.createServer(app);
@@ -435,6 +521,16 @@ async function endInterviewForRoom(roomId, opts = {}) {
       report,
       final: true,
     });
+    // Fire-and-forget persistence — MUST NOT be awaited: the live socket
+    // emit above must not be delayed and a webhook failure must never
+    // affect the interview. Skipped internally when subject is anonymous.
+    fireReportWebhook({
+      roomId,
+      subjectParticipantId: candidateId,
+      partnerParticipantId: interviewerId,
+      role: 'candidate',
+      report,
+    });
   }
 
   // Both participants may be mid-reconnect — resolve each individually
@@ -622,7 +718,7 @@ io.on('connection', (socket) => {
    * who expects to be the initiator (e.g. their room was fully abandoned
    * and needs recreating) — see the 'join-room'-driven client fallback.
    */
-  socket.on('create-room', ({ roomId, participantId } = {}) => {
+  socket.on('create-room', ({ roomId, participantId, token } = {}) => {
     console.log(`[Room] create-room | roomId=${roomId} | participantId=${participantId} | socketId=${socket.id}`);
 
     if (!roomId || !participantId) return;
@@ -633,7 +729,10 @@ io.on('connection', (socket) => {
       return;
     }
 
-    createRoom(roomId, participantId, socket.id);
+    // Optional identity; a bad/expired/missing token is silently ignored
+    // and the participant is created anonymously.
+    const identity = verifyPeerToken(token);
+    createRoom(roomId, participantId, socket.id, identity);
     socket.join(roomId);
     socket.emit('room-created', { roomId });
 
@@ -652,7 +751,7 @@ io.on('connection', (socket) => {
    *   - On success → notify both participants; on reconnect, also resync
    *     the reconnecting participant's interview state.
    */
-  socket.on('join-room', ({ roomId, participantId } = {}) => {
+  socket.on('join-room', ({ roomId, participantId, token } = {}) => {
     console.log(`[Room] join-room | roomId=${roomId} | participantId=${participantId} | socketId=${socket.id}`);
 
     if (!roomId || !participantId) {
@@ -660,11 +759,18 @@ io.on('connection', (socket) => {
       return;
     }
 
+    // Optional identity — silently ignored if bad/expired/missing.
+    const identity = verifyPeerToken(token);
+
     // The liveness probe lets joinRoom tell a genuine reconnect (old socket
     // already gone) apart from a duplicate tab that inherited this room's
     // participantId via sessionStorage (old socket still connected).
-    const result = joinRoom(roomId, participantId, socket.id, (id) =>
-      io.sockets.sockets.has(id)
+    const result = joinRoom(
+      roomId,
+      participantId,
+      socket.id,
+      (id) => io.sockets.sockets.has(id),
+      identity
     );
 
     if (result.notFound) {
@@ -968,6 +1074,14 @@ io.on('connection', (socket) => {
       interview.lastTurnReport = { forParticipantId: outgoingCandidateId, report, final: false };
       emitToParticipant(roomId, outgoingCandidateId, 'interview:turn-report', {
         phase: interview.phase,
+        report,
+      });
+      // Fire-and-forget persistence — see note in endInterviewForRoom.
+      fireReportWebhook({
+        roomId,
+        subjectParticipantId: outgoingCandidateId,
+        partnerParticipantId: interviewerId,
+        role: 'candidate',
         report,
       });
     }

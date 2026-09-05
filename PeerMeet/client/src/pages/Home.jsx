@@ -11,9 +11,10 @@
  *   - Beautiful animated hero design
  */
 
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { v4 as uuidv4 } from 'uuid';
+import { setAuthToken } from '../utils/authToken.js';
 import {
   MdVideoCall,
   MdMeetingRoom,
@@ -41,6 +42,24 @@ function FeatureBadge({ icon, label }) {
 function Home() {
   const navigate = useNavigate();
   const { addToast } = useToast();
+
+  // Capture a dashboard-issued identity token from ?token=... into memory
+  // and immediately strip it from the visible URL. Never persisted to
+  // storage; PeerMeet still works fully anonymously if none is present.
+  useEffect(() => {
+    try {
+      const url = new URL(window.location.href);
+      const token = url.searchParams.get('token');
+      if (token) {
+        setAuthToken(token);
+        url.searchParams.delete('token');
+        window.history.replaceState({}, '', url.pathname + url.search + url.hash);
+      }
+    } catch {
+      // window.location may throw in unusual embeds — safe to ignore; PeerMeet
+      // simply proceeds anonymously.
+    }
+  }, []);
 
   const [joinRoomId, setJoinRoomId] = useState('');
   const [joinError, setJoinError] = useState('');

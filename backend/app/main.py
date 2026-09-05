@@ -2,7 +2,7 @@ import logging
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from .routers.shared import auth
+from .routers.shared import auth, peer_reports
 
 # Without this, every `logger.exception(...)`/`logger.warning(...)` call across
 # the whole backend is a silent no-op — the root logger has no handler
@@ -12,7 +12,7 @@ logging.basicConfig(
     format="%(asctime)s %(levelname)s %(name)s: %(message)s",
 )
 from .routers.college import students, drives, dashboard, shortlist, departments
-from .routers.candidate import sync, analyze, practice
+from .routers.candidate import sync, analyze, practice, peer
 # NOTE: routers/company/{company,roles}.py exist but are NOT wired in here —
 # they depend on deps.require_company_role, crud helpers (get_company_by_owner_id,
 # create_role, etc.) and schemas (CompanyOut, RoleCreateIn, etc.) that were never
@@ -49,6 +49,8 @@ app.include_router(departments.router)
 app.include_router(sync.router)
 app.include_router(analyze.router)
 app.include_router(practice.router)
+app.include_router(peer.router)
+app.include_router(peer_reports.router)
 
 @app.get("/")
 def root():

@@ -9,61 +9,36 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
-import { Route as SitemapDotxmlRouteImport } from './routes/sitemap[.]xml'
-import { Route as PortalsRouteImport } from './routes/portals'
-import { Route as CompanyRouteImport } from './routes/company'
-import { Route as CollegeRouteImport } from './routes/college'
-import { Route as CandidateRouteImport } from './routes/candidate'
-import { Route as AuthRouteImport } from './routes/auth'
-import { Route as AdminRouteImport } from './routes/admin'
 import { Route as IndexRouteImport } from './routes/index'
-import { Route as CompanyRolesIndexRouteImport } from './routes/company-roles/index'
-import { Route as CollegeIndexRouteImport } from './routes/college/index'
-import { Route as CompanyRolesRoleIdRouteImport } from './routes/company-roles/$roleId'
-import { Route as CollegeStudentsRouteImport } from './routes/college/students'
-import { Route as CollegeShortlistRouteImport } from './routes/college/shortlist'
-import { Route as CollegeReportsRouteImport } from './routes/college/reports'
-import { Route as CollegeDrivesRouteImport } from './routes/college/drives'
-import { Route as CollegeDepartmentsRouteImport } from './routes/college/departments'
-import { Route as CollegeAnalyticsRouteImport } from './routes/college/analytics'
-import { Route as AuthSignupRouteImport } from './routes/auth.signup'
-import { Route as AuthResetPasswordRouteImport } from './routes/auth.reset-password'
-import { Route as AuthProfileSetupRouteImport } from './routes/auth.profile-setup'
-import { Route as AuthOtpRouteImport } from './routes/auth.otp'
-import { Route as AuthLoginRouteImport } from './routes/auth.login'
-import { Route as AuthForgotPasswordRouteImport } from './routes/auth.forgot-password'
-import { Route as AuthConfirmRouteImport } from './routes/auth.confirm'
-import { Route as AuthCompanySignupRouteImport } from './routes/auth.company-signup'
+import { Route as AdminRouteImport } from './routes/admin'
+import { Route as AuthRouteImport } from './routes/auth'
+import { Route as CandidateRouteImport } from './routes/candidate'
+import { Route as CollegeRouteImport } from './routes/college'
+import { Route as CompanyRouteImport } from './routes/company'
+import { Route as PortalsRouteImport } from './routes/portals'
+import { Route as SitemapDotxmlRouteImport } from './routes/sitemap[.]xml'
 import { Route as AuthCompanyOnboardingRouteImport } from './routes/auth.company-onboarding'
+import { Route as AuthCompanySignupRouteImport } from './routes/auth.company-signup'
+import { Route as AuthConfirmRouteImport } from './routes/auth.confirm'
+import { Route as AuthForgotPasswordRouteImport } from './routes/auth.forgot-password'
+import { Route as AuthLoginRouteImport } from './routes/auth.login'
+import { Route as AuthOtpRouteImport } from './routes/auth.otp'
+import { Route as AuthProfileSetupRouteImport } from './routes/auth.profile-setup'
+import { Route as AuthResetPasswordRouteImport } from './routes/auth.reset-password'
+import { Route as AuthSignupRouteImport } from './routes/auth.signup'
+import { Route as CollegeIndexRouteImport } from './routes/college/index'
+import { Route as CollegeAnalyticsRouteImport } from './routes/college/analytics'
+import { Route as CollegeDepartmentsRouteImport } from './routes/college/departments'
+import { Route as CollegeDrivesRouteImport } from './routes/college/drives'
+import { Route as CollegeReportsRouteImport } from './routes/college/reports'
+import { Route as CollegeShortlistRouteImport } from './routes/college/shortlist'
+import { Route as CollegeStudentsRouteImport } from './routes/college/students'
+import { Route as CompanyRolesIndexRouteImport } from './routes/company-roles/index'
+import { Route as CompanyRolesRoleIdRouteImport } from './routes/company-roles/$roleId'
 
-const SitemapDotxmlRoute = SitemapDotxmlRouteImport.update({
-  id: '/sitemap.xml',
-  path: '/sitemap.xml',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const PortalsRoute = PortalsRouteImport.update({
-  id: '/portals',
-  path: '/portals',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const CompanyRoute = CompanyRouteImport.update({
-  id: '/company',
-  path: '/company',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const CollegeRoute = CollegeRouteImport.update({
-  id: '/college',
-  path: '/college',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const CandidateRoute = CandidateRouteImport.update({
-  id: '/candidate',
-  path: '/candidate',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const AuthRoute = AuthRouteImport.update({
-  id: '/auth',
-  path: '/auth',
+const IndexRoute = IndexRouteImport.update({
+  id: '/',
+  path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AdminRoute = AdminRouteImport.update({
@@ -71,89 +46,39 @@ const AdminRoute = AdminRouteImport.update({
   path: '/admin',
   getParentRoute: () => rootRouteImport,
 } as any)
-const IndexRoute = IndexRouteImport.update({
-  id: '/',
-  path: '/',
+const AuthRoute = AuthRouteImport.update({
+  id: '/auth',
+  path: '/auth',
   getParentRoute: () => rootRouteImport,
 } as any)
-const CompanyRolesIndexRoute = CompanyRolesIndexRouteImport.update({
-  id: '/company-roles/',
-  path: '/company-roles/',
+const CandidateRoute = CandidateRouteImport.update({
+  id: '/candidate',
+  path: '/candidate',
   getParentRoute: () => rootRouteImport,
 } as any)
-const CollegeIndexRoute = CollegeIndexRouteImport.update({
-  id: '/',
-  path: '/',
-  getParentRoute: () => CollegeRoute,
-} as any)
-const CompanyRolesRoleIdRoute = CompanyRolesRoleIdRouteImport.update({
-  id: '/company-roles/$roleId',
-  path: '/company-roles/$roleId',
+const CollegeRoute = CollegeRouteImport.update({
+  id: '/college',
+  path: '/college',
   getParentRoute: () => rootRouteImport,
 } as any)
-const CollegeStudentsRoute = CollegeStudentsRouteImport.update({
-  id: '/students',
-  path: '/students',
-  getParentRoute: () => CollegeRoute,
+const CompanyRoute = CompanyRouteImport.update({
+  id: '/company',
+  path: '/company',
+  getParentRoute: () => rootRouteImport,
 } as any)
-const CollegeShortlistRoute = CollegeShortlistRouteImport.update({
-  id: '/shortlist',
-  path: '/shortlist',
-  getParentRoute: () => CollegeRoute,
+const PortalsRoute = PortalsRouteImport.update({
+  id: '/portals',
+  path: '/portals',
+  getParentRoute: () => rootRouteImport,
 } as any)
-const CollegeReportsRoute = CollegeReportsRouteImport.update({
-  id: '/reports',
-  path: '/reports',
-  getParentRoute: () => CollegeRoute,
+const SitemapDotxmlRoute = SitemapDotxmlRouteImport.update({
+  id: '/sitemap.xml',
+  path: '/sitemap.xml',
+  getParentRoute: () => rootRouteImport,
 } as any)
-const CollegeDrivesRoute = CollegeDrivesRouteImport.update({
-  id: '/drives',
-  path: '/drives',
-  getParentRoute: () => CollegeRoute,
-} as any)
-const CollegeDepartmentsRoute = CollegeDepartmentsRouteImport.update({
-  id: '/departments',
-  path: '/departments',
-  getParentRoute: () => CollegeRoute,
-} as any)
-const CollegeAnalyticsRoute = CollegeAnalyticsRouteImport.update({
-  id: '/analytics',
-  path: '/analytics',
-  getParentRoute: () => CollegeRoute,
-} as any)
-const AuthSignupRoute = AuthSignupRouteImport.update({
-  id: '/signup',
-  path: '/signup',
-  getParentRoute: () => AuthRoute,
-} as any)
-const AuthResetPasswordRoute = AuthResetPasswordRouteImport.update({
-  id: '/reset-password',
-  path: '/reset-password',
-  getParentRoute: () => AuthRoute,
-} as any)
-const AuthProfileSetupRoute = AuthProfileSetupRouteImport.update({
-  id: '/profile-setup',
-  path: '/profile-setup',
-  getParentRoute: () => AuthRoute,
-} as any)
-const AuthOtpRoute = AuthOtpRouteImport.update({
-  id: '/otp',
-  path: '/otp',
-  getParentRoute: () => AuthRoute,
-} as any)
-const AuthLoginRoute = AuthLoginRouteImport.update({
-  id: '/login',
-  path: '/login',
-  getParentRoute: () => AuthRoute,
-} as any)
-const AuthForgotPasswordRoute = AuthForgotPasswordRouteImport.update({
-  id: '/forgot-password',
-  path: '/forgot-password',
-  getParentRoute: () => AuthRoute,
-} as any)
-const AuthConfirmRoute = AuthConfirmRouteImport.update({
-  id: '/confirm',
-  path: '/confirm',
+const AuthCompanyOnboardingRoute = AuthCompanyOnboardingRouteImport.update({
+  id: '/company-onboarding',
+  path: '/company-onboarding',
   getParentRoute: () => AuthRoute,
 } as any)
 const AuthCompanySignupRoute = AuthCompanySignupRouteImport.update({
@@ -161,10 +86,85 @@ const AuthCompanySignupRoute = AuthCompanySignupRouteImport.update({
   path: '/company-signup',
   getParentRoute: () => AuthRoute,
 } as any)
-const AuthCompanyOnboardingRoute = AuthCompanyOnboardingRouteImport.update({
-  id: '/company-onboarding',
-  path: '/company-onboarding',
+const AuthConfirmRoute = AuthConfirmRouteImport.update({
+  id: '/confirm',
+  path: '/confirm',
   getParentRoute: () => AuthRoute,
+} as any)
+const AuthForgotPasswordRoute = AuthForgotPasswordRouteImport.update({
+  id: '/forgot-password',
+  path: '/forgot-password',
+  getParentRoute: () => AuthRoute,
+} as any)
+const AuthLoginRoute = AuthLoginRouteImport.update({
+  id: '/login',
+  path: '/login',
+  getParentRoute: () => AuthRoute,
+} as any)
+const AuthOtpRoute = AuthOtpRouteImport.update({
+  id: '/otp',
+  path: '/otp',
+  getParentRoute: () => AuthRoute,
+} as any)
+const AuthProfileSetupRoute = AuthProfileSetupRouteImport.update({
+  id: '/profile-setup',
+  path: '/profile-setup',
+  getParentRoute: () => AuthRoute,
+} as any)
+const AuthResetPasswordRoute = AuthResetPasswordRouteImport.update({
+  id: '/reset-password',
+  path: '/reset-password',
+  getParentRoute: () => AuthRoute,
+} as any)
+const AuthSignupRoute = AuthSignupRouteImport.update({
+  id: '/signup',
+  path: '/signup',
+  getParentRoute: () => AuthRoute,
+} as any)
+const CollegeIndexRoute = CollegeIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => CollegeRoute,
+} as any)
+const CollegeAnalyticsRoute = CollegeAnalyticsRouteImport.update({
+  id: '/analytics',
+  path: '/analytics',
+  getParentRoute: () => CollegeRoute,
+} as any)
+const CollegeDepartmentsRoute = CollegeDepartmentsRouteImport.update({
+  id: '/departments',
+  path: '/departments',
+  getParentRoute: () => CollegeRoute,
+} as any)
+const CollegeDrivesRoute = CollegeDrivesRouteImport.update({
+  id: '/drives',
+  path: '/drives',
+  getParentRoute: () => CollegeRoute,
+} as any)
+const CollegeReportsRoute = CollegeReportsRouteImport.update({
+  id: '/reports',
+  path: '/reports',
+  getParentRoute: () => CollegeRoute,
+} as any)
+const CollegeShortlistRoute = CollegeShortlistRouteImport.update({
+  id: '/shortlist',
+  path: '/shortlist',
+  getParentRoute: () => CollegeRoute,
+} as any)
+const CollegeStudentsRoute = CollegeStudentsRouteImport.update({
+  id: '/students',
+  path: '/students',
+  getParentRoute: () => CollegeRoute,
+} as any)
+const CompanyRolesIndexRoute = CompanyRolesIndexRouteImport.update({
+  id: '/company-roles/',
+  path: '/company-roles/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const CompanyRolesRoleIdRoute = CompanyRolesRoleIdRouteImport.update({
+  id: '/company-roles/$roleId',
+  path: '/company-roles/$roleId',
+  getParentRoute: () => rootRouteImport,
 } as any)
 
 export interface FileRoutesByFullPath {
@@ -352,46 +352,11 @@ export interface RootRouteChildren {
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
-    '/sitemap.xml': {
-      id: '/sitemap.xml'
-      path: '/sitemap.xml'
-      fullPath: '/sitemap.xml'
-      preLoaderRoute: typeof SitemapDotxmlRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/portals': {
-      id: '/portals'
-      path: '/portals'
-      fullPath: '/portals'
-      preLoaderRoute: typeof PortalsRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/company': {
-      id: '/company'
-      path: '/company'
-      fullPath: '/company'
-      preLoaderRoute: typeof CompanyRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/college': {
-      id: '/college'
-      path: '/college'
-      fullPath: '/college'
-      preLoaderRoute: typeof CollegeRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/candidate': {
-      id: '/candidate'
-      path: '/candidate'
-      fullPath: '/candidate'
-      preLoaderRoute: typeof CandidateRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/auth': {
-      id: '/auth'
-      path: '/auth'
-      fullPath: '/auth'
-      preLoaderRoute: typeof AuthRouteImport
+    '/': {
+      id: '/'
+      path: '/'
+      fullPath: '/'
+      preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/admin': {
@@ -401,123 +366,53 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/': {
-      id: '/'
-      path: '/'
-      fullPath: '/'
-      preLoaderRoute: typeof IndexRouteImport
+    '/auth': {
+      id: '/auth'
+      path: '/auth'
+      fullPath: '/auth'
+      preLoaderRoute: typeof AuthRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/company-roles/': {
-      id: '/company-roles/'
-      path: '/company-roles'
-      fullPath: '/company-roles/'
-      preLoaderRoute: typeof CompanyRolesIndexRouteImport
+    '/candidate': {
+      id: '/candidate'
+      path: '/candidate'
+      fullPath: '/candidate'
+      preLoaderRoute: typeof CandidateRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/college/': {
-      id: '/college/'
-      path: '/'
-      fullPath: '/college/'
-      preLoaderRoute: typeof CollegeIndexRouteImport
-      parentRoute: typeof CollegeRoute
-    }
-    '/company-roles/$roleId': {
-      id: '/company-roles/$roleId'
-      path: '/company-roles/$roleId'
-      fullPath: '/company-roles/$roleId'
-      preLoaderRoute: typeof CompanyRolesRoleIdRouteImport
+    '/college': {
+      id: '/college'
+      path: '/college'
+      fullPath: '/college'
+      preLoaderRoute: typeof CollegeRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/college/students': {
-      id: '/college/students'
-      path: '/students'
-      fullPath: '/college/students'
-      preLoaderRoute: typeof CollegeStudentsRouteImport
-      parentRoute: typeof CollegeRoute
+    '/company': {
+      id: '/company'
+      path: '/company'
+      fullPath: '/company'
+      preLoaderRoute: typeof CompanyRouteImport
+      parentRoute: typeof rootRouteImport
     }
-    '/college/shortlist': {
-      id: '/college/shortlist'
-      path: '/shortlist'
-      fullPath: '/college/shortlist'
-      preLoaderRoute: typeof CollegeShortlistRouteImport
-      parentRoute: typeof CollegeRoute
+    '/portals': {
+      id: '/portals'
+      path: '/portals'
+      fullPath: '/portals'
+      preLoaderRoute: typeof PortalsRouteImport
+      parentRoute: typeof rootRouteImport
     }
-    '/college/reports': {
-      id: '/college/reports'
-      path: '/reports'
-      fullPath: '/college/reports'
-      preLoaderRoute: typeof CollegeReportsRouteImport
-      parentRoute: typeof CollegeRoute
+    '/sitemap.xml': {
+      id: '/sitemap.xml'
+      path: '/sitemap.xml'
+      fullPath: '/sitemap.xml'
+      preLoaderRoute: typeof SitemapDotxmlRouteImport
+      parentRoute: typeof rootRouteImport
     }
-    '/college/drives': {
-      id: '/college/drives'
-      path: '/drives'
-      fullPath: '/college/drives'
-      preLoaderRoute: typeof CollegeDrivesRouteImport
-      parentRoute: typeof CollegeRoute
-    }
-    '/college/departments': {
-      id: '/college/departments'
-      path: '/departments'
-      fullPath: '/college/departments'
-      preLoaderRoute: typeof CollegeDepartmentsRouteImport
-      parentRoute: typeof CollegeRoute
-    }
-    '/college/analytics': {
-      id: '/college/analytics'
-      path: '/analytics'
-      fullPath: '/college/analytics'
-      preLoaderRoute: typeof CollegeAnalyticsRouteImport
-      parentRoute: typeof CollegeRoute
-    }
-    '/auth/signup': {
-      id: '/auth/signup'
-      path: '/signup'
-      fullPath: '/auth/signup'
-      preLoaderRoute: typeof AuthSignupRouteImport
-      parentRoute: typeof AuthRoute
-    }
-    '/auth/reset-password': {
-      id: '/auth/reset-password'
-      path: '/reset-password'
-      fullPath: '/auth/reset-password'
-      preLoaderRoute: typeof AuthResetPasswordRouteImport
-      parentRoute: typeof AuthRoute
-    }
-    '/auth/profile-setup': {
-      id: '/auth/profile-setup'
-      path: '/profile-setup'
-      fullPath: '/auth/profile-setup'
-      preLoaderRoute: typeof AuthProfileSetupRouteImport
-      parentRoute: typeof AuthRoute
-    }
-    '/auth/otp': {
-      id: '/auth/otp'
-      path: '/otp'
-      fullPath: '/auth/otp'
-      preLoaderRoute: typeof AuthOtpRouteImport
-      parentRoute: typeof AuthRoute
-    }
-    '/auth/login': {
-      id: '/auth/login'
-      path: '/login'
-      fullPath: '/auth/login'
-      preLoaderRoute: typeof AuthLoginRouteImport
-      parentRoute: typeof AuthRoute
-    }
-    '/auth/forgot-password': {
-      id: '/auth/forgot-password'
-      path: '/forgot-password'
-      fullPath: '/auth/forgot-password'
-      preLoaderRoute: typeof AuthForgotPasswordRouteImport
-      parentRoute: typeof AuthRoute
-    }
-    '/auth/confirm': {
-      id: '/auth/confirm'
-      path: '/confirm'
-      fullPath: '/auth/confirm'
-      preLoaderRoute: typeof AuthConfirmRouteImport
+    '/auth/company-onboarding': {
+      id: '/auth/company-onboarding'
+      path: '/company-onboarding'
+      fullPath: '/auth/company-onboarding'
+      preLoaderRoute: typeof AuthCompanyOnboardingRouteImport
       parentRoute: typeof AuthRoute
     }
     '/auth/company-signup': {
@@ -527,12 +422,117 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthCompanySignupRouteImport
       parentRoute: typeof AuthRoute
     }
-    '/auth/company-onboarding': {
-      id: '/auth/company-onboarding'
-      path: '/company-onboarding'
-      fullPath: '/auth/company-onboarding'
-      preLoaderRoute: typeof AuthCompanyOnboardingRouteImport
+    '/auth/confirm': {
+      id: '/auth/confirm'
+      path: '/confirm'
+      fullPath: '/auth/confirm'
+      preLoaderRoute: typeof AuthConfirmRouteImport
       parentRoute: typeof AuthRoute
+    }
+    '/auth/forgot-password': {
+      id: '/auth/forgot-password'
+      path: '/forgot-password'
+      fullPath: '/auth/forgot-password'
+      preLoaderRoute: typeof AuthForgotPasswordRouteImport
+      parentRoute: typeof AuthRoute
+    }
+    '/auth/login': {
+      id: '/auth/login'
+      path: '/login'
+      fullPath: '/auth/login'
+      preLoaderRoute: typeof AuthLoginRouteImport
+      parentRoute: typeof AuthRoute
+    }
+    '/auth/otp': {
+      id: '/auth/otp'
+      path: '/otp'
+      fullPath: '/auth/otp'
+      preLoaderRoute: typeof AuthOtpRouteImport
+      parentRoute: typeof AuthRoute
+    }
+    '/auth/profile-setup': {
+      id: '/auth/profile-setup'
+      path: '/profile-setup'
+      fullPath: '/auth/profile-setup'
+      preLoaderRoute: typeof AuthProfileSetupRouteImport
+      parentRoute: typeof AuthRoute
+    }
+    '/auth/reset-password': {
+      id: '/auth/reset-password'
+      path: '/reset-password'
+      fullPath: '/auth/reset-password'
+      preLoaderRoute: typeof AuthResetPasswordRouteImport
+      parentRoute: typeof AuthRoute
+    }
+    '/auth/signup': {
+      id: '/auth/signup'
+      path: '/signup'
+      fullPath: '/auth/signup'
+      preLoaderRoute: typeof AuthSignupRouteImport
+      parentRoute: typeof AuthRoute
+    }
+    '/college/': {
+      id: '/college/'
+      path: '/'
+      fullPath: '/college/'
+      preLoaderRoute: typeof CollegeIndexRouteImport
+      parentRoute: typeof CollegeRoute
+    }
+    '/college/analytics': {
+      id: '/college/analytics'
+      path: '/analytics'
+      fullPath: '/college/analytics'
+      preLoaderRoute: typeof CollegeAnalyticsRouteImport
+      parentRoute: typeof CollegeRoute
+    }
+    '/college/departments': {
+      id: '/college/departments'
+      path: '/departments'
+      fullPath: '/college/departments'
+      preLoaderRoute: typeof CollegeDepartmentsRouteImport
+      parentRoute: typeof CollegeRoute
+    }
+    '/college/drives': {
+      id: '/college/drives'
+      path: '/drives'
+      fullPath: '/college/drives'
+      preLoaderRoute: typeof CollegeDrivesRouteImport
+      parentRoute: typeof CollegeRoute
+    }
+    '/college/reports': {
+      id: '/college/reports'
+      path: '/reports'
+      fullPath: '/college/reports'
+      preLoaderRoute: typeof CollegeReportsRouteImport
+      parentRoute: typeof CollegeRoute
+    }
+    '/college/shortlist': {
+      id: '/college/shortlist'
+      path: '/shortlist'
+      fullPath: '/college/shortlist'
+      preLoaderRoute: typeof CollegeShortlistRouteImport
+      parentRoute: typeof CollegeRoute
+    }
+    '/college/students': {
+      id: '/college/students'
+      path: '/students'
+      fullPath: '/college/students'
+      preLoaderRoute: typeof CollegeStudentsRouteImport
+      parentRoute: typeof CollegeRoute
+    }
+    '/company-roles/': {
+      id: '/company-roles/'
+      path: '/company-roles'
+      fullPath: '/company-roles/'
+      preLoaderRoute: typeof CompanyRolesIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/company-roles/$roleId': {
+      id: '/company-roles/$roleId'
+      path: '/company-roles/$roleId'
+      fullPath: '/company-roles/$roleId'
+      preLoaderRoute: typeof CompanyRolesRoleIdRouteImport
+      parentRoute: typeof rootRouteImport
     }
   }
 }

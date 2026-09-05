@@ -50,6 +50,8 @@ import { useResumeAnalysisStore } from "@/store/candidate/resumeAnalysis";
 import { ProfileAnalyzerPanel, ScoreRing, verdictTone } from "@/components/candidate/ProfileSyncPanel";
 import { computeDnaBreakdown, computeDnaScore, computeSkillDna } from "@/lib/skillDna";
 import { practiceService } from "@/services/api/candidate/practice";
+import { peerService } from "@/services/api/candidate/peer";
+import { toast } from "sonner";
 import { extractLeetCodeUsername } from "@/services/api/candidate/sync";
 import { ApiClientError } from "@/services/api/client";
 import type { PracticeRecommendations } from "@/types/candidate/practice";
@@ -248,7 +250,31 @@ function OverviewTab() {
           <SectionHeader title="Your workspace" hint="Small tools, one job each." />
           <div className="grid gap-3 sm:grid-cols-2">
             <ModuleCard icon={Brain} title="AI Interview" body="Adaptive mocks, honest feedback." status="Live" />
-            <ModuleCard icon={Users} title="Peer Interview" body="Trade rounds with other candidates." status="Live" />
+            <ModuleCard
+              icon={Users}
+              title="Peer Interview"
+              body="Trade rounds with other candidates."
+              status="Live"
+              onClick={async () => {
+                const peermeetUrl = import.meta.env.VITE_PEERMEET_URL;
+                if (!peermeetUrl) {
+                  toast.error("Peer Interview is not configured. Set VITE_PEERMEET_URL.");
+                  return;
+                }
+                try {
+                  const { token } = await peerService.createSessionToken();
+                  window.open(
+                    `${peermeetUrl}/?token=${encodeURIComponent(token)}`,
+                    "_blank",
+                    "noopener,noreferrer",
+                  );
+                } catch (err) {
+                  toast.error(
+                    err instanceof Error ? err.message : "Could not start Peer Interview.",
+                  );
+                }
+              }}
+            />
             <ModuleCard icon={Video} title="Expert Interview" body="Book seniors from real hiring loops." status="Beta" />
             <ModuleCard icon={FileText} title="Resume Analyzer" body="ATS score, gaps, rewrites for the role." status="Live" />
             <ModuleCard icon={TerminalSquare} title="LeetCode Practice" body="Company-wise DSA sets and timed rounds." status="Live" />
@@ -736,14 +762,19 @@ function ModuleCard({
   title,
   body,
   status,
+  onClick,
 }: {
   icon: typeof Brain;
   title: string;
   body: string;
   status: "Live" | "Beta" | "Coming soon";
+  onClick?: () => void;
 }) {
   return (
-    <Card className="group cursor-pointer p-4 transition-all hover:-translate-y-0.5 hover:border-primary/30">
+    <Card
+      onClick={onClick}
+      className="group cursor-pointer p-4 transition-all hover:-translate-y-0.5 hover:border-primary/30"
+    >
       <div className="flex items-start justify-between">
         <div className="grid h-10 w-10 place-items-center rounded-lg bg-primary/10 text-primary">
           <Icon className="h-5 w-5" />

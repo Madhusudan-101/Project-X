@@ -35,6 +35,7 @@ import socket from '../socket.js';
 import { MdSignalWifiOff } from 'react-icons/md';
 import { HiSignal, HiSignalSlash } from 'react-icons/hi2';
 import { debugLog } from '../utils/debugLog.js';
+import { getAuthToken } from '../utils/authToken.js';
 
 // ── Connection status badge ────────────────────────────────────────────────────
 function StatusBadge({ status }) {
@@ -296,7 +297,7 @@ function MeetingRoom() {
 
     hasJoinedRef.current = true;
     debugLog('[MeetingRoom] Emitting join-room:', roomId, 'participantId:', participantId);
-    socket.emit('join-room', { roomId, participantId });
+    socket.emit('join-room', { roomId, participantId, token: getAuthToken() });
   }, [localStream, roomId, participantId]);
 
   // ── Socket event listeners for room state ─────────────────────────────────
@@ -346,7 +347,7 @@ function MeetingRoom() {
       // create it. Otherwise it's a genuinely bad/expired room ID.
       if (isInitiator) {
         debugLog('[MeetingRoom] Room not found — creating fresh as initiator');
-        socket.emit('create-room', { roomId, participantId });
+        socket.emit('create-room', { roomId, participantId, token: getAuthToken() });
         return;
       }
       setRoomError('not-found');
@@ -358,7 +359,7 @@ function MeetingRoom() {
       // Lost a create-vs-join race (e.g. duplicate tab) — the room exists
       // now, so join it instead.
       debugLog('[MeetingRoom] Room already exists — joining instead');
-      socket.emit('join-room', { roomId, participantId });
+      socket.emit('join-room', { roomId, participantId, token: getAuthToken() });
     };
 
     socket.on('room-created', handleRoomCreated);
@@ -475,7 +476,7 @@ function MeetingRoom() {
       // reconnect (reclaiming our interview role) rather than a fresh
       // join; it falls back to 'room-not-found' → create-room (handled by
       // the existing listener) if the room was fully abandoned.
-      socket.emit('join-room', { roomId, participantId });
+      socket.emit('join-room', { roomId, participantId, token: getAuthToken() });
 
       stopTranscription();
       if (isAudioEnabled) {

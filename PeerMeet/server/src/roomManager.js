@@ -31,9 +31,9 @@ const rooms = new Map();
  * @param {string} participantId
  * @param {string} socketId
  */
-function createRoom(roomId, participantId, socketId) {
+function createRoom(roomId, participantId, socketId, identity = null) {
   rooms.set(roomId, {
-    participants: [{ participantId, socketId }],
+    participants: [{ participantId, socketId, identity: identity || null }],
     // ── Interview state (all AI/role data lives server-side) ──────────────
     // This block is additive; existing signaling logic ignores it.
     interview: createInitialInterviewState(),
@@ -460,6 +460,19 @@ function getSocketIdForParticipant(roomId, participantId) {
  * @param {string} socketId
  * @returns {string|null}
  */
+/**
+ * Return the attached identity ({ studentId, studentName }) for a
+ * participant, or null if that slot is anonymous.
+ * @param {string} roomId
+ * @param {string} participantId
+ */
+function getIdentityForParticipant(roomId, participantId) {
+  const room = rooms.get(roomId);
+  if (!room || !participantId) return null;
+  const participant = room.participants.find((p) => p.participantId === participantId);
+  return participant?.identity || null;
+}
+
 function getParticipantIdForSocket(roomId, socketId) {
   const room = rooms.get(roomId);
   if (!room || !socketId) return null;
@@ -480,7 +493,7 @@ function getParticipantIdForSocket(roomId, socketId) {
  *   to tell a genuine reconnect apart from a duplicate browser tab (below)
  * @returns {{ success: boolean, reconnected?: boolean, partnerId?: string|null, partnerParticipantId?: string|null, isFull?: boolean, notFound?: boolean, duplicateSession?: boolean }}
  */
-function joinRoom(roomId, participantId, socketId, isSocketAlive) {
+function joinRoom(roomId, participantId, socketId, isSocketAlive, identity = null) {
   const room = rooms.get(roomId);
 
   if (!room) {
@@ -510,6 +523,11 @@ function joinRoom(roomId, participantId, socketId, isSocketAlive) {
     }
 
     existing.socketId = socketId;
+    // Only ever adopt a fresh identity on reconnect; never let an anonymous
+    // reconnect blank out an already-attached identity.
+    if (identity && !existing.identity) {
+      existing.identity = identity;
+    }
     const partner = room.participants.find((p) => p.participantId !== participantId) || null;
     return {
       success: true,
@@ -524,7 +542,7 @@ function joinRoom(roomId, participantId, socketId, isSocketAlive) {
   }
 
   const partner = room.participants[0] || null; // the existing participant, before we add the new one
-  room.participants.push({ participantId, socketId });
+  room.participants.push({ participantId, socketId, identity: identity || null });
 
   return {
     success: true,
@@ -615,4 +633,5 @@ module.exports = {
   getRoomIdForSocket,
   getSocketIdForParticipant,
   getParticipantIdForSocket,
+  getIdentityForParticipant,
 };
