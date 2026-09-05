@@ -42,6 +42,10 @@ def map_profile(row: dict) -> dict:
         "firstName": row.get("first_name") or "",
         "lastName": row.get("last_name") or "",
         "onboarded": bool(row.get("onboarded", False)),
+        "skills": row.get("skills") or [],
+        "interestedRoles": row.get("interested_roles") or [],
+        "collegeName": row.get("college_name"),
+        "graduationYear": row.get("graduation_year"),
     }
 
 
@@ -306,7 +310,7 @@ def forgot_password(payload: ForgotIn):
 
 # ── POST /auth/otp/verify ─────────────────────────────────────────────
 
-@router.post("/otp/verify")
+@router.post("/otp/verify", response_model=SessionOut)
 def verify_otp(payload: VerifyOtpIn):
     res = None
     for otp_type in ("signup", "recovery", "email"):
@@ -325,8 +329,32 @@ def verify_otp(payload: VerifyOtpIn):
     if res is None:
         raise HTTPException(status_code=400, detail="Invalid or expired code.")
 
-    token = res.session.access_token if res.session else ""
-    return {"token": token}
+    session = res.session
+    if not session:
+        return {
+            "user": {"id": "", "email": payload.email, "role": "candidate",
+                      "name": "", "firstName": "", "lastName": "", "onboarded": False},
+            "token": "", "refreshToken": "", "expiresAt": "",
+        }
+
+    user = session.user
+    role = (user.user_metadata or {}).get("role", "candidate")
+
+    try:
+        profile = _ensure_profile(user.id, email=user.email or payload.email, role=role)
+    except APIError as e:
+        log.warning("Profile lookup/create failed for %s: %s", user.id, e)
+        profile = None
+
+    return {
+        "user": map_profile(profile) if profile else {
+            "id": user.id, "email": user.email or payload.email, "role": role,
+            "name": "", "firstName": "", "lastName": "", "onboarded": False,
+        },
+        "token": session.access_token,
+        "refreshToken": session.refresh_token,
+        "expiresAt": str(session.expires_at) if session.expires_at else "",
+    }
 
 
 # ── POST /auth/reset ──────────────────────────────────────────────────
@@ -376,6 +404,14 @@ def update_profile_route(
         update_data["last_name"] = payload.lastName
     if payload.onboarded is not None:
         update_data["onboarded"] = payload.onboarded
+    if payload.skills is not None:
+        update_data["skills"] = payload.skills
+    if payload.interestedRoles is not None:
+        update_data["interested_roles"] = payload.interestedRoles
+    if payload.collegeName is not None:
+        update_data["college_name"] = payload.collegeName
+    if payload.graduationYear is not None:
+        update_data["graduation_year"] = payload.graduationYear
 
     try:
         existing = get_profile_by_id(user_id)

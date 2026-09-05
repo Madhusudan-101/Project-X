@@ -6,18 +6,18 @@ import {
   BarChart3,
   Bell,
   Briefcase,
-  Building2,
+  CheckCircle2,
   ClipboardList,
-  Layers,
+  LayoutDashboard,
   LineChart,
   LogOut,
   Search,
   Settings,
-  Settings2,
   Sparkles,
   Star,
+  UserPlus,
   Users,
-  Wand2,
+  Video,
 } from "lucide-react";
 import { motion } from "framer-motion";
 import { toast } from "sonner";
@@ -27,6 +27,14 @@ import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { useAuthStore } from "@/store/auth";
 import { useCompanyStore } from "@/store/company/company";
 import { companyService } from "@/services/api/company/company";
@@ -40,8 +48,6 @@ export const Route = createFileRoute("/company")({
   component: CompanyPortal,
 });
 
-export const CompanyIcons = { Building2, BarChart3, Users };
-
 // ── Root component ─────────────────────────────────────────────────────
 
 function CompanyPortal() {
@@ -51,7 +57,7 @@ function CompanyPortal() {
   const storedCompany = useCompanyStore((s) => s.company);
   const setCompany = useCompanyStore((s) => s.setCompany);
   const clearCompany = useCompanyStore((s) => s.clearCompany);
-  const [tab, setTab] = useState("overview");
+  const [tab, setTab] = useState("dashboard");
 
   // ── Auth + role guard ──────────────────────────────────────────────
   useEffect(() => {
@@ -144,23 +150,57 @@ function CompanyPortal() {
               <Bell className="h-4 w-4" />
               <span className="absolute right-2 top-2 h-1.5 w-1.5 rounded-full bg-primary" aria-hidden="true" />
             </Button>
-            <Button variant="ghost" size="icon" aria-label="Settings">
+            <Button
+              variant="ghost"
+              size="icon"
+              aria-label="Team & access management"
+              onClick={() => toast.info("Team & access management — coming soon")}
+            >
+              <UserPlus className="h-4 w-4" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              aria-label="Settings"
+              onClick={() => toast.info("Settings — coming soon")}
+            >
               <Settings className="h-4 w-4" />
             </Button>
-            <div className="ml-2 hidden text-right text-xs md:block">
-              <div className="font-medium">{displayName}</div>
-              <div className="text-muted-foreground">{email}</div>
-            </div>
-            <div
-              className="ml-2 grid h-8 w-8 place-items-center rounded-full bg-gradient-brand text-xs font-semibold text-primary-foreground"
-              aria-hidden="true"
-            >
-              {initials}
-            </div>
-            <Button variant="ghost" size="sm" onClick={signOut} className="ml-1">
-              <LogOut className="mr-2 h-4 w-4" />
-              Sign out
-            </Button>
+
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button
+                  className="ml-2 flex items-center gap-2 rounded-full outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+                  aria-label="Account menu"
+                >
+                  <div className="hidden text-right text-xs md:block">
+                    <div className="font-medium">{displayName}</div>
+                    <div className="text-muted-foreground">{email}</div>
+                  </div>
+                  <div
+                    className="grid h-8 w-8 place-items-center rounded-full bg-gradient-brand text-xs font-semibold text-primary-foreground"
+                    aria-hidden="true"
+                  >
+                    {initials}
+                  </div>
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-48">
+                <DropdownMenuLabel className="font-normal">
+                  <div className="text-sm font-medium">{displayName}</div>
+                  <div className="text-xs text-muted-foreground">{email}</div>
+                </DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={() => toast.info("Settings — coming soon")}>
+                  <Settings className="mr-2 h-4 w-4" />
+                  Settings
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={signOut}>
+                  <LogOut className="mr-2 h-4 w-4" />
+                  Sign out
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         </div>
 
@@ -169,9 +209,11 @@ function CompanyPortal() {
           <Tabs value={tab} onValueChange={setTab}>
             <TabsList className="h-11 gap-1 bg-transparent p-0" role="tablist">
               {[
-                { v: "overview", label: "Overview", icon: Building2 },
+                { v: "dashboard", label: "Dashboard", icon: LayoutDashboard },
                 { v: "jobs", label: "Jobs", icon: Briefcase },
-                { v: "applicants", label: "Applicants", icon: Users },
+                { v: "candidates", label: "Candidates", icon: Users },
+                { v: "assessments", label: "Assessments", icon: ClipboardList },
+                { v: "interviews", label: "Interviews", icon: Video },
                 { v: "analytics", label: "Analytics", icon: BarChart3 },
               ].map((t) => {
                 const Icon = t.icon;
@@ -196,25 +238,41 @@ function CompanyPortal() {
             </TabsList>
 
             <div className="pt-6 pb-12">
-              <TabsContent value="overview" className="mt-0">
-                <OverviewTab company={company ?? null} loading={companyLoading} />
+              <TabsContent value="dashboard" className="mt-0">
+                <DashboardTab company={company ?? null} loading={companyLoading} />
               </TabsContent>
               <TabsContent value="jobs" className="mt-0">
                 <JobsTabEntry />
               </TabsContent>
-              <TabsContent value="applicants" className="mt-0">
+              <TabsContent value="candidates" className="mt-0">
                 <ComingSoonTab
                   icon={Users}
-                  title="Applicant Pipeline"
-                  body="Kanban board showing every candidate from Applied → Screening → Interview → Offer → Hired."
+                  title="Candidate Database"
+                  body="Search every candidate across all your jobs, filter by status or role, and jump straight to their profile."
                   feature="Feature 3"
+                />
+              </TabsContent>
+              <TabsContent value="assessments" className="mt-0">
+                <ComingSoonTab
+                  icon={ClipboardList}
+                  title="Assessments"
+                  body="Build a question bank — self-authored or AI-assisted — and attach assessments to any job."
+                  feature="Feature 5"
+                />
+              </TabsContent>
+              <TabsContent value="interviews" className="mt-0">
+                <ComingSoonTab
+                  icon={Video}
+                  title="AI Interview Studio"
+                  body="Configure interview weightage per job and run structured AI-assisted interviews."
+                  feature="Feature 6"
                 />
               </TabsContent>
               <TabsContent value="analytics" className="mt-0">
                 <ComingSoonTab
                   icon={LineChart}
                   title="Hiring Analytics"
-                  body="Funnel metrics, source breakdown, time-to-hire, and offer acceptance rate — all in one view."
+                  body="Funnel metrics, diversity metrics, source breakdown, time-to-hire, and offer acceptance rate — all in one view."
                   feature="Feature 4"
                 />
               </TabsContent>
@@ -226,16 +284,43 @@ function CompanyPortal() {
   );
 }
 
-// ── Overview tab ───────────────────────────────────────────────────────
+// ── Dashboard tab ──────────────────────────────────────────────────────
 
-interface OverviewTabProps {
+interface DashboardTabProps {
   company: Company | null;
   loading: boolean;
 }
 
-function OverviewTab({ company, loading }: OverviewTabProps) {
+// Funnel counts have no backend yet (no applications pipeline exists) —
+// zeroed placeholders, not fabricated numbers, until Feature 3 is built.
+const FUNNEL_STAGES = [
+  { label: "New Applications", value: 0, icon: Briefcase },
+  { label: "Shortlisted", value: 0, icon: Star },
+  { label: "In Interview", value: 0, icon: Video },
+  { label: "Hired", value: 0, icon: CheckCircle2 },
+];
+
+function DashboardTab({ company, loading }: DashboardTabProps) {
   return (
     <div className="space-y-6">
+      {/* Funnel view */}
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        {FUNNEL_STAGES.map((stage) => {
+          const Icon = stage.icon;
+          return (
+            <Card key={stage.label} className="p-4">
+              <div className="flex items-center justify-between">
+                <div className="grid h-8 w-8 place-items-center rounded-lg bg-primary/10 text-primary">
+                  <Icon className="h-4 w-4" aria-hidden="true" />
+                </div>
+              </div>
+              <div className="mt-2 font-display text-2xl font-bold">{stage.value}</div>
+              <div className="text-xs text-muted-foreground">{stage.label}</div>
+            </Card>
+          );
+        })}
+      </div>
+
       {/* Welcome + company info */}
       <motion.div
         initial={{ opacity: 0, y: 12 }}
@@ -315,51 +400,6 @@ function OverviewTab({ company, loading }: OverviewTabProps) {
           </div>
         </Card>
       </motion.div>
-
-      {/* Quick start modules grid */}
-      <div>
-        <div className="mb-3 flex items-end justify-between">
-          <div>
-            <h2 className="font-display text-lg font-semibold">Your workspace</h2>
-            <p className="text-xs text-muted-foreground">Modules coming live in upcoming features.</p>
-          </div>
-        </div>
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          {MODULES.map((m, i) => {
-            const Icon = m.icon;
-            return (
-              <motion.div
-                key={m.label}
-                initial={{ opacity: 0, y: 8 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.25, delay: 0.05 * i }}
-              >
-                <Card className="group cursor-not-allowed p-4 opacity-80 transition-all hover:-translate-y-0.5 hover:border-primary/30">
-                  <div className="flex items-start justify-between">
-                    <div className="grid h-9 w-9 place-items-center rounded-lg bg-primary/10 text-primary">
-                      <Icon className="h-4 w-4" aria-hidden="true" />
-                    </div>
-                    <Badge
-                      variant="outline"
-                      className={
-                        m.status === "Live"
-                          ? "border-success/30 bg-success/10 text-success"
-                          : m.status === "Beta"
-                            ? "border-secondary/30 bg-secondary/10 text-secondary"
-                            : "border-border text-muted-foreground"
-                      }
-                    >
-                      {m.status}
-                    </Badge>
-                  </div>
-                  <div className="mt-3 font-display text-sm font-semibold">{m.label}</div>
-                  <p className="mt-0.5 text-xs text-muted-foreground">{m.desc}</p>
-                </Card>
-              </motion.div>
-            );
-          })}
-        </div>
-      </div>
 
       {/* Recent activity — empty state */}
       <Card className="p-5">
@@ -481,20 +521,3 @@ function ComingSoonTab({ icon: Icon, title, body, feature }: ComingSoonTabProps)
   );
 }
 
-// ── Static module data ─────────────────────────────────────────────────
-
-const MODULES: Array<{
-  label: string;
-  desc: string;
-  icon: typeof Briefcase;
-  status: "Live" | "Beta" | "Soon";
-}> = [
-  { label: "Jobs", desc: "Publish and manage job listings.", icon: Briefcase, status: "Soon" },
-  { label: "Applicants", desc: "AI-scored pipeline view.", icon: Users, status: "Soon" },
-  { label: "AI Interview Studio", desc: "Structured AI interviews.", icon: Wand2, status: "Beta" },
-  { label: "OA Builder", desc: "Coding & MCQ assessments.", icon: ClipboardList, status: "Soon" },
-  { label: "Interview Templates", desc: "Battle-tested question sets.", icon: Layers, status: "Soon" },
-  { label: "Candidate Ranking", desc: "Explainable AI ranking.", icon: Star, status: "Beta" },
-  { label: "Analytics", desc: "Funnel & diversity metrics.", icon: LineChart, status: "Soon" },
-  { label: "Settings", desc: "Team roles, SSO & integrations.", icon: Settings2, status: "Soon" },
-];

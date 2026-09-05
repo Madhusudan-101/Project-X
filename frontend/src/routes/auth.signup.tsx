@@ -50,7 +50,7 @@ function SignupPage() {
         values.lastName,
       );
       toast.success(`Welcome, ${values.firstName}! Verify your email to continue.`);
-      navigate({ to: "/auth/otp", search: { role, email: values.email } });
+      navigate({ to: "/auth/otp", search: { role, email: values.email, purpose: "signup" } });
     } catch (err: any) {
       toast.error(err.message || "Could not create account");
     } finally {

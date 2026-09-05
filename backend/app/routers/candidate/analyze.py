@@ -82,6 +82,12 @@ class CombinedAnalysisResponse(BaseModel):
     warnings: List[str] = Field(default_factory=list)
 
 
+class SavedResumeAnalysisResponse(BaseModel):
+    """The candidate's most recent saved resume analysis, if any."""
+    resume_analysis: ResumeAnalysisResult
+    role_target: str
+
+
 async def _fetch_platforms_tolerant(
     github_username: Optional[str],
     leetcode_username: Optional[str],
@@ -252,6 +258,29 @@ async def analyze_user(
         analysis=analysis,
         formatted_metrics=formatted,
         warnings=warnings,
+    )
+
+
+@router.get(
+    "/analyze-resume/me",
+    response_model=Optional[SavedResumeAnalysisResponse],
+    summary="Fetch the current candidate's most recent saved resume analysis, if any",
+)
+async def get_my_resume_analysis(
+    current_user: dict = Depends(get_current_user),
+) -> Optional[SavedResumeAnalysisResponse]:
+    """
+    Returns the candidate's last saved analysis from the database, scoped
+    to their own account (never any other candidate's), so the frontend can
+    show it after a fresh login instead of relying on client-side cache —
+    returns null if this candidate has never analyzed a resume.
+    """
+    previous = load_previous_analysis(current_user["id"])
+    if previous is None:
+        return None
+    return SavedResumeAnalysisResponse(
+        resume_analysis=previous.result,
+        role_target=previous.role_target,
     )
 
 

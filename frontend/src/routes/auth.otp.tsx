@@ -6,11 +6,14 @@ import { ArrowLeft, Loader2 } from "lucide-react";
 import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp";
 import { Button } from "@/components/ui/button";
 import { authService } from "@/services/api/auth";
+import { useAuthStore } from "@/store/auth";
+import { dashboardPathForRole, onboardingPathForRole } from "@/lib/roles";
 import type { UserRole } from "@/types";
 
 const searchSchema = z.object({
   role: z.enum(["candidate", "company", "college", "admin"]).optional(),
   email: z.string().email().optional(),
+  purpose: z.enum(["signup", "reset"]).optional(),
 });
 
 export const Route = createFileRoute("/auth/otp")({
@@ -20,7 +23,7 @@ export const Route = createFileRoute("/auth/otp")({
 
 function OtpPage() {
   const navigate = useNavigate();
-  const { role, email } = Route.useSearch();
+  const { role, email, purpose } = Route.useSearch();
   const [code, setCode] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
@@ -31,9 +34,21 @@ function OtpPage() {
     }
     setSubmitting(true);
     try {
-      const res = await authService.verifyOtp(email ?? "", code);
+      const session = await authService.verifyOtp(email ?? "", code);
       toast.success("Verified");
-      navigate({ to: "/auth/reset-password", search: { role, token: res.token } });
+
+      if (purpose === "reset") {
+        navigate({ to: "/auth/reset-password", search: { role, token: session.token } });
+        return;
+      }
+
+      // Signup verification — log the user in and continue onboarding.
+      useAuthStore.getState().setSession(session);
+      if (!session.user.firstName || !session.user.onboarded) {
+        navigate({ to: onboardingPathForRole(session.user.role) });
+      } else {
+        navigate({ to: dashboardPathForRole(session.user.role) });
+      }
     } catch {
       toast.error("Invalid code");
     } finally {

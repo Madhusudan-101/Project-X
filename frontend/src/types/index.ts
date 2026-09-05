@@ -13,6 +13,11 @@ export interface User {
   onboarded?: boolean;
   /** Set for company users — the id of their public.companies row */
   companyId?: string;
+  /** Candidate onboarding fields (unused for company/college accounts) */
+  skills?: string[];
+  interestedRoles?: string[];
+  collegeName?: string;
+  graduationYear?: number;
 }
 
 export interface Session {

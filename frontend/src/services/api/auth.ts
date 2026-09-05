@@ -1,6 +1,7 @@
 import type { Session, User, UserRole } from "@/types";
 import { request } from "./client";
 import { useAuthStore } from "@/store/auth";
+import { useResumeAnalysisStore } from "@/store/candidate/resumeAnalysis";
 
 // Real backend calls — no mocks
 export const authService = {
@@ -37,7 +38,7 @@ export const authService = {
     request<{ ok: true }>("/auth/forgot", { method: "POST", body: { email } }),
 
   verifyOtp: (email: string, code: string) =>
-    request<{ ok: true }>("/auth/otp/verify", { method: "POST", body: { email, code } }),
+    request<Session>("/auth/otp/verify", { method: "POST", body: { email, code } }),
 
   resetPassword: (token: string, password: string) =>
     request<{ ok: true }>("/auth/reset", { method: "POST", body: { token, password } }),
@@ -48,5 +49,8 @@ export const authService = {
   logout: async () => {
     await request<{ ok: true }>("/auth/logout", { method: "POST" });
     useAuthStore.getState().logout();
+    // Account-scoped client caches must not survive a logout — otherwise
+    // the next login on this browser (any account) can see stale data.
+    useResumeAnalysisStore.getState().clear();
   },
 };

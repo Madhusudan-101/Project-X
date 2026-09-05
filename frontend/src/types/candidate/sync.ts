@@ -77,6 +77,11 @@ export interface CombinedAnalysisResponse {
   warnings: string[];
 }
 
+export interface SavedResumeAnalysisResponse {
+  resume_analysis: ResumeAnalysisResult;
+  role_target: string;
+}
+
 /** Tech-only target roles a candidate can pick before running the resume analyzer. */
 export const TECH_ROLES = [
   "Software Engineer (SWE / SDE)",

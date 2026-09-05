@@ -35,7 +35,7 @@ function ForgotPasswordPage() {
     try {
       await authService.forgotPassword(values.email);
       toast.success("Reset code sent — check your email.");
-      navigate({ to: "/auth/otp", search: { role, email: values.email } });
+      navigate({ to: "/auth/otp", search: { role, email: values.email, purpose: "reset" } });
     } catch {
       toast.error("Could not send reset email");
     } finally {

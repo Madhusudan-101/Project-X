@@ -1,5 +1,5 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Activity,
   ArrowUpRight,
@@ -58,7 +58,7 @@ import { peerService } from "@/services/api/candidate/peer";
 import { toast } from "sonner";
 import { PeerInterviewMatchModal } from "@/components/candidate/PeerInterviewMatchModal";
 import { usePeerInterviewStore } from "@/store/candidate/peerInterview";
-import { extractLeetCodeUsername } from "@/services/api/candidate/sync";
+import { extractLeetCodeUsername, syncService } from "@/services/api/candidate/sync";
 import { ApiClientError } from "@/services/api/client";
 import type { PracticeRecommendations } from "@/types/candidate/practice";
 
@@ -89,6 +89,31 @@ function CandidatePortal() {
   const session = useAuthStore((s) => s.session);
   const logout = useAuthStore((s) => s.logout);
   const clearResumeAnalysis = useResumeAnalysisStore((s) => s.clear);
+  const setResumeAnalysisResult = useResumeAnalysisStore((s) => s.setResult);
+
+  // Resume analysis is persisted client-side (localStorage) with no account
+  // scoping of its own, so a previous account's result could otherwise
+  // linger and show up under a different login on the same browser. Clear
+  // immediately on every account change, then hydrate from this account's
+  // own saved analysis in the database (never trust the stale local cache).
+  useEffect(() => {
+    if (!session?.user.id) return;
+    clearResumeAnalysis();
+    let cancelled = false;
+    syncService
+      .getMyResumeAnalysis()
+      .then((saved) => {
+        if (cancelled || !saved) return;
+        setResumeAnalysisResult(saved.resume_analysis, saved.role_target);
+      })
+      .catch(() => {
+        // Best-effort hydration — if it fails, the account simply shows no
+        // resume analysis yet instead of risking stale/wrong-account data.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [session?.user.id, clearResumeAnalysis, setResumeAnalysisResult]);
 
   const displayName = useMemo(() => {
     const u = session?.user;

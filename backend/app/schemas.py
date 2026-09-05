@@ -49,6 +49,11 @@ class UserOut(BaseModel):
     firstName: Optional[str] = None
     lastName: Optional[str] = None
     onboarded: bool = False
+    # Candidate onboarding fields (unused for company/college accounts)
+    skills: List[str] = Field(default_factory=list)
+    interestedRoles: List[str] = Field(default_factory=list)
+    collegeName: Optional[str] = None
+    graduationYear: Optional[int] = None
 
 
 class SessionOut(BaseModel):
@@ -82,6 +87,10 @@ class ProfileUpdateIn(BaseModel):
     firstName: Optional[str] = None
     lastName: Optional[str] = None
     onboarded: Optional[bool] = None
+    skills: Optional[List[str]] = None
+    interestedRoles: Optional[List[str]] = None
+    collegeName: Optional[str] = None
+    graduationYear: Optional[int] = None
 
 
 # ── College Portal payloads ───────────────────────────────────────────

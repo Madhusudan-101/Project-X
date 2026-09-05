@@ -10,7 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { authService } from "@/services/api/auth";
 import { useAuthStore } from "@/store/auth";
-import { dashboardPathForRole } from "@/lib/roles";
+import { dashboardPathForRole, onboardingPathForRole } from "@/lib/roles";
 import type { UserRole } from "@/types";
 
 const schema = z.object({
@@ -42,7 +42,7 @@ function LoginPage() {
       toast.success("Welcome back!");
       // First-time login (or missing name) → collect real name before dashboard
       if (!session.user.firstName || !session.user.onboarded) {
-        navigate({ to: "/auth/profile-setup" });
+        navigate({ to: onboardingPathForRole(session.user.role) });
       } else {
         navigate({ to: dashboardPathForRole(session.user.role) });
       }

@@ -4,7 +4,7 @@
  */
 
 import { request } from "../client";
-import type { CombinedAnalysisResponse } from "@/types/candidate/sync";
+import type { CombinedAnalysisResponse, SavedResumeAnalysisResponse } from "@/types/candidate/sync";
 
 // ── Username extraction helpers ──────────────────────────────────────
 
@@ -118,4 +118,13 @@ export const syncService = {
       },
     );
   },
+
+  /**
+   * Fetch the current candidate's most recent saved resume analysis from
+   * the database, scoped to their own account — used to hydrate the
+   * dashboard after login instead of trusting stale client-side cache.
+   * Returns null if this candidate has never analyzed a resume.
+   */
+  getMyResumeAnalysis: () =>
+    request<SavedResumeAnalysisResponse | null>("/api/v1/analyze-resume/me"),
 };
