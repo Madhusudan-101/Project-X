@@ -14,9 +14,16 @@ import { HiClipboard, HiClipboardDocumentCheck } from 'react-icons/hi2';
 import { MdPeopleOutline } from 'react-icons/md';
 import { useToast } from '../context/ToastContext.jsx';
 
-function WaitingScreen({ roomId }) {
+function WaitingScreen({ roomId, reconnecting = false }) {
   const [copied, setCopied] = useState(false);
   const { addToast } = useToast();
+
+  const heading = reconnecting
+    ? 'Waiting for your peer to rejoin…'
+    : 'Waiting for your interview partner…';
+  const subheading = reconnecting
+    ? 'Your peer stepped away. The interview clock is paused until they return.'
+    : 'Share the Room ID below so your peer can join. The interview clock will start the moment they do.';
 
   const handleCopy = useCallback(async () => {
     try {
@@ -39,7 +46,29 @@ function WaitingScreen({ roomId }) {
   }, [roomId, addToast]);
 
   return (
-    <div className="absolute inset-0 flex flex-col items-center justify-center glass-dark rounded-2xl animate-fade-in">
+    <div className="absolute inset-0 flex flex-col items-center justify-center glass-dark rounded-2xl overflow-hidden animate-fade-in">
+      {/* Subtle grid backdrop, faded toward the edges — matches the modal's
+          "signal room" aesthetic without extra libraries. */}
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-0 opacity-[0.18]"
+        style={{
+          backgroundImage:
+            'linear-gradient(rgba(148,163,184,0.35) 1px, transparent 1px), linear-gradient(90deg, rgba(148,163,184,0.35) 1px, transparent 1px)',
+          backgroundSize: '28px 28px',
+          maskImage:
+            'radial-gradient(120% 80% at 50% 40%, black, transparent 70%)',
+          WebkitMaskImage:
+            'radial-gradient(120% 80% at 50% 40%, black, transparent 70%)',
+        }}
+      />
+
+      {/* Status pill */}
+      <div className="relative mb-4 inline-flex items-center gap-1.5 rounded-full border border-violet-500/30 bg-violet-500/10 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-violet-200">
+        <span className="inline-block h-1.5 w-1.5 rounded-full bg-violet-400 animate-pulse" />
+        {reconnecting ? 'Peer left — waiting' : 'Room open'}
+      </div>
+
       {/* Animated icon */}
       <div className="relative mb-6">
         {/* Outer pulse rings */}
@@ -53,11 +82,11 @@ function WaitingScreen({ roomId }) {
       </div>
 
       {/* Text */}
-      <h2 className="text-xl font-semibold text-white mb-2">
-        Waiting for participant...
+      <h2 className="text-xl font-semibold text-white mb-2 text-center px-4">
+        {heading}
       </h2>
-      <p className="text-sm text-slate-400 mb-8 text-center px-4">
-        Share the meeting ID below for someone to join
+      <p className="text-sm text-slate-400 mb-8 text-center px-6 max-w-sm">
+        {subheading}
       </p>
 
       {/* Meeting ID card */}

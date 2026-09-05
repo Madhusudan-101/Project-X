@@ -226,9 +226,22 @@ function MeetingRoom() {
     destroyPeer,
   } = useWebRTC({ localStream, roomId, isInitiator });
 
-  // ── Meeting Timer (starts when connected) ──────────────────────────────────
+  // ── Meeting Timer ─────────────────────────────────────────────────────────
+  // Starts only when BOTH participants are in the room (server's user-joined/
+  // ready is the source of truth via `remoteJoined`) AND our own media is
+  // ready. Sitting alone in the room keeps the timer at 00:00.
+  // useMeetingTimer preserves elapsed across pause/resume, so a partner's
+  // transient drop + rejoin doesn't reset the clock.
   const isConnected = connectionStatus === ConnectionStatus.CONNECTED;
-  const { formatted: timerFormatted } = useMeetingTimer(isConnected);
+  const isMeetingLive = remoteJoined && Boolean(localStream);
+  const { formatted: timerFormatted } = useMeetingTimer(isMeetingLive);
+
+  // Track whether we have ever paired in this session, so the waiting-state
+  // copy can distinguish first-wait from rejoin-wait.
+  const [everPaired, setEverPaired] = useState(false);
+  useEffect(() => {
+    if (remoteJoined) setEverPaired(true);
+  }, [remoteJoined]);
 
   // ── Live Transcription ─────────────────────────────────────────
   const {
@@ -307,8 +320,17 @@ function MeetingRoom() {
       setCanTranscribe(true);
     };
 
-    const handleReady = () => {
+    const handleReady = ({ initiatorId } = {}) => {
       setCanTranscribe(true);
+      // `ready` is delivered when the server knows who our partner is —
+      // for a fresh second-participant join, this is the moment BOTH
+      // participants exist in the room, so it's the authoritative signal
+      // to start the meeting clock. Guarded on initiatorId so a lone
+      // reconnect (partner slot exists but is disconnected → initiatorId
+      // is null) does not falsely mark the peer as present.
+      if (initiatorId) {
+        setRemoteJoined(true);
+      }
     };
 
     const handleUserJoined = () => {
@@ -609,9 +631,11 @@ function MeetingRoom() {
                   className="w-full"
                 />
 
-                {/* Waiting overlay — shown until partner joins */}
-                {!remoteStream && connectionStatus === ConnectionStatus.WAITING && (
-                  <WaitingScreen roomId={roomId} />
+                {/* Waiting overlay — shown whenever the peer is not in the
+                    room (initial wait OR partner-left / rejoin wait). The
+                    meeting timer stays at 00:00 while this is visible. */}
+                {!remoteJoined && (
+                  <WaitingScreen roomId={roomId} reconnecting={everPaired} />
                 )}
 
                 {/* Disconnected overlay */}

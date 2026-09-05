@@ -14,7 +14,7 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { v4 as uuidv4 } from 'uuid';
-import { setAuthToken } from '../utils/authToken.js';
+import { setAuthToken, setIdentityPrivate } from '../utils/authToken.js';
 import {
   MdVideoCall,
   MdMeetingRoom,
@@ -46,19 +46,54 @@ function Home() {
   // Capture a dashboard-issued identity token from ?token=... into memory
   // and immediately strip it from the visible URL. Never persisted to
   // storage; PeerMeet still works fully anonymously if none is present.
+  //
+  // If the dashboard also passed `?room=<id>&init=1` (the auto-create
+  // handoff), navigate straight into that room as the initiator instead of
+  // showing the create/join tab UI. Falls back to Home otherwise, so
+  // opening PeerMeet directly still works exactly as before.
   useEffect(() => {
+    let autoRoom = null;
+    let autoInit = false;
     try {
       const url = new URL(window.location.href);
       const token = url.searchParams.get('token');
+      autoRoom = url.searchParams.get('room');
+      autoInit = url.searchParams.get('init') === '1';
+      const privateFlag = url.searchParams.get('private') === '1';
+      let touched = false;
       if (token) {
         setAuthToken(token);
         url.searchParams.delete('token');
+        touched = true;
+      }
+      if (autoRoom) {
+        url.searchParams.delete('room');
+        touched = true;
+      }
+      if (autoInit) {
+        url.searchParams.delete('init');
+        touched = true;
+      }
+      if (url.searchParams.has('private')) {
+        setIdentityPrivate(privateFlag);
+        url.searchParams.delete('private');
+        touched = true;
+      }
+      if (touched) {
         window.history.replaceState({}, '', url.pathname + url.search + url.hash);
       }
     } catch {
       // window.location may throw in unusual embeds — safe to ignore; PeerMeet
-      // simply proceeds anonymously.
+      // simply proceeds anonymously and stays on Home.
     }
+    if (autoRoom) {
+      // Reuse MeetingRoom's existing initiator flow (?init=true): it first
+      // tries join-room, and on room-not-found falls back to create-room —
+      // so this same navigate handles both "you're first" (auto-create) and
+      // "you're joining a peer" (auto-join) cases with no server changes.
+      navigate(`/room/${autoRoom}${autoInit ? '?init=true' : ''}`, { replace: true });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const [joinRoomId, setJoinRoomId] = useState('');

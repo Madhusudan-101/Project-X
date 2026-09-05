@@ -9,12 +9,14 @@ import {
   Briefcase,
   Building2,
   Code2,
+  Copy,
   Dna,
   FileText,
   Filter,
   Flame,
   Github,
   Loader2,
+  LogIn,
   LogOut,
   Play,
   Search,
@@ -24,6 +26,7 @@ import {
   TerminalSquare,
   Users,
   Video,
+  X as CloseIcon,
   Zap,
 } from "lucide-react";
 import {
@@ -52,6 +55,8 @@ import { computeDnaBreakdown, computeDnaScore, computeSkillDna } from "@/lib/ski
 import { practiceService } from "@/services/api/candidate/practice";
 import { peerService } from "@/services/api/candidate/peer";
 import { toast } from "sonner";
+import { PeerInterviewMatchModal } from "@/components/candidate/PeerInterviewMatchModal";
+import { usePeerInterviewStore } from "@/store/candidate/peerInterview";
 import { extractLeetCodeUsername } from "@/services/api/candidate/sync";
 import { ApiClientError } from "@/services/api/client";
 import type { PracticeRecommendations } from "@/types/candidate/practice";
@@ -205,6 +210,9 @@ function CandidatePortal() {
 
 function OverviewTab() {
   const session = useAuthStore((s) => s.session);
+  const [peerModalOpen, setPeerModalOpen] = useState(false);
+  const activePeerRoom = usePeerInterviewStore((s) => s.activeRoom);
+  const clearPeerRoom = usePeerInterviewStore((s) => s.clearActiveRoom);
   const firstName =
     session?.user?.firstName ?? session?.user?.name?.split(" ")[0] ?? "";
   const today = new Date().toLocaleDateString(undefined, {
@@ -250,31 +258,51 @@ function OverviewTab() {
           <SectionHeader title="Your workspace" hint="Small tools, one job each." />
           <div className="grid gap-3 sm:grid-cols-2">
             <ModuleCard icon={Brain} title="AI Interview" body="Adaptive mocks, honest feedback." status="Live" />
-            <ModuleCard
-              icon={Users}
-              title="Peer Interview"
-              body="Trade rounds with other candidates."
-              status="Live"
-              onClick={async () => {
-                const peermeetUrl = import.meta.env.VITE_PEERMEET_URL;
-                if (!peermeetUrl) {
-                  toast.error("Peer Interview is not configured. Set VITE_PEERMEET_URL.");
-                  return;
-                }
-                try {
-                  const { token } = await peerService.createSessionToken();
-                  window.open(
-                    `${peermeetUrl}/?token=${encodeURIComponent(token)}`,
-                    "_blank",
-                    "noopener,noreferrer",
-                  );
-                } catch (err) {
-                  toast.error(
-                    err instanceof Error ? err.message : "Could not start Peer Interview.",
-                  );
-                }
-              }}
-            />
+            {activePeerRoom ? (
+              <ActivePeerRoomCard
+                roomId={activePeerRoom.roomId}
+                onEnter={async () => {
+                  const peermeetUrl = import.meta.env.VITE_PEERMEET_URL as string | undefined;
+                  if (!peermeetUrl) {
+                    toast.error("Peer Interview is not configured. Set VITE_PEERMEET_URL.");
+                    return;
+                  }
+                  try {
+                    const { token } = await peerService.createSessionToken();
+                    const url = new URL("/", peermeetUrl);
+                    url.searchParams.set("token", token);
+                    url.searchParams.set("room", activePeerRoom.roomId);
+                    url.searchParams.set("init", "1");
+                    url.searchParams.set("private", activePeerRoom.keepPrivate ? "1" : "0");
+                    window.open(url.toString(), "_blank", "noopener,noreferrer");
+                  } catch (err) {
+                    toast.error(
+                      err instanceof Error ? err.message : "Could not open Peer Interview.",
+                    );
+                  }
+                }}
+                onCopy={async () => {
+                  try {
+                    await navigator.clipboard.writeText(activePeerRoom.roomId);
+                    toast.success("Room ID copied");
+                  } catch {
+                    toast.error("Could not copy — select the ID and copy manually.");
+                  }
+                }}
+                onEnd={() => {
+                  clearPeerRoom();
+                  toast.success("Peer Interview session cleared.");
+                }}
+              />
+            ) : (
+              <ModuleCard
+                icon={Users}
+                title="Peer Interview"
+                body="Trade rounds with other candidates."
+                status="Live"
+                onClick={() => setPeerModalOpen(true)}
+              />
+            )}
             <ModuleCard icon={Video} title="Expert Interview" body="Book seniors from real hiring loops." status="Beta" />
             <ModuleCard icon={FileText} title="Resume Analyzer" body="ATS score, gaps, rewrites for the role." status="Live" />
             <ModuleCard icon={TerminalSquare} title="LeetCode Practice" body="Company-wise DSA sets and timed rounds." status="Live" />
@@ -305,7 +333,60 @@ function OverviewTab() {
           </Card>
         </aside>
       </div>
+
+      <PeerInterviewMatchModal open={peerModalOpen} onOpenChange={setPeerModalOpen} />
     </div>
+  );
+}
+
+function ActivePeerRoomCard({
+  roomId,
+  onEnter,
+  onCopy,
+  onEnd,
+}: {
+  roomId: string;
+  onEnter: () => void;
+  onCopy: () => void;
+  onEnd: () => void;
+}) {
+  return (
+    <Card className="relative overflow-hidden border-primary/30 bg-gradient-to-br from-primary/5 via-surface to-surface p-4">
+      <div className="flex items-start justify-between">
+        <div className="grid h-10 w-10 place-items-center rounded-lg bg-primary/10 text-primary">
+          <Users className="h-5 w-5" />
+        </div>
+        <Badge variant="outline" className="border-success/40 bg-success/10 text-success">
+          <span className="mr-1.5 inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-success" />
+          Room ready
+        </Badge>
+      </div>
+      <div className="mt-3">
+        <div className="font-display text-sm font-semibold">Peer Interview</div>
+        <div className="mt-1 text-xs text-muted-foreground">
+          Share this room ID with your peer so they can join.
+        </div>
+      </div>
+      <div className="mt-3 flex items-center gap-2">
+        <code className="flex-1 truncate rounded bg-muted px-2 py-1 font-mono text-xs">{roomId}</code>
+        <Button size="sm" variant="outline" onClick={onCopy} aria-label="Copy room ID">
+          <Copy className="h-3.5 w-3.5" />
+        </Button>
+      </div>
+      <div className="mt-3 flex gap-2">
+        <Button
+          size="sm"
+          className="flex-1 bg-gradient-brand text-primary-foreground"
+          onClick={onEnter}
+        >
+          <LogIn className="mr-1.5 h-3.5 w-3.5" />
+          Enter interview
+        </Button>
+        <Button size="sm" variant="ghost" onClick={onEnd} aria-label="End session">
+          <CloseIcon className="h-3.5 w-3.5" />
+        </Button>
+      </div>
+    </Card>
   );
 }
 

@@ -8,6 +8,7 @@
  */
 
 let authToken = null;
+let identityPrivate = false;
 
 export function setAuthToken(token) {
   authToken = token || null;
@@ -19,4 +20,18 @@ export function getAuthToken() {
 
 export function clearAuthToken() {
   authToken = null;
+}
+
+/**
+ * Dashboard-controlled privacy preference: when true, PeerMeet UI should
+ * treat the peer's identity as "Anonymous Candidate" locally. Does NOT
+ * change the JWT/webhook contracts — the backend still receives the real
+ * student identity for persistence. In-memory only.
+ */
+export function setIdentityPrivate(value) {
+  identityPrivate = !!value;
+}
+
+export function getIdentityPrivate() {
+  return identityPrivate;
 }
