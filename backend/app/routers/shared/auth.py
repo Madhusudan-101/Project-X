@@ -19,8 +19,12 @@ from ...deps import supabase, get_current_user
 from ...schemas import (
     AuthIn, SignupIn, UserOut, SessionOut,
     ForgotIn, VerifyOtpIn, ResetIn, ProfileUpdateIn, RefreshIn,
+    CompanySignupIn,
 )
-from ...crud import upsert_profile, get_profile_by_id, update_profile
+from ...crud import (
+    upsert_profile, get_profile_by_id, update_profile, get_profile_by_email,
+    create_company,
+)
 
 log = logging.getLogger(__name__)
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -39,6 +43,20 @@ def map_profile(row: dict) -> dict:
         "lastName": row.get("last_name") or "",
         "onboarded": bool(row.get("onboarded", False)),
     }
+
+
+def _check_signup_conflict(email: str, role: str) -> None:
+    """Reject signup if this email is already registered under a different role."""
+    try:
+        existing = get_profile_by_email(email)
+    except APIError as e:
+        log.warning("Profile lookup by email failed for %s: %s", email, e)
+        return
+    if existing and existing.get("role") and existing["role"] != role:
+        raise HTTPException(
+            status_code=409,
+            detail=f"This email is already registered as a {existing['role']} account.",
+        )
 
 
 def _ensure_profile(user_id: str, email: str, role: str,
@@ -64,6 +82,8 @@ def _ensure_profile(user_id: str, email: str, role: str,
 def signup(payload: SignupIn):
     first = payload.resolved_first_name or ""
     last = payload.resolved_last_name or ""
+
+    _check_signup_conflict(payload.email, payload.role)
 
     try:
         res = supabase.auth.sign_up({
@@ -114,6 +134,75 @@ def signup(payload: SignupIn):
     }
 
 
+# ── POST /auth/company-signup ───────────────────────────────────────────
+
+@router.post("/company-signup")
+def company_signup(payload: CompanySignupIn):
+    """Atomic HR account + company registration. No institutional-email
+    restriction — any valid email is accepted for company accounts."""
+    _check_signup_conflict(payload.email, "company")
+
+    try:
+        res = supabase.auth.sign_up({
+            "email": payload.email,
+            "password": payload.password,
+            "options": {
+                "data": {
+                    "role": "company",
+                    "name": f"{payload.first_name} {payload.last_name}".strip(),
+                    "firstName": payload.first_name,
+                    "lastName": payload.last_name,
+                }
+            },
+        })
+    except AuthWeakPasswordError as e:
+        raise HTTPException(status_code=400, detail=e.message)
+    except AuthApiError as e:
+        raise HTTPException(status_code=400, detail=e.message)
+
+    user = res.user
+    if not user:
+        raise HTTPException(status_code=400, detail="Signup failed.")
+
+    session = res.session  # None when email-confirm is ON
+
+    try:
+        profile = upsert_profile(user.id, {
+            "email": payload.email,
+            "role": "company",
+            "name": f"{payload.first_name} {payload.last_name}".strip(),
+            "first_name": payload.first_name,
+            "last_name": payload.last_name,
+        })
+    except APIError as e:
+        log.warning("Profile upsert failed for %s: %s", user.id, e)
+        profile = None
+
+    company = None
+    try:
+        company = create_company(user.id, {
+            "name": payload.company_name,
+            "industry": payload.industry,
+            "size": payload.size,
+            "hiring_domains": payload.hiring_domains,
+        })
+    except APIError as e:
+        log.warning("Company creation failed for %s: %s", user.id, e)
+
+    return {
+        "user": map_profile(profile) if profile else {
+            "id": user.id, "email": payload.email, "role": "company",
+            "name": f"{payload.first_name} {payload.last_name}".strip(),
+            "firstName": payload.first_name, "lastName": payload.last_name,
+            "onboarded": False,
+        },
+        "token": session.access_token if session else "",
+        "refreshToken": session.refresh_token if session else "",
+        "expiresAt": str(session.expires_at) if session and session.expires_at else "",
+        "company": company,
+    }
+
+
 # ── POST /auth/login ──────────────────────────────────────────────────
 
 @router.post("/login", response_model=SessionOut)
@@ -142,6 +231,12 @@ def login(payload: AuthIn):
     except APIError as e:
         log.warning("Profile lookup/create failed for %s: %s", user.id, e)
         profile = None
+
+    if profile and profile.get("role") and profile["role"] != payload.role:
+        raise HTTPException(
+            status_code=403,
+            detail=f"This account is registered as a {profile['role']} account, not {payload.role}.",
+        )
 
     return {
         "user": map_profile(profile) if profile else {

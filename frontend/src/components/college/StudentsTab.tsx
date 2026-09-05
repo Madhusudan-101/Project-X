@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
+import { useListAnimation } from "@/hooks/use-list-animation";
 import {
   Download,
   MoreHorizontal,
@@ -54,6 +55,7 @@ import type { CsvUploadInvalidRow, Student } from "@/types/college/college";
 const PAGE_SIZE = 10;
 
 export function StudentsTab() {
+  const [tableRef] = useListAnimation<HTMLTableSectionElement>();
   const [students, setStudents] = useState<Student[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -183,7 +185,7 @@ export function StudentsTab() {
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
-            <TableBody>
+            <TableBody ref={tableRef}>
               {pageRows.map((s) => (
                 <TableRow key={s.id}>
                   <TableCell className="font-medium">{s.name}</TableCell>

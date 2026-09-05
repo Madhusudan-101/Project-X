@@ -9,7 +9,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { authService } from "@/services/api/auth";
-import { useAuthStore } from "@/store/auth";
 import type { UserRole } from "@/types";
 
 const schema = z
@@ -31,7 +30,6 @@ export const Route = createFileRoute("/auth/signup")({
 function SignupPage() {
   const navigate = useNavigate();
   const { role } = Route.useSearch() as { role?: UserRole };
-  const setSession = useAuthStore((s) => s.setSession);
   const [submitting, setSubmitting] = useState(false);
 
   const form = useForm<FormValues>({
@@ -43,7 +41,7 @@ function SignupPage() {
     setSubmitting(true);
     try {
       const fullName = `${values.firstName} ${values.lastName}`.trim();
-      const session = await authService.signup(
+      await authService.signup(
         values.email,
         values.password,
         role ?? "candidate",
@@ -51,7 +49,6 @@ function SignupPage() {
         values.firstName,
         values.lastName,
       );
-      setSession(session);
       toast.success(`Welcome, ${values.firstName}! Verify your email to continue.`);
       navigate({ to: "/auth/otp", search: { role, email: values.email } });
     } catch (err: any) {

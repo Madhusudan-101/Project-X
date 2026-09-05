@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
+import { useListAnimation } from "@/hooks/use-list-animation";
 import { CalendarCheck, MoreHorizontal, Pencil, Plus, Trash2, Users } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -42,6 +43,7 @@ import { drivesService } from "@/services/api/college/college";
 import type { Drive, DriveStatus, Student } from "@/types/college/college";
 
 export function DrivesTab() {
+  const [tableRef] = useListAnimation<HTMLTableSectionElement>();
   const [drives, setDrives] = useState<Drive[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -104,7 +106,7 @@ export function DrivesTab() {
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
-            <TableBody>
+            <TableBody ref={tableRef}>
               {drives.map((d) => (
                 <TableRow key={d.id}>
                   <TableCell className="font-medium">{d.companyName}</TableCell>
@@ -354,6 +356,7 @@ function CreateDriveDialog({ onCreated }: { onCreated: () => void }) {
 }
 
 function EligibleStudentsDialog({ drive, onClose }: { drive: Drive | null; onClose: () => void }) {
+  const [studentsTableRef] = useListAnimation<HTMLTableSectionElement>();
   const [students, setStudents] = useState<Student[] | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -400,7 +403,7 @@ function EligibleStudentsDialog({ drive, onClose }: { drive: Drive | null; onClo
                   <TableHead>Score</TableHead>
                 </TableRow>
               </TableHeader>
-              <TableBody>
+              <TableBody ref={studentsTableRef}>
                 {students.map((s) => (
                   <TableRow key={s.id}>
                     <TableCell className="font-medium">{s.name}</TableCell>

@@ -1,6 +1,8 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from typing import Optional, List, Union
 from datetime import date
+
+from .utils.email_rules import is_valid_email_format
 
 
 # ── Auth request payloads ──────────────────────────────────────────────
@@ -8,6 +10,13 @@ class AuthIn(BaseModel):
     email: str
     password: str
     role: str = "candidate"
+
+    @field_validator("email")
+    @classmethod
+    def _validate_email_format(cls, v: str) -> str:
+        if not is_valid_email_format(v):
+            raise ValueError("Enter a valid email address.")
+        return v
 
 
 class SignupIn(AuthIn):
@@ -108,3 +117,83 @@ class DepartmentUpdateIn(BaseModel):
     name: Optional[str] = None
     code: Optional[str] = None
     hodName: Optional[str] = None
+
+
+# ── Company Portal payloads ───────────────────────────────────────────
+
+class CompanySignupIn(BaseModel):
+    """Atomic HR account + company registration."""
+    email: str
+    password: str
+    first_name: str
+    last_name: str
+    company_name: str
+    industry: str
+    size: str
+    hiring_domains: List[str] = Field(default_factory=list)
+
+    @field_validator("email")
+    @classmethod
+    def _validate_email_format(cls, v: str) -> str:
+        if not is_valid_email_format(v):
+            raise ValueError("Enter a valid email address.")
+        return v
+
+
+class CompanyOut(BaseModel):
+    id: str
+    owner_id: str
+    name: str
+    industry: str
+    size: str
+    hiring_domains: List[str] = Field(default_factory=list)
+    website: Optional[str] = None
+    logo_url: Optional[str] = None
+    is_verified: bool = False
+    created_at: str
+
+
+class CompanyUpdateIn(BaseModel):
+    name: Optional[str] = None
+    industry: Optional[str] = None
+    size: Optional[str] = None
+    hiring_domains: Optional[List[str]] = None
+    website: Optional[str] = None
+    logo_url: Optional[str] = None
+
+
+# ── Job role payloads ──────────────────────────────────────────────────
+
+VALID_ROLE_STATUSES = ("draft", "published", "archived")
+
+
+class RoleCreateIn(BaseModel):
+    title: str
+    description: str
+    required_skills: List[str] = Field(default_factory=list)
+    experience_level: str
+    deadline: date
+    minimum_employability_score: int = 0
+
+
+class RoleUpdateIn(BaseModel):
+    title: Optional[str] = None
+    description: Optional[str] = None
+    required_skills: Optional[List[str]] = None
+    experience_level: Optional[str] = None
+    deadline: Optional[date] = None
+    minimum_employability_score: Optional[int] = None
+
+
+class RoleOut(BaseModel):
+    id: str
+    company_id: str
+    title: str
+    description: str
+    required_skills: List[str] = Field(default_factory=list)
+    experience_level: str
+    deadline: str
+    minimum_employability_score: int = 0
+    status: str
+    created_at: str
+    updated_at: str

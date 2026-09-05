@@ -13,13 +13,7 @@ logging.basicConfig(
 )
 from .routers.college import students, drives, dashboard, shortlist, departments
 from .routers.candidate import sync, analyze, practice, peer
-# NOTE: routers/company/{company,roles}.py exist but are NOT wired in here —
-# they depend on deps.require_company_role, crud helpers (get_company_by_owner_id,
-# create_role, etc.) and schemas (CompanyOut, RoleCreateIn, etc.) that were never
-# implemented, and no `companies`/`roles` tables exist in db/ migrations yet.
-# Importing them here would crash the app at startup. That's a separate feature
-# to scope and build (migrations + RLS + crud + schemas + the auth dependency),
-# not something to bundle into a folder reorg.
+from .routers.company import company, roles as company_roles
 
 app = FastAPI(title="Mirracle API")
 
@@ -51,6 +45,8 @@ app.include_router(analyze.router)
 app.include_router(practice.router)
 app.include_router(peer.router)
 app.include_router(peer_reports.router)
+app.include_router(company.router)
+app.include_router(company_roles.router)
 
 @app.get("/")
 def root():

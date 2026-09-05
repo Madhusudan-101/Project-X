@@ -9,11 +9,12 @@ from app.crud import upsert_profile
 
 def create_admin_user(email, password, name="Test User", role="candidate"):
     try:
-        # Create user via Supabase Auth Admin API (automatically confirms email)
+        # Create user via Supabase Auth Admin API. email_confirm is intentionally
+        # NOT set to True here — test users must verify via OTP like everyone
+        # else, otherwise this script is a standing bypass of email verification.
         res = supabase.auth.admin.create_user({
             "email": email,
             "password": password,
-            "email_confirm": True
         })
         user = res.user
         if not user:

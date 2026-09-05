@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
+import { useListAnimation } from "@/hooks/use-list-animation";
 import {
   Award,
   Building2,
@@ -53,6 +54,7 @@ import { departmentsService } from "@/services/api/college/college";
 import type { Department, DepartmentDetail, DepartmentInput } from "@/types/college/college";
 
 export function DepartmentsTab() {
+  const [tableRef] = useListAnimation<HTMLTableSectionElement>();
   const [departments, setDepartments] = useState<Department[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -118,7 +120,7 @@ export function DepartmentsTab() {
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
-            <TableBody>
+            <TableBody ref={tableRef}>
               {departments.map((d) => (
                 <TableRow key={d.id} className="cursor-pointer" onClick={() => setDetailFor(d)}>
                   <TableCell className="font-medium">{d.name}</TableCell>
@@ -367,6 +369,7 @@ function DepartmentDetailDialog({
   department: Department | null;
   onClose: () => void;
 }) {
+  const [detailTableRef] = useListAnimation<HTMLTableSectionElement>();
   const [detail, setDetail] = useState<DepartmentDetail | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -433,7 +436,7 @@ function DepartmentDetailDialog({
                       <TableHead>Score</TableHead>
                     </TableRow>
                   </TableHeader>
-                  <TableBody>
+                  <TableBody ref={detailTableRef}>
                     {detail.students.map((s) => (
                       <TableRow key={s.id}>
                         <TableCell className="font-medium">{s.name}</TableCell>

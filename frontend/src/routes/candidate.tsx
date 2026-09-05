@@ -49,6 +49,7 @@ import { Progress } from "@/components/ui/progress";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { useAuthStore } from "@/store/auth";
+import { useCandidateGuard } from "@/hooks/candidate/use-candidate-guard";
 import { useResumeAnalysisStore } from "@/store/candidate/resumeAnalysis";
 import { ProfileAnalyzerPanel, ScoreRing, verdictTone } from "@/components/candidate/ProfileSyncPanel";
 import { computeDnaBreakdown, computeDnaScore, computeSkillDna } from "@/lib/skillDna";
@@ -84,6 +85,7 @@ const companyTracks: {
 function CandidatePortal() {
   const [tab, setTab] = useState("overview");
   const navigate = useNavigate();
+  useCandidateGuard();
   const session = useAuthStore((s) => s.session);
   const logout = useAuthStore((s) => s.logout);
   const clearResumeAnalysis = useResumeAnalysisStore((s) => s.clear);

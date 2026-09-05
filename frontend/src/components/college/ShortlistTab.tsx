@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { toast } from "sonner";
+import { useListAnimation } from "@/hooks/use-list-animation";
 import { Download, ListFilter } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -26,6 +27,7 @@ import { downloadCsvBlob, shortlistService } from "@/services/api/college/colleg
 import type { ShortlistFilters, Student, VerificationStatus } from "@/types/college/college";
 
 export function ShortlistTab() {
+  const [tableRef] = useListAnimation<HTMLTableSectionElement>();
   const [branch, setBranch] = useState("");
   const [graduationYear, setGraduationYear] = useState("");
   const [minimumScore, setMinimumScore] = useState("");
@@ -185,7 +187,7 @@ export function ShortlistTab() {
                   <TableHead>Status</TableHead>
                 </TableRow>
               </TableHeader>
-              <TableBody>
+              <TableBody ref={tableRef}>
                 {results.map((s) => (
                   <TableRow key={s.id}>
                     <TableCell className="font-medium">{s.name}</TableCell>

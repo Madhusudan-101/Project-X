@@ -136,30 +136,30 @@ function CompanySignupPage() {
         hiringDomains,
       });
 
-      // Persist auth session
-      setSession({
-        user: {
-          id: result.user.id,
-          email: result.user.email,
-          name: result.user.name ?? `${values.firstName} ${values.lastName}`.trim(),
-          firstName: result.user.firstName ?? values.firstName,
-          lastName: result.user.lastName ?? values.lastName,
-          role: "company",
-          onboarded: result.user.onboarded,
-          companyId: result.company?.id,
-        },
-        token: result.token,
-        refreshToken: result.refreshToken,
-        expiresAt: result.expiresAt,
-      });
-
-      // Persist company profile
-      if (result.company) {
-        setCompany(result.company);
-      }
-
       if (result.token) {
-        // Email confirmation is disabled in Supabase → session is live immediately
+        // Email confirmation is disabled in Supabase → session is live immediately.
+        // Only persist a "logged in" session when a real token came back —
+        // an empty token means OTP verification is still pending.
+        setSession({
+          user: {
+            id: result.user.id,
+            email: result.user.email,
+            name: result.user.name ?? `${values.firstName} ${values.lastName}`.trim(),
+            firstName: result.user.firstName ?? values.firstName,
+            lastName: result.user.lastName ?? values.lastName,
+            role: "company",
+            onboarded: result.user.onboarded,
+            companyId: result.company?.id,
+          },
+          token: result.token,
+          refreshToken: result.refreshToken,
+          expiresAt: result.expiresAt,
+        });
+
+        if (result.company) {
+          setCompany(result.company);
+        }
+
         toast.success(`Welcome, ${values.firstName}! Let's set up your workspace.`);
         navigate({ to: "/auth/company-onboarding" });
       } else {

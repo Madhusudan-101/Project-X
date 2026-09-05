@@ -25,7 +25,11 @@ export const authService = {
       method: "POST",
       body: { email, password, role, name, first_name: firstName, last_name: lastName },
     });
-    useAuthStore.getState().setSession(session);
+    // Only persist a "logged in" session when a real token came back — an
+    // empty token means email verification is still pending (OTP required).
+    if (session.token) {
+      useAuthStore.getState().setSession(session);
+    }
     return session;
   },
 

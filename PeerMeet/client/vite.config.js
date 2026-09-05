@@ -15,6 +15,8 @@ export default defineConfig({
   ],
   server: {
     port: 5173,
+    // Allow access via ngrok tunnels for testing on other devices
+    allowedHosts: ['.ngrok-free.app'],
     // Proxy API calls to the backend in development
     proxy: {
       '/socket.io': {

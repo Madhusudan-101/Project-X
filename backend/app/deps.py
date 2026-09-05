@@ -88,3 +88,24 @@ def get_current_tpo(current_user: dict = Depends(get_current_user)) -> dict:
         raise HTTPException(status_code=403, detail="College account is not linked to a college")
 
     return {**current_user, "college_id": college_id, "profile_role": role}
+
+
+def require_company_role(current_user: dict = Depends(get_current_user)) -> dict:
+    """Load the caller's profile via the service client, assert Company portal user.
+
+    Mirrors get_current_tpo. Attaches `profile_role` to the returned dict.
+    """
+    try:
+        res = db_client.table("profiles").select(
+            "id, role"
+        ).eq("id", current_user["id"]).single().execute()
+    except APIError as e:
+        raise HTTPException(status_code=403, detail=f"Profile lookup failed: {e.message}")
+
+    row = res.data or {}
+    role = row.get("role")
+
+    if role != "company":
+        raise HTTPException(status_code=403, detail="Company role required")
+
+    return {**current_user, "profile_role": role}

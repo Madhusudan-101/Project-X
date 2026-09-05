@@ -16,6 +16,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { useCompanyGuard } from "@/hooks/company/use-company-guard";
+import { useListAnimation } from "@/hooks/use-list-animation";
 import { rolesService } from "@/services/api/company/roles";
 import { RoleFormDialog } from "@/components/company/roles/RoleFormDialog";
 import { RoleStatusBadge } from "@/components/company/roles/RoleStatusBadge";
@@ -38,6 +39,7 @@ type StatusFilter = "all" | RoleStatus;
 const ROLES_QUERY_KEY = ["company-roles"] as const;
 
 function RolesListingPage() {
+  const [tableRef] = useListAnimation<HTMLTableSectionElement>();
   const session = useCompanyGuard();
   const queryClient = useQueryClient();
 
@@ -197,7 +199,7 @@ function RolesListingPage() {
                   </TableHead>
                 </TableRow>
               </TableHeader>
-              <TableBody>
+              <TableBody ref={tableRef}>
                 {filteredRoles.map((role) => (
                   <TableRow key={role.id}>
                     <TableCell>

@@ -942,50 +942,56 @@ export function ProfileAnalyzerPanel() {
               </div>
 
               {linkedinResult.sections.length > 0 && (
-                <Accordion type="single" collapsible className="w-full">
+                <Accordion type="single" collapsible className="w-full space-y-2">
                   {linkedinResult.sections.map((s) => (
-                    <AccordionItem key={s.section} value={s.section}>
+                    <AccordionItem
+                      key={s.section}
+                      value={s.section}
+                      className="rounded-xl border border-border/60 bg-surface/30 px-4"
+                    >
                       <AccordionTrigger className="text-lg hover:no-underline">
-                        <div className="flex items-center gap-2.5">
-                          <Badge className={`${sectionRatingStyle[s.rating]} text-sm font-semibold px-2 py-0.5`}>
+                        <div className="flex items-center gap-3">
+                          <Badge className={`${sectionRatingStyle[s.rating]} w-24 shrink-0 justify-center text-sm font-semibold px-2 py-0.5`}>
                             {s.rating}
                           </Badge>
                           <span className="font-medium">{s.section}</span>
                         </div>
                       </AccordionTrigger>
-                      <AccordionContent className="space-y-4 text-lg">
-                        <div className="space-y-1">
+                      <AccordionContent className="pb-5 pt-1">
+                        <div className="grid gap-3 sm:grid-cols-3">
+                        <div className="rounded-xl border border-primary/20 bg-primary/5 p-4 space-y-2">
                           <h5 className="flex items-center gap-1.5 text-sm font-semibold uppercase tracking-wider text-muted-foreground">
-                            <FileText className="h-3 w-3" />
+                            <FileText className="h-3.5 w-3.5" />
                             Current Profile
                           </h5>
-                          <p className="text-foreground/90">{s.current_summary}</p>
+                          <p className="text-base leading-relaxed text-foreground/90">{s.current_summary}</p>
                         </div>
                         {s.gap_reason && (
-                          <div className="space-y-1">
+                          <div className="rounded-xl border border-primary/20 bg-primary/5 p-4 space-y-2">
                             <h5 className="flex items-center gap-1.5 text-sm font-semibold uppercase tracking-wider text-amber-500">
-                              <AlertCircle className="h-3 w-3" />
+                              <AlertCircle className="h-3.5 w-3.5" />
                               Gaps in Profile
                             </h5>
-                            <p className="text-foreground/90">{s.gap_reason}</p>
+                            <p className="text-base leading-relaxed text-foreground/90">{s.gap_reason}</p>
                           </div>
                         )}
                         {s.suggestions.length > 0 && (
-                          <div className="space-y-1.5">
+                          <div className="rounded-xl border border-primary/20 bg-primary/5 p-4 space-y-2">
                             <h5 className="flex items-center gap-1.5 text-sm font-semibold uppercase tracking-wider text-primary">
-                              <PenLine className="h-3 w-3" />
+                              <PenLine className="h-3.5 w-3.5" />
                               Improvement Suggestions
                             </h5>
-                            <ul className="space-y-1.5">
+                            <ul className="space-y-2">
                               {s.suggestions.map((sugg, i) => (
-                                <li key={i} className="flex items-start gap-2 text-foreground/90">
-                                  <span className="mt-2.5 h-1 w-1 shrink-0 rounded-full bg-primary" />
+                                <li key={i} className="flex items-start gap-2 text-base leading-relaxed text-foreground/90">
+                                  <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary" />
                                   <span>{sugg}</span>
                                 </li>
                               ))}
                             </ul>
                           </div>
                         )}
+                        </div>
                       </AccordionContent>
                     </AccordionItem>
                   ))}
