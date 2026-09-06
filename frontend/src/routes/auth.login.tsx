@@ -11,6 +11,7 @@ import { Label } from "@/components/ui/label";
 import { authService } from "@/services/api/auth";
 import { useAuthStore } from "@/store/auth";
 import { dashboardPathForRole, onboardingPathForRole } from "@/lib/roles";
+import { GoogleSignInButton } from "@/components/auth/GoogleSignInButton";
 import type { UserRole } from "@/types";
 
 const schema = z.object({
@@ -58,7 +59,17 @@ function LoginPage() {
       <h1 className="font-display text-3xl font-bold">Welcome back</h1>
       <p className="mt-2 text-sm text-muted-foreground">Sign in to continue to Mirracle.</p>
 
-      <form onSubmit={form.handleSubmit(onSubmit)} className="mt-8 space-y-4">
+      <div className="mt-6">
+        <GoogleSignInButton role={role ?? "candidate"} />
+      </div>
+
+      <div className="my-6 flex items-center gap-3">
+        <div className="h-px flex-1 bg-border/60" />
+        <span className="text-xs text-muted-foreground">or continue with email</span>
+        <div className="h-px flex-1 bg-border/60" />
+      </div>
+
+      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
         <div className="space-y-2">
           <Label htmlFor="email">Email</Label>
           <Input id="email" type="email" placeholder="you@work.com" {...form.register("email")} />

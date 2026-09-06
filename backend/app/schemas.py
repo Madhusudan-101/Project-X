@@ -67,6 +67,22 @@ class RefreshIn(BaseModel):
     refreshToken: str
 
 
+class OAuthSessionIn(BaseModel):
+    """Sent after the frontend completes a Supabase OAuth (Google) redirect —
+    accessToken/refreshToken/expiresAt are already-valid Supabase tokens from
+    that client-side flow, not re-derived here."""
+    accessToken: str
+    refreshToken: str = ""
+    expiresAt: str = ""
+    role: str = "candidate"
+
+
+class SetPasswordIn(BaseModel):
+    """One-time password set for accounts created via Google OAuth, which
+    never have a password at all — Google never shares it, by design."""
+    password: str
+
+
 # ── Misc payloads ─────────────────────────────────────────────────────
 class ForgotIn(BaseModel):
     email: str

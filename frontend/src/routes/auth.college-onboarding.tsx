@@ -29,6 +29,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useAuthStore } from "@/store/auth";
+import { authService } from "@/services/api/auth";
 
 // ── Constants ──────────────────────────────────────────────────────────
 
@@ -99,6 +100,7 @@ export const Route = createFileRoute("/auth/college-onboarding")({
 function CollegeOnboardingPage() {
   const navigate = useNavigate();
   const session = useAuthStore((s) => s.session);
+  const updateUser = useAuthStore((s) => s.updateUser);
   const [submitting, setSubmitting] = useState(false);
   const [step, setStep] = useState(0);
 
@@ -218,6 +220,12 @@ function CollegeOnboardingPage() {
     // which are wired yet, pending schema approval.
     setSubmitting(true);
     try {
+      // Mark onboarding complete so login doesn't send this account back
+      // here every time — profiles.onboarded is shared across all roles
+      // and already fully wired, independent of the college-specific
+      // fields above still being stubbed.
+      const updatedUser = await authService.updateProfile({ onboarded: true });
+      updateUser(updatedUser);
       toast.success("Workspace ready!");
       navigate({ to: "/college/placement-cycle" });
     } finally {

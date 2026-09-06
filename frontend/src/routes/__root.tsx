@@ -144,6 +144,12 @@ function RootShell({ children }: { children: ReactNode }) {
 function useSupabaseHashRedirect() {
   const navigate = useNavigate();
   useEffect(() => {
+    // /auth/oauth-callback (Google sign-in) already parses this same kind of
+    // hash itself via the Supabase JS client's own session detection —
+    // redirecting it to /auth/confirm would hijack that flow into a page
+    // that expects a GET /auth/profile endpoint which doesn't exist.
+    if (window.location.pathname === "/auth/oauth-callback") return;
+
     const hash = window.location.hash;
     if (
       hash &&

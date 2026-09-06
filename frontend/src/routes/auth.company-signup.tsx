@@ -139,7 +139,7 @@ function CompanySignupPage() {
       if (result.token) {
         // Email confirmation is disabled in Supabase → session is live immediately.
         // Only persist a "logged in" session when a real token came back —
-        // an empty token means OTP verification is still pending.
+        // an empty token means OTP verification is still pending (handled below).
         setSession({
           user: {
             id: result.user.id,
@@ -163,9 +163,13 @@ function CompanySignupPage() {
         toast.success(`Welcome, ${values.firstName}! Let's set up your workspace.`);
         navigate({ to: "/auth/company-onboarding" });
       } else {
-        // Email confirmation is enabled → user must verify first
-        toast.success("Account created! Check your email to verify and then sign in.");
-        navigate({ to: "/portals" });
+        // Email confirmation is enabled — route through the same OTP screen
+        // candidate/college signup already use, instead of dead-ending on /portals.
+        toast.success(`Welcome, ${values.firstName}! Verify your email to continue.`);
+        navigate({
+          to: "/auth/otp",
+          search: { role: "company", email: values.email, purpose: "signup" },
+        });
       }
     } catch (err: unknown) {
       const message =

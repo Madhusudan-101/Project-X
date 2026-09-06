@@ -2,6 +2,7 @@ import type { Session, User, UserRole } from "@/types";
 import { request } from "./client";
 import { useAuthStore } from "@/store/auth";
 import { useResumeAnalysisStore } from "@/store/candidate/resumeAnalysis";
+import { useCompanyStore } from "@/store/company/company";
 
 // Real backend calls — no mocks
 export const authService = {
@@ -34,6 +35,19 @@ export const authService = {
     return session;
   },
 
+  /** Exchange a Supabase OAuth (Google) session for an app session — creates
+   * the profiles row on first sign-in via the backend's self-heal logic. */
+  completeOAuthSession: (
+    accessToken: string,
+    refreshToken: string,
+    expiresAt: string,
+    role: UserRole,
+  ): Promise<Session> =>
+    request<Session>("/auth/oauth-session", {
+      method: "POST",
+      body: { accessToken, refreshToken, expiresAt, role },
+    }),
+
   forgotPassword: (email: string) =>
     request<{ ok: true }>("/auth/forgot", { method: "POST", body: { email } }),
 
@@ -42,6 +56,11 @@ export const authService = {
 
   resetPassword: (token: string, password: string) =>
     request<{ ok: true }>("/auth/reset", { method: "POST", body: { token, password } }),
+
+  /** One-time password set for accounts created via Google — they never
+   * have a password otherwise, since Google never shares it with us. */
+  setPassword: (password: string) =>
+    request<{ ok: true }>("/auth/set-password", { method: "POST", body: { password } }),
 
   updateProfile: (patch: Partial<User>) =>
     request<User>("/auth/profile", { method: "PATCH", body: patch }),
@@ -52,5 +71,6 @@ export const authService = {
     // Account-scoped client caches must not survive a logout — otherwise
     // the next login on this browser (any account) can see stale data.
     useResumeAnalysisStore.getState().clear();
+    useCompanyStore.getState().clearCompany();
   },
 };

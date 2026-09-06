@@ -28,9 +28,11 @@ import { Route as CollegeDrivesRouteImport } from './routes/college/drives'
 import { Route as CollegeDepartmentsRouteImport } from './routes/college/departments'
 import { Route as CollegeAnalyticsRouteImport } from './routes/college/analytics'
 import { Route as AuthSignupRouteImport } from './routes/auth.signup'
+import { Route as AuthSetPasswordRouteImport } from './routes/auth.set-password'
 import { Route as AuthResetPasswordRouteImport } from './routes/auth.reset-password'
 import { Route as AuthProfileSetupRouteImport } from './routes/auth.profile-setup'
 import { Route as AuthOtpRouteImport } from './routes/auth.otp'
+import { Route as AuthOauthCallbackRouteImport } from './routes/auth.oauth-callback'
 import { Route as AuthLoginRouteImport } from './routes/auth.login'
 import { Route as AuthForgotPasswordRouteImport } from './routes/auth.forgot-password'
 import { Route as AuthConfirmRouteImport } from './routes/auth.confirm'
@@ -133,6 +135,11 @@ const AuthSignupRoute = AuthSignupRouteImport.update({
   path: '/signup',
   getParentRoute: () => AuthRoute,
 } as any)
+const AuthSetPasswordRoute = AuthSetPasswordRouteImport.update({
+  id: '/set-password',
+  path: '/set-password',
+  getParentRoute: () => AuthRoute,
+} as any)
 const AuthResetPasswordRoute = AuthResetPasswordRouteImport.update({
   id: '/reset-password',
   path: '/reset-password',
@@ -146,6 +153,11 @@ const AuthProfileSetupRoute = AuthProfileSetupRouteImport.update({
 const AuthOtpRoute = AuthOtpRouteImport.update({
   id: '/otp',
   path: '/otp',
+  getParentRoute: () => AuthRoute,
+} as any)
+const AuthOauthCallbackRoute = AuthOauthCallbackRouteImport.update({
+  id: '/oauth-callback',
+  path: '/oauth-callback',
   getParentRoute: () => AuthRoute,
 } as any)
 const AuthLoginRoute = AuthLoginRouteImport.update({
@@ -194,9 +206,11 @@ export interface FileRoutesByFullPath {
   '/auth/confirm': typeof AuthConfirmRoute
   '/auth/forgot-password': typeof AuthForgotPasswordRoute
   '/auth/login': typeof AuthLoginRoute
+  '/auth/oauth-callback': typeof AuthOauthCallbackRoute
   '/auth/otp': typeof AuthOtpRoute
   '/auth/profile-setup': typeof AuthProfileSetupRoute
   '/auth/reset-password': typeof AuthResetPasswordRoute
+  '/auth/set-password': typeof AuthSetPasswordRoute
   '/auth/signup': typeof AuthSignupRoute
   '/college/analytics': typeof CollegeAnalyticsRoute
   '/college/departments': typeof CollegeDepartmentsRoute
@@ -223,9 +237,11 @@ export interface FileRoutesByTo {
   '/auth/confirm': typeof AuthConfirmRoute
   '/auth/forgot-password': typeof AuthForgotPasswordRoute
   '/auth/login': typeof AuthLoginRoute
+  '/auth/oauth-callback': typeof AuthOauthCallbackRoute
   '/auth/otp': typeof AuthOtpRoute
   '/auth/profile-setup': typeof AuthProfileSetupRoute
   '/auth/reset-password': typeof AuthResetPasswordRoute
+  '/auth/set-password': typeof AuthSetPasswordRoute
   '/auth/signup': typeof AuthSignupRoute
   '/college/analytics': typeof CollegeAnalyticsRoute
   '/college/departments': typeof CollegeDepartmentsRoute
@@ -254,9 +270,11 @@ export interface FileRoutesById {
   '/auth/confirm': typeof AuthConfirmRoute
   '/auth/forgot-password': typeof AuthForgotPasswordRoute
   '/auth/login': typeof AuthLoginRoute
+  '/auth/oauth-callback': typeof AuthOauthCallbackRoute
   '/auth/otp': typeof AuthOtpRoute
   '/auth/profile-setup': typeof AuthProfileSetupRoute
   '/auth/reset-password': typeof AuthResetPasswordRoute
+  '/auth/set-password': typeof AuthSetPasswordRoute
   '/auth/signup': typeof AuthSignupRoute
   '/college/analytics': typeof CollegeAnalyticsRoute
   '/college/departments': typeof CollegeDepartmentsRoute
@@ -286,9 +304,11 @@ export interface FileRouteTypes {
     | '/auth/confirm'
     | '/auth/forgot-password'
     | '/auth/login'
+    | '/auth/oauth-callback'
     | '/auth/otp'
     | '/auth/profile-setup'
     | '/auth/reset-password'
+    | '/auth/set-password'
     | '/auth/signup'
     | '/college/analytics'
     | '/college/departments'
@@ -315,9 +335,11 @@ export interface FileRouteTypes {
     | '/auth/confirm'
     | '/auth/forgot-password'
     | '/auth/login'
+    | '/auth/oauth-callback'
     | '/auth/otp'
     | '/auth/profile-setup'
     | '/auth/reset-password'
+    | '/auth/set-password'
     | '/auth/signup'
     | '/college/analytics'
     | '/college/departments'
@@ -345,9 +367,11 @@ export interface FileRouteTypes {
     | '/auth/confirm'
     | '/auth/forgot-password'
     | '/auth/login'
+    | '/auth/oauth-callback'
     | '/auth/otp'
     | '/auth/profile-setup'
     | '/auth/reset-password'
+    | '/auth/set-password'
     | '/auth/signup'
     | '/college/analytics'
     | '/college/departments'
@@ -509,6 +533,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthSignupRouteImport
       parentRoute: typeof AuthRoute
     }
+    '/auth/set-password': {
+      id: '/auth/set-password'
+      path: '/set-password'
+      fullPath: '/auth/set-password'
+      preLoaderRoute: typeof AuthSetPasswordRouteImport
+      parentRoute: typeof AuthRoute
+    }
     '/auth/reset-password': {
       id: '/auth/reset-password'
       path: '/reset-password'
@@ -528,6 +559,13 @@ declare module '@tanstack/react-router' {
       path: '/otp'
       fullPath: '/auth/otp'
       preLoaderRoute: typeof AuthOtpRouteImport
+      parentRoute: typeof AuthRoute
+    }
+    '/auth/oauth-callback': {
+      id: '/auth/oauth-callback'
+      path: '/oauth-callback'
+      fullPath: '/auth/oauth-callback'
+      preLoaderRoute: typeof AuthOauthCallbackRouteImport
       parentRoute: typeof AuthRoute
     }
     '/auth/login': {
@@ -582,9 +620,11 @@ interface AuthRouteChildren {
   AuthConfirmRoute: typeof AuthConfirmRoute
   AuthForgotPasswordRoute: typeof AuthForgotPasswordRoute
   AuthLoginRoute: typeof AuthLoginRoute
+  AuthOauthCallbackRoute: typeof AuthOauthCallbackRoute
   AuthOtpRoute: typeof AuthOtpRoute
   AuthProfileSetupRoute: typeof AuthProfileSetupRoute
   AuthResetPasswordRoute: typeof AuthResetPasswordRoute
+  AuthSetPasswordRoute: typeof AuthSetPasswordRoute
   AuthSignupRoute: typeof AuthSignupRoute
 }
 
@@ -595,9 +635,11 @@ const AuthRouteChildren: AuthRouteChildren = {
   AuthConfirmRoute: AuthConfirmRoute,
   AuthForgotPasswordRoute: AuthForgotPasswordRoute,
   AuthLoginRoute: AuthLoginRoute,
+  AuthOauthCallbackRoute: AuthOauthCallbackRoute,
   AuthOtpRoute: AuthOtpRoute,
   AuthProfileSetupRoute: AuthProfileSetupRoute,
   AuthResetPasswordRoute: AuthResetPasswordRoute,
+  AuthSetPasswordRoute: AuthSetPasswordRoute,
   AuthSignupRoute: AuthSignupRoute,
 }
 

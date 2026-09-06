@@ -19,7 +19,7 @@ from ...deps import supabase, get_current_user
 from ...schemas import (
     AuthIn, SignupIn, UserOut, SessionOut,
     ForgotIn, VerifyOtpIn, ResetIn, ProfileUpdateIn, RefreshIn,
-    CompanySignupIn,
+    CompanySignupIn, OAuthSessionIn, SetPasswordIn,
 )
 from ...crud import (
     upsert_profile, get_profile_by_id, update_profile, get_profile_by_email,
@@ -290,6 +290,63 @@ def refresh_session_route(payload: RefreshIn):
     }
 
 
+# ── POST /auth/oauth-session ────────────────────────────────────────────
+
+@router.post("/oauth-session", response_model=SessionOut)
+def oauth_session_route(payload: OAuthSessionIn):
+    """Complete a Google (or other Supabase OAuth provider) sign-in. The
+    frontend already has a valid Supabase session from its own client-side
+    OAuth redirect (Supabase JS handles that hop directly with Google) —
+    this verifies that token, creates the profiles row on first sign-in
+    (same self-heal as email/password), and returns the same SessionOut
+    shape used everywhere else in the app."""
+    try:
+        res = supabase.auth.get_user(payload.accessToken)
+    except AuthApiError as e:
+        raise HTTPException(status_code=401, detail=f"Invalid token: {e.message}")
+
+    if not res or not res.user:
+        raise HTTPException(status_code=401, detail="Invalid token")
+
+    user = res.user
+    if not user.email:
+        raise HTTPException(status_code=400, detail="Google account has no email.")
+
+    meta = user.user_metadata or {}
+    full_name = meta.get("full_name") or meta.get("name") or ""
+    name_parts = full_name.split(" ", 1)
+    first = name_parts[0] if name_parts else ""
+    last = name_parts[1] if len(name_parts) > 1 else ""
+
+    _check_signup_conflict(user.email, payload.role)
+
+    try:
+        profile = _ensure_profile(
+            user.id, email=user.email, role=payload.role,
+            name=full_name, first_name=first, last_name=last,
+        )
+    except APIError as e:
+        log.warning("Profile lookup/create failed for %s: %s", user.id, e)
+        profile = None
+
+    if profile and profile.get("role") and profile["role"] != payload.role:
+        raise HTTPException(
+            status_code=403,
+            detail=f"This account is registered as a {profile['role']} account, not {payload.role}.",
+        )
+
+    return {
+        "user": map_profile(profile) if profile else {
+            "id": user.id, "email": user.email, "role": payload.role,
+            "name": full_name, "firstName": first, "lastName": last,
+            "onboarded": False,
+        },
+        "token": payload.accessToken,
+        "refreshToken": payload.refreshToken,
+        "expiresAt": payload.expiresAt,
+    }
+
+
 # ── POST /auth/logout ─────────────────────────────────────────────────
 
 @router.post("/logout")
@@ -381,6 +438,35 @@ def reset_password(payload: ResetIn):
         raise HTTPException(status_code=400, detail=f"Password reset failed: {e}")
 
     return {"ok": True}
+
+
+# ── POST /auth/set-password ─────────────────────────────────────────────
+
+@router.post("/set-password")
+def set_password_route(
+    payload: SetPasswordIn,
+    current_user: dict = Depends(get_current_user),
+):
+    """One-time password set for the currently authenticated account —
+    used right after Google sign-in, since OAuth accounts never have a
+    password at all until this runs."""
+    try:
+        supabase.auth.admin.update_user_by_id(current_user["id"], {"password": payload.password})
+    except AuthWeakPasswordError as e:
+        raise HTTPException(status_code=400, detail=e.message)
+    except AuthApiError as e:
+        raise HTTPException(status_code=400, detail=e.message)
+    return {"ok": True}
+
+
+# ── GET /auth/profile ───────────────────────────────────────────────────
+
+@router.get("/profile", response_model=UserOut)
+def get_profile_route(current_user: dict = Depends(get_current_user)):
+    """Used by /auth/confirm (Supabase's legacy hash-based email-confirmation
+    redirect) to fetch the profile for a freshly-verified access token."""
+    profile = _ensure_profile(current_user["id"], email=current_user["email"], role=current_user.get("role", "candidate"))
+    return map_profile(profile)
 
 
 # ── PATCH /auth/profile ───────────────────────────────────────────────

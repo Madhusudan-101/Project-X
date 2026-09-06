@@ -71,12 +71,28 @@ function CompanyPortal() {
     }
   }, [session, navigate]);
 
+  // `company` is persisted to localStorage keyed by nothing but the browser —
+  // it can belong to a *different* account than the one now logged in. Only
+  // trust it as instant `initialData` when it actually matches this session's
+  // user; otherwise a stale company could otherwise be treated as "fresh" for
+  // the full staleTime window below and never get refetched at all. Also
+  // clear it outright on account change so nothing stale lingers on screen.
+  useEffect(() => {
+    if (session?.user.role === "company" && storedCompany?.ownerId !== session.user.id) {
+      clearCompany();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [session?.user.id]);
+
+  const trustedStoredCompany =
+    storedCompany && session && storedCompany.ownerId === session.user.id ? storedCompany : undefined;
+
   // ── Company profile (hydrate from store or fetch) ──────────────────
   const { data: company, isLoading: companyLoading } = useQuery<Company>({
-    queryKey: ["company", "me"],
+    queryKey: ["company", "me", session?.user.id],
     queryFn: () => companyService.getMe(),
     enabled: !!session && session.user.role === "company",
-    initialData: storedCompany ?? undefined,
+    initialData: trustedStoredCompany,
     staleTime: 5 * 60 * 1000, // 5 min
   });
 

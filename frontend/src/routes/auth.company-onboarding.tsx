@@ -30,6 +30,7 @@ import {
 import { useAuthStore } from "@/store/auth";
 import { useCompanyStore } from "@/store/company/company";
 import { companyService } from "@/services/api/company/company";
+import { authService } from "@/services/api/auth";
 
 // ── Constants ──────────────────────────────────────────────────────────
 
@@ -78,6 +79,7 @@ export const Route = createFileRoute("/auth/company-onboarding")({
 function CompanyOnboardingPage() {
   const navigate = useNavigate();
   const session = useAuthStore((s) => s.session);
+  const updateUser = useAuthStore((s) => s.updateUser);
   const company = useCompanyStore((s) => s.company);
   const setCompany = useCompanyStore((s) => s.setCompany);
   const [submitting, setSubmitting] = useState(false);
@@ -100,6 +102,30 @@ function CompanyOnboardingPage() {
       navigate({ to: "/portals" });
     }
   }, [session, navigate]);
+
+  // Hydrate the company preview card — the OTP-verify response (unlike
+  // signup's) doesn't include company data, so fetch it directly. Cleared
+  // immediately on every account change first (same fix as the resume-
+  // analysis leak) — `company` is persisted to localStorage, so without
+  // this a previous account's company could flash here before/instead of
+  // this account's own fetch completing.
+  useEffect(() => {
+    if (!session || session.user.role !== "company") return;
+    setCompany(null);
+    let cancelled = false;
+    companyService
+      .getMe()
+      .then((c) => {
+        if (!cancelled) setCompany(c);
+      })
+      .catch(() => {
+        // No company row yet (shouldn't normally happen post-signup) —
+        // leave the preview card hidden rather than showing an error here.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [session?.user.id, session?.user.role, setCompany]);
 
   useEffect(() => {
     return () => {
@@ -159,6 +185,12 @@ function CompanyOnboardingPage() {
         const updated = await companyService.updateMe(payload);
         setCompany(updated);
       }
+      // Mark onboarding complete so login doesn't send this account back
+      // here every time — profiles.onboarded is shared across all roles
+      // and already fully wired, independent of the company-specific
+      // fields above still being stubbed.
+      const updatedUser = await authService.updateProfile({ onboarded: true });
+      updateUser(updatedUser);
       toast.success("Workspace ready!");
       navigate({ to: "/company" });
     } catch (err: unknown) {
