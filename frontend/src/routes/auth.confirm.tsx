@@ -62,6 +62,11 @@ function AuthConfirmPage() {
     const expiresIn = params["expires_in"];
     const errorCode = params["error"];
     const errorDescription = params["error_description"];
+    // Supabase's password-recovery emails redirect here too, with
+    // type=recovery in the hash — this must NOT log the user straight into
+    // the dashboard with their old password untouched; it needs to route
+    // to actually setting a new one.
+    const linkType = params["type"];
 
     // Supabase may send an error in the fragment
     if (errorCode) {
@@ -93,6 +98,13 @@ function AuthConfirmPage() {
         });
 
         setStatus("success");
+
+        if (linkType === "recovery") {
+          toast.success("Verified! Choose a new password.");
+          setTimeout(() => navigate({ to: "/auth/set-password" }), 1200);
+          return;
+        }
+
         toast.success("Email confirmed! Welcome to Mirracle.");
 
         // Redirect to the correct portal based on role

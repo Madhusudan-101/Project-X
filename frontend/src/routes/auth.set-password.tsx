@@ -69,9 +69,8 @@ function SetPasswordPage() {
       </div>
       <h1 className="mt-4 font-display text-3xl font-bold">Set a password</h1>
       <p className="mt-2 text-sm text-muted-foreground">
-        You signed up with Google, so there's no password on this account yet. Set one now so you
-        can also sign in with your email — this is separate from your Google password, which we
-        never see.
+        Choose a password for this account. If you signed up with Google, this is what lets you
+        also sign in with your email — separate from your Google password, which we never see.
       </p>
 
       <form onSubmit={form.handleSubmit(onSubmit)} className="mt-8 space-y-4">
