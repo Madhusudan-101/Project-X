@@ -10,10 +10,12 @@ import { useAuthStore } from "@/store/auth";
 import { dashboardPathForRole, onboardingPathForRole } from "@/lib/roles";
 import type { UserRole } from "@/types";
 
+// Signup-only. Password recovery is a link-based flow (/auth/forgot → email
+// link → /auth/confirm → /auth/reset-password) and never reaches this screen.
 const searchSchema = z.object({
   role: z.enum(["candidate", "company", "college", "admin"]).optional(),
   email: z.string().email().optional(),
-  purpose: z.enum(["signup", "reset"]).optional(),
+  purpose: z.literal("signup").optional(),
 });
 
 export const Route = createFileRoute("/auth/otp")({
@@ -23,9 +25,26 @@ export const Route = createFileRoute("/auth/otp")({
 
 function OtpPage() {
   const navigate = useNavigate();
-  const { role, email, purpose } = Route.useSearch();
+  const { role, email } = Route.useSearch();
   const [code, setCode] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [resending, setResending] = useState(false);
+
+  const resend = async () => {
+    if (!email) {
+      toast.error("Missing email — go back and start again.");
+      return;
+    }
+    setResending(true);
+    try {
+      await authService.resendOtp(email);
+      toast.success("New code sent — check your email.");
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : "Could not resend the code.");
+    } finally {
+      setResending(false);
+    }
+  };
 
   const verify = async () => {
     if (code.length !== 6) {
@@ -36,11 +55,6 @@ function OtpPage() {
     try {
       const session = await authService.verifyOtp(email ?? "", code);
       toast.success("Verified");
-
-      if (purpose === "reset") {
-        navigate({ to: "/auth/reset-password", search: { role, token: session.token } });
-        return;
-      }
 
       // Signup verification — log the user in and continue onboarding.
       useAuthStore.getState().setSession(session);
@@ -67,7 +81,8 @@ function OtpPage() {
       </Link>
       <h1 className="mt-4 font-display text-3xl font-bold">Verify your email</h1>
       <p className="mt-2 text-sm text-muted-foreground">
-        Enter the 6-digit code sent to <span className="font-medium text-foreground">{email ?? "your email"}</span>.
+        Enter the 6-digit code sent to{" "}
+        <span className="font-medium text-foreground">{email ?? "your email"}</span>.
       </p>
 
       <div className="mt-8 flex justify-center">
@@ -91,8 +106,13 @@ function OtpPage() {
 
       <p className="mt-6 text-center text-sm text-muted-foreground">
         Didn't get the code?{" "}
-        <button type="button" onClick={() => toast.info("Code resent")} className="font-medium text-primary hover:underline">
-          Resend
+        <button
+          type="button"
+          onClick={resend}
+          disabled={resending}
+          className="font-medium text-primary hover:underline disabled:opacity-60"
+        >
+          {resending ? "Resending…" : "Resend"}
         </button>
       </p>
     </div>

@@ -42,8 +42,7 @@ function AuthConfirmPage() {
     // Hash may come from:
     // 1. window.location.hash — when Supabase redirected directly to /auth/confirm
     // 2. The TanStack Router 'hash' param — when root intercepted / and redirected here
-    const rawHash =
-      window.location.hash || window.location.search;
+    const rawHash = window.location.hash || window.location.search;
 
     // Build a reliable fragment string from the URL
     // TanStack puts the hash value after the # in the actual URL, so window.location.hash works
@@ -100,8 +99,20 @@ function AuthConfirmPage() {
         setStatus("success");
 
         if (linkType === "recovery") {
+          // Password-recovery emails send a link (not a 6-digit code), so this
+          // is the ONLY reachable reset path. Hand the verified access token to
+          // the reset screen, which posts it to the (signature-checked)
+          // POST /auth/reset. This must never fall through to the dashboard
+          // with the old password still in place.
           toast.success("Verified! Choose a new password.");
-          setTimeout(() => navigate({ to: "/auth/set-password" }), 1200);
+          setTimeout(
+            () =>
+              navigate({
+                to: "/auth/reset-password",
+                search: { role: user.role, token: accessToken },
+              }),
+            1200,
+          );
           return;
         }
 
@@ -127,7 +138,7 @@ function AuthConfirmPage() {
         setErrorMsg(msg);
         toast.error(msg);
       });
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   return (
@@ -151,9 +162,7 @@ function AuthConfirmPage() {
               <CheckCircle2 className="h-8 w-8 text-success" />
             </div>
             <h1 className="mt-5 font-display text-2xl font-bold">Email confirmed!</h1>
-            <p className="mt-2 text-sm text-muted-foreground">
-              Redirecting you to your dashboard…
-            </p>
+            <p className="mt-2 text-sm text-muted-foreground">Redirecting you to your dashboard…</p>
           </>
         )}
 
@@ -165,7 +174,7 @@ function AuthConfirmPage() {
             <h1 className="mt-5 font-display text-2xl font-bold">Confirmation failed</h1>
             <p className="mt-2 text-sm text-muted-foreground">{errorMsg}</p>
             <button
-              onClick={() => navigate({ to: "/auth/login" })}
+              onClick={() => navigate({ to: "/portals" })}
               className="mt-6 inline-flex items-center justify-center rounded-lg bg-gradient-brand px-5 py-2.5 text-sm font-semibold text-primary-foreground shadow-soft transition-transform hover:-translate-y-0.5"
             >
               Go to Login

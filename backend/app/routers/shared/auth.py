@@ -7,15 +7,14 @@ Conventions
 * `map_profile` converts DB row → frontend-friendly dict.
 """
 
-import base64
-import json
 import logging
+import time
 
 from fastapi import APIRouter, HTTPException, Depends
 from supabase_auth.errors import AuthApiError, AuthWeakPasswordError
 from postgrest.exceptions import APIError
 
-from ...deps import supabase, get_current_user
+from ...deps import supabase, admin_client, get_current_user
 from ...schemas import (
     AuthIn, SignupIn, UserOut, SessionOut,
     ForgotIn, VerifyOtpIn, ResetIn, ProfileUpdateIn, RefreshIn,
@@ -23,7 +22,7 @@ from ...schemas import (
 )
 from ...crud import (
     upsert_profile, get_profile_by_id, update_profile, get_profile_by_email,
-    create_company,
+    create_company, get_company_by_owner_id,
 )
 
 log = logging.getLogger(__name__)
@@ -78,6 +77,30 @@ def _ensure_profile(user_id: str, email: str, role: str,
         "first_name": first_name,
         "last_name": last_name,
     }) or {}
+
+
+def _set_password_with_retry(user_id: str, password: str) -> None:
+    """Set a user's password via the service-role admin API.
+
+    Uses `admin_client` (never `supabase`/`auth_client`): the shared auth
+    client's `Authorization` header gets rewritten to the last signed-in
+    user's JWT by supabase-py's auth-state listener, which made
+    admin.update_user_by_id intermittently return 403 "User not allowed"
+    depending on which request touched the client last. `admin_client` is
+    only ever used for admin calls, so its header stays the service-role key.
+
+    The short retry is kept only for genuinely transient upstream 5xx/network
+    blips; a real permanent failure (weak password, bad user id) fails
+    identically every attempt and still raises after the last one."""
+    delays = [1, 2, 4]
+    for i, delay in enumerate(delays):
+        try:
+            admin_client.auth.admin.update_user_by_id(user_id, {"password": password})
+            return
+        except AuthApiError:
+            if i == len(delays) - 1:
+                raise
+            time.sleep(delay)
 
 
 # ── POST /auth/signup ──────────────────────────────────────────────────
@@ -182,16 +205,35 @@ def company_signup(payload: CompanySignupIn):
         log.warning("Profile upsert failed for %s: %s", user.id, e)
         profile = None
 
-    company = None
-    try:
-        company = create_company(user.id, {
+    # The company row is not optional — an HR account with no company is
+    # unusable and there is no other code path that can create one later
+    # (name/industry/size are only ever collected here). So this is a hard
+    # failure, with a short retry for the same transient APIError flakiness
+    # `_set_password_with_retry` already guards against, and a reconcile read
+    # in case an earlier attempt actually landed despite raising.
+    company = get_company_by_owner_id(user.id)
+    if company is None:
+        company_payload = {
             "name": payload.company_name,
             "industry": payload.industry,
             "size": payload.size,
             "hiring_domains": payload.hiring_domains,
-        })
-    except APIError as e:
-        log.warning("Company creation failed for %s: %s", user.id, e)
+        }
+        for i, delay in enumerate((1, 2, 4)):
+            try:
+                company = create_company(user.id, company_payload)
+                break
+            except APIError as e:
+                log.warning("Company creation attempt %d failed for %s: %s", i + 1, user.id, e)
+                time.sleep(delay)
+        if company is None:
+            company = get_company_by_owner_id(user.id)
+    if company is None:
+        raise HTTPException(
+            status_code=502,
+            detail="Your account was created but company setup failed. "
+                   "Please sign in and try again, or contact support.",
+        )
 
     return {
         "user": map_profile(profile) if profile else {
@@ -369,8 +411,15 @@ def forgot_password(payload: ForgotIn):
 
 @router.post("/otp/verify", response_model=SessionOut)
 def verify_otp(payload: VerifyOtpIn):
+    # This endpoint only ever verifies signup confirmation codes — password
+    # recovery is a link-based flow (see /auth/forgot) and never lands here.
+    # Depending on the project's "Confirm email" template, Supabase classifies
+    # the first email as type "signup" or "email", so both are tried; "recovery"
+    # is deliberately NOT tried, so a stray recovery code can't be silently
+    # consumed here and a bad signup code fails cleanly.
     res = None
-    for otp_type in ("signup", "recovery", "email"):
+    last_error: Exception | None = None
+    for otp_type in ("signup", "email"):
         try:
             res = supabase.auth.verify_otp({
                 "email": payload.email,
@@ -378,12 +427,12 @@ def verify_otp(payload: VerifyOtpIn):
                 "type": otp_type,
             })
             break  # first success wins
-        except AuthApiError:
-            continue
-        except Exception:
+        except Exception as e:
+            last_error = e
             continue
 
     if res is None:
+        log.info("OTP verify failed for %s: %s", payload.email, last_error)
         raise HTTPException(status_code=400, detail="Invalid or expired code.")
 
     session = res.session
@@ -414,24 +463,37 @@ def verify_otp(payload: VerifyOtpIn):
     }
 
 
+# ── POST /auth/otp/resend ─────────────────────────────────────────────
+
+@router.post("/otp/resend")
+def resend_otp(payload: ForgotIn):
+    """Re-send the signup confirmation code. (Password-reset codes are
+    re-sent by calling /auth/forgot again.)"""
+    try:
+        supabase.auth.resend({"type": "signup", "email": payload.email})
+    except AuthApiError as e:
+        raise HTTPException(status_code=400, detail=e.message)
+    return {"ok": True}
+
+
 # ── POST /auth/reset ──────────────────────────────────────────────────
 
 @router.post("/reset")
 def reset_password(payload: ResetIn):
+    # Verify the recovery token the same way get_current_user does — a real
+    # signature/expiry check against Supabase. The old code just decoded the
+    # JWT payload segment for `sub` without verifying anything, so any
+    # JWT-shaped string with a `sub` claim could reset any account's password.
     try:
-        parts = payload.token.split(".")
-        if len(parts) != 3:
-            raise ValueError("Not a JWT")
-        pad = parts[1] + "=" * ((4 - len(parts[1]) % 4) % 4)
-        data = json.loads(base64.b64decode(pad))
-        user_id = data.get("sub")
-        if not user_id:
-            raise ValueError("No sub claim")
-    except Exception:
-        raise HTTPException(status_code=400, detail="Invalid reset token.")
+        res = supabase.auth.get_user(payload.token)
+    except AuthApiError as e:
+        raise HTTPException(status_code=400, detail=f"Invalid reset token: {e.message}")
+    if not res or not res.user:
+        raise HTTPException(status_code=400, detail="Invalid or expired reset token.")
+    user_id = res.user.id
 
     try:
-        supabase.auth.admin.update_user_by_id(user_id, {"password": payload.password})
+        _set_password_with_retry(user_id, payload.password)
     except AuthApiError as e:
         raise HTTPException(status_code=400, detail=e.message)
     except Exception as e:
@@ -451,7 +513,7 @@ def set_password_route(
     used right after Google sign-in, since OAuth accounts never have a
     password at all until this runs."""
     try:
-        supabase.auth.admin.update_user_by_id(current_user["id"], {"password": payload.password})
+        _set_password_with_retry(current_user["id"], payload.password)
     except AuthWeakPasswordError as e:
         raise HTTPException(status_code=400, detail=e.message)
     except AuthApiError as e:

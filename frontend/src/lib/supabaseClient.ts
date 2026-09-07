@@ -23,6 +23,20 @@ export function getSupabase(): SupabaseClient {
     );
   }
 
-  client = createClient(supabaseUrl ?? "", supabaseAnonKey ?? "");
+  client = createClient(supabaseUrl ?? "", supabaseAnonKey ?? "", {
+    auth: {
+      // This client only ever completes the one-time OAuth redirect
+      // handshake (signInWithOAuth + a single getSession() read right
+      // after). From then on, the app's own backend/store (mirracle.auth,
+      // POST /auth/refresh) owns session lifecycle exclusively — if this
+      // client were also allowed to persist its own session and
+      // auto-refresh in the background, it would silently rotate the same
+      // (single-use) refresh token behind the app's back, invalidating
+      // whichever copy the app itself tries to use next.
+      autoRefreshToken: false,
+      persistSession: false,
+      detectSessionInUrl: true,
+    },
+  });
   return client;
 }

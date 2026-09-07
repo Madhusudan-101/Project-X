@@ -9,6 +9,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { authService } from "@/services/api/auth";
+import { useAuthStore } from "@/store/auth";
+import { dashboardPathForRole, onboardingPathForRole } from "@/lib/roles";
 import { GoogleSignInButton } from "@/components/auth/GoogleSignInButton";
 import type { UserRole } from "@/types";
 
@@ -42,7 +44,7 @@ function SignupPage() {
     setSubmitting(true);
     try {
       const fullName = `${values.firstName} ${values.lastName}`.trim();
-      await authService.signup(
+      const session = await authService.signup(
         values.email,
         values.password,
         role ?? "candidate",
@@ -50,6 +52,22 @@ function SignupPage() {
         values.firstName,
         values.lastName,
       );
+
+      // Email confirmation OFF → /auth/signup already returned a full session
+      // (authService.signup has called setSession). Go straight in, exactly
+      // like the login page — don't ask for an OTP that was never sent.
+      if (session.token) {
+        useAuthStore.getState().setSession(session);
+        toast.success(`Welcome, ${values.firstName}!`);
+        if (!session.user.firstName || !session.user.onboarded) {
+          navigate({ to: onboardingPathForRole(session.user.role) });
+        } else {
+          navigate({ to: dashboardPathForRole(session.user.role) });
+        }
+        return;
+      }
+
+      // Email confirmation ON → no session yet; verify via the OTP screen.
       toast.success(`Welcome, ${values.firstName}! Verify your email to continue.`);
       navigate({ to: "/auth/otp", search: { role, email: values.email, purpose: "signup" } });
     } catch (err: any) {
@@ -127,7 +145,11 @@ function SignupPage() {
 
       <p className="mt-6 text-center text-sm text-muted-foreground">
         Already have an account?{" "}
-        <Link to="/auth/login" search={{ role }} className="font-medium text-primary hover:underline">
+        <Link
+          to="/auth/login"
+          search={{ role }}
+          className="font-medium text-primary hover:underline"
+        >
           Sign in
         </Link>
       </p>

@@ -46,12 +46,22 @@ function SetPasswordPage() {
     if (!session) return;
     setSubmitting(true);
     try {
+      const email = session.user.email;
+      const role = session.user.role;
       await authService.setPassword(values.password);
-      toast.success("Password set! You can now also sign in with email + password.");
-      if (!session.user.firstName || !session.user.onboarded) {
-        navigate({ to: onboardingPathForRole(session.user.role) });
+
+      // Immediately trade the OAuth-derived session for a fresh one via a
+      // real login. The Google OAuth token pair has turned out to be
+      // unreliable past this point (its refresh token intermittently gets
+      // rejected by Supabase within moments of being issued) — a password
+      // login is the one path that's proven to reliably issue a good
+      // session, so use it rather than continuing to trust the OAuth one.
+      const freshSession = await authService.login(email, values.password, role);
+      toast.success("Password set!");
+      if (!freshSession.user.firstName || !freshSession.user.onboarded) {
+        navigate({ to: onboardingPathForRole(freshSession.user.role) });
       } else {
-        navigate({ to: dashboardPathForRole(session.user.role) });
+        navigate({ to: dashboardPathForRole(freshSession.user.role) });
       }
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : "Could not set password");

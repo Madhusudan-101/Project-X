@@ -2,7 +2,7 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { Loader2, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -52,6 +52,16 @@ function ProfileSetupPage() {
   const updateUser = useAuthStore((s) => s.updateUser);
   const isCandidate = (session?.user.role ?? "candidate") === "candidate";
   const [submitting, setSubmitting] = useState(false);
+
+  // This page had no session guard at all — without one, a page reload
+  // with an expired/cleared session (URL still pointing here) silently
+  // renders the whole form, lets you fill everything in, and only fails
+  // once you submit. Same guard pattern as company/college onboarding.
+  useEffect(() => {
+    if (!session) {
+      navigate({ to: "/auth/login" });
+    }
+  }, [session, navigate]);
 
   // Kept outside react-hook-form, same pattern as the company-signup tag input —
   // both resolve to a single value/list, not a set of independent field errors.
@@ -111,6 +121,8 @@ function ProfileSetupPage() {
       setSubmitting(false);
     }
   };
+
+  if (!session) return null;
 
   return (
     <div>

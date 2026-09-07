@@ -59,6 +59,20 @@ def update_company(owner_id: str, payload: Dict[str, Any]) -> Optional[Dict[str,
     return res.data[0] if res.data else None
 
 
+def upsert_company(owner_id: str, payload: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    """Insert or update a company row keyed by owner_id (unique). Used by
+    company onboarding, which is the single create-point for accounts that
+    signed up via Google/generic signup rather than the atomic
+    /auth/company-signup form. Inserts require name + industry + size
+    (all NOT NULL)."""
+    res = (
+        db_client.table("companies")
+        .upsert({"owner_id": owner_id, **payload}, on_conflict="owner_id")
+        .execute()
+    )
+    return res.data[0] if res.data else None
+
+
 # ── Job roles ────────────────────────────────────────────────────────────
 
 def create_role(company_id: str, payload: Dict[str, Any]) -> Optional[Dict[str, Any]]:

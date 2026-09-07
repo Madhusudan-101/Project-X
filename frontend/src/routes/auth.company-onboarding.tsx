@@ -31,6 +31,7 @@ import { useAuthStore } from "@/store/auth";
 import { useCompanyStore } from "@/store/company/company";
 import { companyService } from "@/services/api/company/company";
 import { authService } from "@/services/api/auth";
+import { INDUSTRIES, COMPANY_SIZES } from "@/types/company/company";
 
 // ── Constants ──────────────────────────────────────────────────────────
 
@@ -47,6 +48,9 @@ const STEPS = ["Company details", "Point of contact", "Legal & consent"] as cons
 // ── Validation ─────────────────────────────────────────────────────────
 
 const schema = z.object({
+  companyName: z.string().trim().min(2, "Enter your company name").max(120),
+  industry: z.string().min(1, "Select an industry"),
+  size: z.string().min(1, "Select company size"),
   website: z
     .string()
     .trim()
@@ -142,6 +146,9 @@ function CompanyOnboardingPage() {
   const form = useForm<FormValues>({
     resolver: zodResolver(schema),
     defaultValues: {
+      companyName: "",
+      industry: "",
+      size: "",
       website: "",
       designation: "",
       customDesignation: "",
@@ -152,11 +159,22 @@ function CompanyOnboardingPage() {
     },
   });
 
+  // Prefill the identity fields from an existing company row (accounts that
+  // came through the atomic /auth/company-signup form already have one); for
+  // Google / generic signups this stays blank and the row is created on submit.
+  useEffect(() => {
+    if (!company) return;
+    form.setValue("companyName", company.name ?? "");
+    form.setValue("industry", company.industry ?? "");
+    form.setValue("size", company.size ?? "");
+    if (company.website) form.setValue("website", company.website);
+  }, [company, form]);
+
   const designation = form.watch("designation");
 
   // ── Step navigation — validate only the current step's fields ──────
   const STEP_FIELDS: Record<number, (keyof FormValues)[]> = {
-    0: ["website"],
+    0: ["companyName", "industry", "size", "website"],
     1: ["designation", "phone", "domain", "hiringVolume", "hiringType"],
     2: ["tosAccepted", "dataConsentAccepted", "gstin"],
   };
@@ -173,18 +191,22 @@ function CompanyOnboardingPage() {
   const onSubmit = async (values: FormValues) => {
     setSubmitting(true);
     try {
-      // NOTE: only website is actually persisted right now — it's the only
-      // field with real backend support today (PATCH /company/me). Logo file,
+      // Company identity (name / industry / size) + website are persisted.
+      // PATCH /company/me creates the companies row here if it doesn't exist
+      // yet — the case for accounts that signed up via Google / generic signup
+      // rather than the atomic /auth/company-signup form. Logo file,
       // designation, phone, hiring intent, and consent are captured above for
       // review but intentionally not sent: they need the new company_contacts /
       // company_hiring_intent / company_consents tables and endpoints
       // (db/company_onboarding_migration.sql), which haven't been run or
       // wired yet — see the schema review sent alongside this form.
-      const payload = values.website ? { website: values.website } : {};
-      if (Object.keys(payload).length > 0) {
-        const updated = await companyService.updateMe(payload);
-        setCompany(updated);
-      }
+      const updated = await companyService.updateMe({
+        name: values.companyName,
+        industry: values.industry,
+        size: values.size,
+        ...(values.website ? { website: values.website } : {}),
+      });
+      setCompany(updated);
       // Mark onboarding complete so login doesn't send this account back
       // here every time — profiles.onboarded is shared across all roles
       // and already fully wired, independent of the company-specific
@@ -213,7 +235,9 @@ function CompanyOnboardingPage() {
         </div>
         <div>
           <h1 className="font-display text-xl font-bold">You're in, {firstName}!</h1>
-          <p className="text-sm text-muted-foreground">A few details before your workspace is ready.</p>
+          <p className="text-sm text-muted-foreground">
+            A few details before your workspace is ready.
+          </p>
         </div>
       </div>
 
@@ -259,6 +283,70 @@ function CompanyOnboardingPage() {
         {step === 0 && (
           <fieldset className="space-y-4">
             <div className="space-y-1.5">
+              <Label htmlFor="companyName">Company name</Label>
+              <Input
+                id="companyName"
+                placeholder="Acme Corp"
+                aria-invalid={!!form.formState.errors.companyName}
+                {...form.register("companyName")}
+              />
+              {form.formState.errors.companyName && (
+                <p role="alert" className="text-xs text-destructive">
+                  {form.formState.errors.companyName.message}
+                </p>
+              )}
+            </div>
+
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-1.5">
+                <Label htmlFor="industry">Industry</Label>
+                <Select
+                  value={form.watch("industry")}
+                  onValueChange={(v) => form.setValue("industry", v, { shouldValidate: true })}
+                >
+                  <SelectTrigger id="industry" aria-invalid={!!form.formState.errors.industry}>
+                    <SelectValue placeholder="Select industry" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {INDUSTRIES.map((ind) => (
+                      <SelectItem key={ind} value={ind}>
+                        {ind}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {form.formState.errors.industry && (
+                  <p role="alert" className="text-xs text-destructive">
+                    {form.formState.errors.industry.message}
+                  </p>
+                )}
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="size">Company size</Label>
+                <Select
+                  value={form.watch("size")}
+                  onValueChange={(v) => form.setValue("size", v, { shouldValidate: true })}
+                >
+                  <SelectTrigger id="size" aria-invalid={!!form.formState.errors.size}>
+                    <SelectValue placeholder="Employees" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {COMPANY_SIZES.map((s) => (
+                      <SelectItem key={s} value={s}>
+                        {s} employees
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {form.formState.errors.size && (
+                  <p role="alert" className="text-xs text-destructive">
+                    {form.formState.errors.size.message}
+                  </p>
+                )}
+              </div>
+            </div>
+
+            <div className="space-y-1.5">
               <Label htmlFor="website" className="flex items-center gap-1.5">
                 <Globe className="h-3.5 w-3.5 text-muted-foreground" />
                 Company website
@@ -282,7 +370,11 @@ function CompanyOnboardingPage() {
               <div className="flex items-center gap-4">
                 <div className="grid h-16 w-16 shrink-0 place-items-center overflow-hidden rounded-xl border border-dashed border-border bg-surface">
                   {logoPreviewUrl ? (
-                    <img src={logoPreviewUrl} alt="Logo preview" className="h-full w-full object-cover" />
+                    <img
+                      src={logoPreviewUrl}
+                      alt="Logo preview"
+                      className="h-full w-full object-cover"
+                    />
                   ) : (
                     <Building2 className="h-6 w-6 text-muted-foreground" />
                   )}
@@ -295,11 +387,18 @@ function CompanyOnboardingPage() {
                     className="hidden"
                     onChange={(e) => handleLogoSelect(e.target.files?.[0] ?? null)}
                   />
-                  <Button type="button" size="sm" variant="outline" onClick={() => logoInputRef.current?.click()}>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={() => logoInputRef.current?.click()}
+                  >
                     <Upload className="mr-2 h-3.5 w-3.5" />
                     {logoFile ? "Change logo" : "Upload logo"}
                   </Button>
-                  <p className="text-xs text-muted-foreground">PNG, JPG, SVG or WEBP · optional, skippable</p>
+                  <p className="text-xs text-muted-foreground">
+                    PNG, JPG, SVG or WEBP · optional, skippable
+                  </p>
                 </div>
               </div>
             </div>
@@ -312,7 +411,9 @@ function CompanyOnboardingPage() {
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-1.5">
                 <Label htmlFor="designation">Your designation</Label>
-                <Select onValueChange={(v) => form.setValue("designation", v, { shouldValidate: true })}>
+                <Select
+                  onValueChange={(v) => form.setValue("designation", v, { shouldValidate: true })}
+                >
                   <SelectTrigger id="designation">
                     <SelectValue placeholder="Select designation" />
                   </SelectTrigger>
@@ -325,19 +426,30 @@ function CompanyOnboardingPage() {
                   </SelectContent>
                 </Select>
                 {form.formState.errors.designation && (
-                  <p className="text-xs text-destructive">{form.formState.errors.designation.message}</p>
+                  <p className="text-xs text-destructive">
+                    {form.formState.errors.designation.message}
+                  </p>
                 )}
               </div>
               <div className="space-y-1.5">
                 <Label htmlFor="phone">Phone number</Label>
-                <Input id="phone" type="tel" placeholder="+91 98765 43210" {...form.register("phone")} />
+                <Input
+                  id="phone"
+                  type="tel"
+                  placeholder="+91 98765 43210"
+                  {...form.register("phone")}
+                />
               </div>
             </div>
 
             {designation === "Other" && (
               <div className="space-y-1.5">
                 <Label htmlFor="customDesignation">Enter your designation</Label>
-                <Input id="customDesignation" placeholder="e.g. VP of People" {...form.register("customDesignation")} />
+                <Input
+                  id="customDesignation"
+                  placeholder="e.g. VP of People"
+                  {...form.register("customDesignation")}
+                />
               </div>
             )}
 
@@ -351,7 +463,11 @@ function CompanyOnboardingPage() {
 
             <div className="space-y-1.5">
               <Label htmlFor="domain">What are you hiring for?</Label>
-              <Select onValueChange={(v) => form.setValue("domain", v as FormValues["domain"], { shouldValidate: true })}>
+              <Select
+                onValueChange={(v) =>
+                  form.setValue("domain", v as FormValues["domain"], { shouldValidate: true })
+                }
+              >
                 <SelectTrigger id="domain">
                   <SelectValue placeholder="Select domain" />
                 </SelectTrigger>
@@ -369,7 +485,9 @@ function CompanyOnboardingPage() {
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-1.5">
                 <Label htmlFor="hiringVolume">Expected hiring volume</Label>
-                <Select onValueChange={(v) => form.setValue("hiringVolume", v, { shouldValidate: true })}>
+                <Select
+                  onValueChange={(v) => form.setValue("hiringVolume", v, { shouldValidate: true })}
+                >
                   <SelectTrigger id="hiringVolume">
                     <SelectValue placeholder="Select volume" />
                   </SelectTrigger>
@@ -382,12 +500,16 @@ function CompanyOnboardingPage() {
                   </SelectContent>
                 </Select>
                 {form.formState.errors.hiringVolume && (
-                  <p className="text-xs text-destructive">{form.formState.errors.hiringVolume.message}</p>
+                  <p className="text-xs text-destructive">
+                    {form.formState.errors.hiringVolume.message}
+                  </p>
                 )}
               </div>
               <div className="space-y-1.5">
                 <Label htmlFor="hiringType">Hiring type</Label>
-                <Select onValueChange={(v) => form.setValue("hiringType", v, { shouldValidate: true })}>
+                <Select
+                  onValueChange={(v) => form.setValue("hiringType", v, { shouldValidate: true })}
+                >
                   <SelectTrigger id="hiringType">
                     <SelectValue placeholder="Select type" />
                   </SelectTrigger>
@@ -400,7 +522,9 @@ function CompanyOnboardingPage() {
                   </SelectContent>
                 </Select>
                 {form.formState.errors.hiringType && (
-                  <p className="text-xs text-destructive">{form.formState.errors.hiringType.message}</p>
+                  <p className="text-xs text-destructive">
+                    {form.formState.errors.hiringType.message}
+                  </p>
                 )}
               </div>
             </div>
@@ -419,21 +543,27 @@ function CompanyOnboardingPage() {
               <div className="flex items-start gap-2">
                 <Checkbox
                   id="tosAccepted"
-                  onCheckedChange={(v) => form.setValue("tosAccepted", (v === true) as true, { shouldValidate: true })}
+                  onCheckedChange={(v) =>
+                    form.setValue("tosAccepted", (v === true) as true, { shouldValidate: true })
+                  }
                 />
                 <Label htmlFor="tosAccepted" className="text-sm font-normal leading-tight">
                   I agree to the Terms of Service <span className="text-destructive">*</span>
                 </Label>
               </div>
               {form.formState.errors.tosAccepted && (
-                <p className="text-xs text-destructive">{form.formState.errors.tosAccepted.message}</p>
+                <p className="text-xs text-destructive">
+                  {form.formState.errors.tosAccepted.message}
+                </p>
               )}
 
               <div className="flex items-start gap-2">
                 <Checkbox
                   id="dataConsentAccepted"
                   onCheckedChange={(v) =>
-                    form.setValue("dataConsentAccepted", (v === true) as true, { shouldValidate: true })
+                    form.setValue("dataConsentAccepted", (v === true) as true, {
+                      shouldValidate: true,
+                    })
                   }
                 />
                 <Label htmlFor="dataConsentAccepted" className="text-sm font-normal leading-tight">
@@ -443,7 +573,9 @@ function CompanyOnboardingPage() {
                 </Label>
               </div>
               {form.formState.errors.dataConsentAccepted && (
-                <p className="text-xs text-destructive">{form.formState.errors.dataConsentAccepted.message}</p>
+                <p className="text-xs text-destructive">
+                  {form.formState.errors.dataConsentAccepted.message}
+                </p>
               )}
             </div>
           </fieldset>

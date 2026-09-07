@@ -2,7 +2,7 @@ from typing import Optional
 import os
 from fastapi import Header, HTTPException, Depends
 from dotenv import load_dotenv
-from supabase import create_client, Client
+from supabase import create_client, Client, ClientOptions
 from supabase_auth.errors import AuthApiError
 from postgrest.exceptions import APIError
 
@@ -15,8 +15,35 @@ if not SUPABASE_URL or not SUPABASE_KEY:
 
 # Two separate clients so auth operations don't taint the DB client's
 # internal auth state (which would cause RLS to kick in on DB queries).
-auth_client = create_client(SUPABASE_URL, SUPABASE_KEY)   # for auth.sign_up, etc.
+#
+# `auth_client` is ONE module-level client shared across every concurrent
+# request. The gotrue library defaults to auto_refresh_token=True /
+# persist_session=True, which means every sign_up / sign_in_with_password /
+# verify_otp / refresh_session call would mutate one shared "current session"
+# slot and reschedule one shared background refresh timer. When that timer
+# fired it would rotate whichever unrelated user's refresh token happened to
+# be sitting in the slot — single-use tokens, so that user's next real
+# /auth/refresh would then be rejected as "already used", causing random
+# logouts under concurrency. Every route already uses the returned
+# res.session / res.user directly and nothing here relies on the client's
+# ambient session, so disabling both is safe and removes the race entirely.
+_AUTH_CLIENT_OPTIONS = ClientOptions(auto_refresh_token=False, persist_session=False)
+auth_client = create_client(SUPABASE_URL, SUPABASE_KEY, options=_AUTH_CLIENT_OPTIONS)
 db_client = create_client(SUPABASE_URL, SUPABASE_KEY)     # for table() queries
+
+# Dedicated client for `auth.admin.*` (service-role-only) operations.
+#
+# supabase-py registers `_listen_to_auth_events` on every create_client(), and
+# that callback rewrites the client's shared `Authorization` header to the
+# CURRENT user's access_token on every SIGNED_IN / TOKEN_REFRESHED event — the
+# `admin` sub-client reads that same header dict by reference. So on the shared
+# `auth_client`, the first `sign_in_with_password` / `verify_otp` /
+# `refresh_session` from any request leaves a plain user JWT in that header, and
+# every later `admin.update_user_by_id` call is then sent as that user instead
+# of as service-role → Supabase replies 403 "User not allowed". This client is
+# NEVER used for sign-in/verify/refresh, so its header stays pinned to the
+# service-role key and admin calls always authorize correctly.
+admin_client = create_client(SUPABASE_URL, SUPABASE_KEY, options=_AUTH_CLIENT_OPTIONS)
 
 # Legacy alias — routes import this
 supabase = auth_client

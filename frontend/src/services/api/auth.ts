@@ -54,6 +54,11 @@ export const authService = {
   verifyOtp: (email: string, code: string) =>
     request<Session>("/auth/otp/verify", { method: "POST", body: { email, code } }),
 
+  /** Re-send the signup confirmation code. Password-reset codes are re-sent
+   * via forgotPassword() instead. */
+  resendOtp: (email: string) =>
+    request<{ ok: true }>("/auth/otp/resend", { method: "POST", body: { email } }),
+
   resetPassword: (token: string, password: string) =>
     request<{ ok: true }>("/auth/reset", { method: "POST", body: { token, password } }),
 

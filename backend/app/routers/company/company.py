@@ -12,7 +12,7 @@ from postgrest.exceptions import APIError
 
 from ...deps import require_company_role
 from ...schemas import CompanyOut, CompanyUpdateIn
-from ...crud import get_company_by_owner_id, update_company
+from ...crud import get_company_by_owner_id, update_company, upsert_company
 
 log = logging.getLogger(__name__)
 router = APIRouter(prefix="/company", tags=["company"])
@@ -65,10 +65,16 @@ def update_my_company(
     payload: CompanyUpdateIn,
     current_user: dict = Depends(require_company_role),
 ) -> dict:
-    """Partially update the company profile (website, logo, domains, etc.)."""
+    """Update the caller's company profile — or create it on first run.
+
+    Accounts that reached the company portal via Google / generic signup
+    (not the atomic /auth/company-signup form) have a profile row but no
+    companies row yet; company onboarding is where that row gets created,
+    so this endpoint upserts. Inserts require name + industry + size
+    (all NOT NULL in the schema)."""
     owner_id = current_user["id"]
 
-    # Build the DB update dict — only include provided fields
+    # Build the DB write dict — only include provided fields
     update_data: dict = {}
     if payload.name is not None:
         update_data["name"] = payload.name
@@ -83,11 +89,26 @@ def update_my_company(
     if payload.logo_url is not None:
         update_data["logo_url"] = payload.logo_url
 
-    try:
-        company = update_company(owner_id, update_data)
-    except APIError as e:
-        log.error("DB error updating company for owner %s: %s", owner_id, e)
-        raise HTTPException(status_code=400, detail=f"Update failed: {e.message}")
+    existing = get_company_by_owner_id(owner_id)
+
+    if existing:
+        try:
+            company = update_company(owner_id, update_data)
+        except APIError as e:
+            log.error("DB error updating company for owner %s: %s", owner_id, e)
+            raise HTTPException(status_code=400, detail=f"Update failed: {e.message}")
+    else:
+        missing = [f for f in ("name", "industry", "size") if not update_data.get(f)]
+        if missing:
+            raise HTTPException(
+                status_code=422,
+                detail=f"Cannot create company profile — missing required field(s): {', '.join(missing)}.",
+            )
+        try:
+            company = upsert_company(owner_id, update_data)
+        except APIError as e:
+            log.error("DB error creating company for owner %s: %s", owner_id, e)
+            raise HTTPException(status_code=400, detail=f"Create failed: {e.message}")
 
     if not company:
         raise HTTPException(status_code=404, detail="Company profile not found.")
