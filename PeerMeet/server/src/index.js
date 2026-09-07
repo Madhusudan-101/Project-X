@@ -67,6 +67,7 @@ const {
   getSocketIdForParticipant,
   getParticipantIdForSocket,
   getIdentityForParticipant,
+  getPublicDisplayName,
 } = require('./roomManager');
 const {
   createDeepgramTranscriptionManager,
@@ -718,7 +719,7 @@ io.on('connection', (socket) => {
    * who expects to be the initiator (e.g. their room was fully abandoned
    * and needs recreating) — see the 'join-room'-driven client fallback.
    */
-  socket.on('create-room', ({ roomId, participantId, token } = {}) => {
+  socket.on('create-room', ({ roomId, participantId, token, keepPrivate } = {}) => {
     console.log(`[Room] create-room | roomId=${roomId} | participantId=${participantId} | socketId=${socket.id}`);
 
     if (!roomId || !participantId) return;
@@ -732,7 +733,7 @@ io.on('connection', (socket) => {
     // Optional identity; a bad/expired/missing token is silently ignored
     // and the participant is created anonymously.
     const identity = verifyPeerToken(token);
-    createRoom(roomId, participantId, socket.id, identity);
+    createRoom(roomId, participantId, socket.id, identity, !!keepPrivate);
     socket.join(roomId);
     socket.emit('room-created', { roomId });
 
@@ -751,7 +752,7 @@ io.on('connection', (socket) => {
    *   - On success → notify both participants; on reconnect, also resync
    *     the reconnecting participant's interview state.
    */
-  socket.on('join-room', ({ roomId, participantId, token } = {}) => {
+  socket.on('join-room', ({ roomId, participantId, token, keepPrivate } = {}) => {
     console.log(`[Room] join-room | roomId=${roomId} | participantId=${participantId} | socketId=${socket.id}`);
 
     if (!roomId || !participantId) {
@@ -770,7 +771,8 @@ io.on('connection', (socket) => {
       participantId,
       socket.id,
       (id) => io.sockets.sockets.has(id),
-      identity
+      identity,
+      !!keepPrivate
     );
 
     if (result.notFound) {
@@ -804,15 +806,28 @@ io.on('connection', (socket) => {
       socket.emit('transcription:history', { entries: history });
     }
 
+    // Public display names respect each participant's "keep private" flag
+    // (see roomManager.getPublicDisplayName). These are what the other side
+    // sees on the video tile — Mirracle still uses the real identity for
+    // the report webhook, which never reads these labels.
+    const myDisplayName = getPublicDisplayName(roomId, participantId);
+    const partnerDisplayName = result.partnerParticipantId
+      ? getPublicDisplayName(roomId, result.partnerParticipantId)
+      : null;
+
     if (result.reconnected) {
       // Tell this participant who the current partner is, exactly like a
       // fresh 'ready' — their client destroys any stale peer and creates a
       // new one as the receiver.
-      socket.emit('ready', { initiatorId: result.partnerId });
+      socket.emit('ready', { initiatorId: result.partnerId, partnerDisplayName });
       // Tell the (still-connected) partner this participant is back, so
       // THEY create a fresh peer as the initiator.
       if (result.partnerId) {
-        io.to(result.partnerId).emit('user-joined', { signal: null, callerId: socket.id });
+        io.to(result.partnerId).emit('user-joined', {
+          signal: null,
+          callerId: socket.id,
+          partnerDisplayName: myDisplayName,
+        });
       }
       // Resync interview role/state — they missed whatever was emitted to
       // their previous (now-dead) socket while disconnected.
@@ -827,11 +842,13 @@ io.on('connection', (socket) => {
     socket.to(result.partnerId).emit('user-joined', {
       signal: null,
       callerId: socket.id,
+      partnerDisplayName: myDisplayName,
     });
 
     // Tell participant B who the initiator is so they can set up SimplePeer.
     socket.emit('ready', {
       initiatorId: result.partnerId,
+      partnerDisplayName,
     });
 
     console.log(`[Room] ${socket.id} joined room ${roomId}. Partner: ${result.partnerId}`);

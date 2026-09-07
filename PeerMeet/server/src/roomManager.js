@@ -31,9 +31,9 @@ const rooms = new Map();
  * @param {string} participantId
  * @param {string} socketId
  */
-function createRoom(roomId, participantId, socketId, identity = null) {
+function createRoom(roomId, participantId, socketId, identity = null, keepPrivate = false) {
   rooms.set(roomId, {
-    participants: [{ participantId, socketId, identity: identity || null }],
+    participants: [{ participantId, socketId, identity: identity || null, keepPrivate: !!keepPrivate }],
     // ── Interview state (all AI/role data lives server-side) ──────────────
     // This block is additive; existing signaling logic ignores it.
     interview: createInitialInterviewState(),
@@ -473,6 +473,25 @@ function getIdentityForParticipant(roomId, participantId) {
   return participant?.identity || null;
 }
 
+/**
+ * Return the DISPLAY name a peer should see for this participant.
+ * Enforces the "Keep my identity private" preference server-side: when set,
+ * the peer only ever sees "Anonymous Candidate", regardless of whether the
+ * identity is attached (Mirracle still uses the real identity for the
+ * webhook — that flow does not read this function).
+ * @param {string} roomId
+ * @param {string} participantId
+ * @returns {string}
+ */
+function getPublicDisplayName(roomId, participantId) {
+  const room = rooms.get(roomId);
+  if (!room || !participantId) return 'Participant';
+  const participant = room.participants.find((p) => p.participantId === participantId);
+  if (!participant) return 'Participant';
+  if (participant.keepPrivate) return 'Anonymous Candidate';
+  return participant.identity?.studentName || 'Participant';
+}
+
 function getParticipantIdForSocket(roomId, socketId) {
   const room = rooms.get(roomId);
   if (!room || !socketId) return null;
@@ -493,7 +512,7 @@ function getParticipantIdForSocket(roomId, socketId) {
  *   to tell a genuine reconnect apart from a duplicate browser tab (below)
  * @returns {{ success: boolean, reconnected?: boolean, partnerId?: string|null, partnerParticipantId?: string|null, isFull?: boolean, notFound?: boolean, duplicateSession?: boolean }}
  */
-function joinRoom(roomId, participantId, socketId, isSocketAlive, identity = null) {
+function joinRoom(roomId, participantId, socketId, isSocketAlive, identity = null, keepPrivate = false) {
   const room = rooms.get(roomId);
 
   if (!room) {
@@ -528,6 +547,11 @@ function joinRoom(roomId, participantId, socketId, isSocketAlive, identity = nul
     if (identity && !existing.identity) {
       existing.identity = identity;
     }
+    // Privacy preference can be updated on reconnect (user may have toggled
+    // it in the source tab before rejoining).
+    if (typeof keepPrivate === 'boolean') {
+      existing.keepPrivate = keepPrivate;
+    }
     const partner = room.participants.find((p) => p.participantId !== participantId) || null;
     return {
       success: true,
@@ -542,7 +566,7 @@ function joinRoom(roomId, participantId, socketId, isSocketAlive, identity = nul
   }
 
   const partner = room.participants[0] || null; // the existing participant, before we add the new one
-  room.participants.push({ participantId, socketId, identity: identity || null });
+  room.participants.push({ participantId, socketId, identity: identity || null, keepPrivate: !!keepPrivate });
 
   return {
     success: true,
@@ -634,4 +658,5 @@ module.exports = {
   getSocketIdForParticipant,
   getParticipantIdForSocket,
   getIdentityForParticipant,
+  getPublicDisplayName,
 };

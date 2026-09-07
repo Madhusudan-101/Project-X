@@ -54,9 +54,32 @@ function Home() {
   useEffect(() => {
     let autoRoom = null;
     let autoInit = false;
+    // Dashboard opens this tab via `window.open` without `noopener` on
+    // purpose (that would return a null Window handle in Chromium/Firefox
+    // and break the reserved-tab pattern that keeps the flow at exactly
+    // one tab). Sever `window.opener` here on the PeerMeet side so the
+    // dashboard's Window is not reachable from this cross-origin document
+    // — same security posture `noopener` would have given, without the
+    // regression it causes for the opener.
+    try {
+      // Same-origin write from the loaded document is allowed by the spec
+      // even when the opener is cross-origin, in every current major
+      // browser.
+      window.opener = null;
+    } catch {
+      /* ignore — best-effort */
+    }
     try {
       const url = new URL(window.location.href);
-      const token = url.searchParams.get('token');
+      // Prefer the URL fragment for the identity token: it is never sent in
+      // Referer headers, cached by proxies, or written to server access
+      // logs, so a 10-minute impersonation token can't leak through those
+      // channels. Fall back to the query string for older dashboard builds
+      // that still send it that way, so a mid-rollout link doesn't break.
+      const hashParams = new URLSearchParams(
+        (url.hash || '').replace(/^#/, '')
+      );
+      const token = hashParams.get('token') || url.searchParams.get('token');
       autoRoom = url.searchParams.get('room');
       autoInit = url.searchParams.get('init') === '1';
       const privateFlag = url.searchParams.get('private') === '1';
@@ -64,6 +87,9 @@ function Home() {
       if (token) {
         setAuthToken(token);
         url.searchParams.delete('token');
+        hashParams.delete('token');
+        const remainingHash = hashParams.toString();
+        url.hash = remainingHash ? `#${remainingHash}` : '';
         touched = true;
       }
       if (autoRoom) {

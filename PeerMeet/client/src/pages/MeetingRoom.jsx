@@ -35,7 +35,7 @@ import socket from '../socket.js';
 import { MdSignalWifiOff } from 'react-icons/md';
 import { HiSignal, HiSignalSlash } from 'react-icons/hi2';
 import { debugLog } from '../utils/debugLog.js';
-import { getAuthToken } from '../utils/authToken.js';
+import { getAuthToken, getIdentityPrivate } from '../utils/authToken.js';
 
 // ── Connection status badge ────────────────────────────────────────────────────
 function StatusBadge({ status }) {
@@ -194,6 +194,10 @@ function MeetingRoom() {
   const [roomError, setRoomError] = useState(null); // 'full' | 'not-found'
   const [remoteJoined, setRemoteJoined] = useState(false);
   const [canTranscribe, setCanTranscribe] = useState(false);
+  // Peer's display name — either their real name or "Anonymous Candidate"
+  // depending on THEIR own privacy preference. Server-authoritative; we
+  // don't try to derive it client-side.
+  const [partnerDisplayName, setPartnerDisplayName] = useState('Participant');
 
   // ── Media Devices ──────────────────────────────────────────────────────────
   // `localStream` is the VIDEO source (camera or, while sharing, the
@@ -310,7 +314,12 @@ function MeetingRoom() {
 
     hasJoinedRef.current = true;
     debugLog('[MeetingRoom] Emitting join-room:', roomId, 'participantId:', participantId);
-    socket.emit('join-room', { roomId, participantId, token: getAuthToken() });
+    socket.emit('join-room', {
+      roomId,
+      participantId,
+      token: getAuthToken(),
+      keepPrivate: getIdentityPrivate(),
+    });
   }, [localStream, roomId, participantId]);
 
   // ── Socket event listeners for room state ─────────────────────────────────
@@ -320,7 +329,7 @@ function MeetingRoom() {
       setCanTranscribe(true);
     };
 
-    const handleReady = ({ initiatorId } = {}) => {
+    const handleReady = ({ initiatorId, partnerDisplayName: pdn } = {}) => {
       setCanTranscribe(true);
       // `ready` is delivered when the server knows who our partner is —
       // for a fresh second-participant join, this is the moment BOTH
@@ -330,11 +339,13 @@ function MeetingRoom() {
       // is null) does not falsely mark the peer as present.
       if (initiatorId) {
         setRemoteJoined(true);
+        if (pdn) setPartnerDisplayName(pdn);
       }
     };
 
-    const handleUserJoined = () => {
+    const handleUserJoined = ({ partnerDisplayName: pdn } = {}) => {
       setRemoteJoined(true);
+      if (pdn) setPartnerDisplayName(pdn);
       addToast('A participant has joined the meeting!', 'success');
       // Only the creator (initiator) sees the interview setup modal, and only
       // if they haven't already dismissed or completed it.
@@ -345,6 +356,7 @@ function MeetingRoom() {
 
     const handleUserLeft = () => {
       setRemoteJoined(false);
+      setPartnerDisplayName('Participant');
       addToast('Participant has left the meeting.', 'warning', 5000);
     };
 
@@ -369,7 +381,12 @@ function MeetingRoom() {
       // create it. Otherwise it's a genuinely bad/expired room ID.
       if (isInitiator) {
         debugLog('[MeetingRoom] Room not found — creating fresh as initiator');
-        socket.emit('create-room', { roomId, participantId, token: getAuthToken() });
+        socket.emit('create-room', {
+          roomId,
+          participantId,
+          token: getAuthToken(),
+          keepPrivate: getIdentityPrivate(),
+        });
         return;
       }
       setRoomError('not-found');
@@ -381,7 +398,12 @@ function MeetingRoom() {
       // Lost a create-vs-join race (e.g. duplicate tab) — the room exists
       // now, so join it instead.
       debugLog('[MeetingRoom] Room already exists — joining instead');
-      socket.emit('join-room', { roomId, participantId, token: getAuthToken() });
+      socket.emit('join-room', {
+        roomId,
+        participantId,
+        token: getAuthToken(),
+        keepPrivate: getIdentityPrivate(),
+      });
     };
 
     socket.on('room-created', handleRoomCreated);
@@ -498,7 +520,12 @@ function MeetingRoom() {
       // reconnect (reclaiming our interview role) rather than a fresh
       // join; it falls back to 'room-not-found' → create-room (handled by
       // the existing listener) if the room was fully abandoned.
-      socket.emit('join-room', { roomId, participantId, token: getAuthToken() });
+      socket.emit('join-room', {
+        roomId,
+        participantId,
+        token: getAuthToken(),
+        keepPrivate: getIdentityPrivate(),
+      });
 
       stopTranscription();
       if (isAudioEnabled) {
@@ -603,7 +630,7 @@ function MeetingRoom() {
                   <VideoPlayer
                     stream={remoteStream}
                     muted={false}
-                    label="Participant"
+                    label={partnerDisplayName || 'Participant'}
                     isAudioEnabled={true}
                     isVideoEnabled={true}
                     isLocal={false}
