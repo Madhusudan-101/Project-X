@@ -58,9 +58,12 @@ import {
 } from "@/components/candidate/ProfileSyncPanel";
 import { computeDnaBreakdown, computeDnaScore, computeSkillDna } from "@/lib/skillDna";
 import { practiceService } from "@/services/api/candidate/practice";
-import { peerService } from "@/services/api/candidate/peer";
+import { peerService, type PeerReport } from "@/services/api/candidate/peer";
+import { reservePeerMeetTab } from "@/lib/peerMeetTab";
 import { toast } from "sonner";
 import { PeerInterviewMatchModal } from "@/components/candidate/PeerInterviewMatchModal";
+import { ScheduledMeetingsList } from "@/components/candidate/ScheduledMeetingsList";
+import { UpcomingMeetings } from "@/components/candidate/UpcomingMeetings";
 import { usePeerInterviewStore } from "@/store/candidate/peerInterview";
 import { extractLeetCodeUsername, syncService } from "@/services/api/candidate/sync";
 import { ApiClientError } from "@/services/api/client";
@@ -83,8 +86,6 @@ export const Route = createFileRoute("/candidate")({
 // No shared demo data. Each user starts empty and their own activity is per-user.
 // Wire these to the API / per-user store later.
 
-const learningCurve: { week: string; score: number; hours: number }[] = [];
-
 const companyTracks: {
   company: string;
   tag: "FAANG" | "Product" | "India";
@@ -92,6 +93,80 @@ const companyTracks: {
   focus: string;
   difficulty: "Easy" | "Medium" | "Hard";
 }[] = [];
+
+// ---------- peer-report derivations ----------
+
+interface PeerStats {
+  // Average of `overall_score` across all reports. The score is produced
+  // by PeerMeet's Gemini pipeline on a 0-100 scale (see
+  // PeerMeet/server/src/interviewAssistant.js rubric), not 0-10; the
+  // dashboard renders it as `<n>/100`.
+  readinessScore: number | null;
+  streakDays: number;            // consecutive days with at least one report ending today or yesterday
+  interviewCount: number;
+  // Per-ISO-week average `overall_score`, most recent 8 weeks. Same 0-100
+  // scale as `readinessScore`.
+  learningCurve: { week: string; score: number }[];
+}
+
+/** Derive dashboard stat inputs from a candidate's own peer-interview
+ * report history. Pure function — no fetch, no side effects. */
+function derivePeerStats(reports: PeerReport[]): PeerStats {
+  if (!reports.length) {
+    return { readinessScore: null, streakDays: 0, interviewCount: 0, learningCurve: [] };
+  }
+  const scored = reports.filter((r) => typeof r.overall_score === "number");
+  const readinessScore = scored.length
+    ? Math.round(
+        (scored.reduce((s, r) => s + (r.overall_score ?? 0), 0) / scored.length) * 10,
+      ) / 10
+    : null;
+
+  // Streak: unique YYYY-MM-DD days with a report, counting backwards from
+  // today (grace of one day so a report at 2am UTC doesn't reset the streak).
+  const dayKeys = new Set(
+    reports.map((r) => new Date(r.created_at).toISOString().slice(0, 10)),
+  );
+  let streakDays = 0;
+  const cursor = new Date();
+  // Grace: if today has no entry but yesterday does, still start the streak.
+  const todayKey = cursor.toISOString().slice(0, 10);
+  if (!dayKeys.has(todayKey)) {
+    cursor.setUTCDate(cursor.getUTCDate() - 1);
+  }
+  while (dayKeys.has(cursor.toISOString().slice(0, 10))) {
+    streakDays += 1;
+    cursor.setUTCDate(cursor.getUTCDate() - 1);
+  }
+
+  // Learning curve: bucket by ISO week, average overall_score; last 8 weeks.
+  const byWeek = new Map<string, number[]>();
+  for (const r of scored) {
+    const d = new Date(r.created_at);
+    // Simple week key = year-week number in the caller's local time.
+    const yr = d.getFullYear();
+    const first = new Date(yr, 0, 1);
+    const wk = Math.ceil(((d.getTime() - first.getTime()) / 86_400_000 + first.getDay() + 1) / 7);
+    const key = `${yr}-W${String(wk).padStart(2, "0")}`;
+    const bucket = byWeek.get(key) ?? [];
+    bucket.push(r.overall_score ?? 0);
+    byWeek.set(key, bucket);
+  }
+  const learningCurve = [...byWeek.entries()]
+    .sort((a, b) => a[0].localeCompare(b[0]))
+    .slice(-8)
+    .map(([week, scores]) => ({
+      week,
+      score: Math.round((scores.reduce((s, v) => s + v, 0) / scores.length) * 10) / 10,
+    }));
+
+  return {
+    readinessScore,
+    streakDays,
+    interviewCount: reports.length,
+    learningCurve,
+  };
+}
 
 // ---------- component ----------
 
@@ -278,8 +353,39 @@ function OverviewTab() {
     staleTime: 30_000,
   });
   const applicationCount = applications?.length ?? 0;
-  const activePeerRoom = usePeerInterviewStore((s) => s.activeRoom);
+  const persistedRoom = usePeerInterviewStore((s) => s.activeRoom);
+  const getActiveRoom = usePeerInterviewStore((s) => s.getActiveRoom);
   const clearPeerRoom = usePeerInterviewStore((s) => s.clearActiveRoom);
+  // Drop stale rooms (older than the store's TTL) so a week-old localStorage
+  // entry never resurrects a room the PeerMeet server has long forgotten.
+  const activePeerRoom = useMemo(() => {
+    if (!persistedRoom) return null;
+    return getActiveRoom();
+  }, [persistedRoom, getActiveRoom]);
+
+  // Load the caller's completed peer-interview reports so the stat cards +
+  // learning-curve chart show real data instead of placeholders. Refetches
+  // when the peer-interview version bumps (e.g. after cancelling a
+  // scheduled meeting) or when a completed meeting flips status via the
+  // 15-second polls elsewhere.
+  const scheduledMeetingsVersion = usePeerInterviewStore((s) => s.scheduledMeetingsVersion);
+  const [peerReports, setPeerReports] = useState<PeerReport[] | null>(null);
+  useEffect(() => {
+    if (!session?.user.id) return;
+    let cancelled = false;
+    peerService
+      .listMyReports()
+      .then((rows) => {
+        if (!cancelled) setPeerReports(rows);
+      })
+      .catch(() => {
+        if (!cancelled) setPeerReports([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [session?.user.id, scheduledMeetingsVersion]);
+  const peerStats = useMemo(() => derivePeerStats(peerReports ?? []), [peerReports]);
   const firstName = session?.user?.firstName ?? session?.user?.name?.split(" ")[0] ?? "";
   const today = new Date().toLocaleDateString(undefined, {
     weekday: "long",
@@ -316,8 +422,12 @@ function OverviewTab() {
         <StatCard
           icon={Target}
           label="Industry readiness"
-          value="—"
-          hint="Complete 1 mock to unlock"
+          value={peerStats.readinessScore !== null ? `${peerStats.readinessScore}/100` : "—"}
+          hint={
+            peerStats.interviewCount > 0
+              ? `Avg. across ${peerStats.interviewCount} peer interview${peerStats.interviewCount === 1 ? "" : "s"}`
+              : "Complete 1 mock to unlock"
+          }
         />
         <StatCard
           icon={Briefcase}
@@ -325,8 +435,19 @@ function OverviewTab() {
           value={String(applicationCount)}
           hint={applicationCount === 0 ? "No applications yet" : `${applicationCount} active`}
         />
-        <StatCard icon={Flame} label="Streak" value="0 days" hint="Start today" />
-        <LearningCurveCard />
+        <StatCard
+          icon={Flame}
+          label="Peer interview streak"
+          value={`${peerStats.streakDays} day${peerStats.streakDays === 1 ? "" : "s"}`}
+          hint={
+            peerStats.streakDays > 0
+              ? "Keep it going"
+              : peerStats.interviewCount > 0
+                ? "Come back tomorrow"
+                : "Start today"
+          }
+        />
+        <LearningCurveCard data={peerStats.learningCurve} />
       </div>
 
       <div className="grid gap-6 lg:grid-cols-3">
@@ -348,15 +469,27 @@ function OverviewTab() {
                     toast.error("Peer Interview is not configured. Set VITE_PEERMEET_URL.");
                     return;
                   }
+                  // Reserve the target tab synchronously in the click so
+                  // the pop-up blocker accepts it; `createSessionToken`
+                  // below is async and would otherwise put the eventual
+                  // `window.open` outside the gesture window. Guarantees
+                  // ONE PeerMeet tab per click.
+                  const tab = reservePeerMeetTab({
+                    title: "Opening your Peer Interview room",
+                    message: "Preparing your identity token…",
+                  });
                   try {
                     const { token } = await peerService.createSessionToken();
                     const url = new URL("/", peermeetUrl);
-                    url.searchParams.set("token", token);
                     url.searchParams.set("room", activePeerRoom.roomId);
                     url.searchParams.set("init", "1");
                     url.searchParams.set("private", activePeerRoom.keepPrivate ? "1" : "0");
-                    window.open(url.toString(), "_blank", "noopener,noreferrer");
+                    // Identity token in fragment — never leaks via Referer /
+                    // access logs / browser history.
+                    url.hash = `token=${encodeURIComponent(token)}`;
+                    tab.navigate(url.toString());
                   } catch (err) {
+                    tab.abort();
                     toast.error(
                       err instanceof Error ? err.message : "Could not open Peer Interview.",
                     );
@@ -412,6 +545,9 @@ function OverviewTab() {
         </div>
 
         <aside className="space-y-4">
+          <ScheduledMeetingsList />
+          <UpcomingMeetings />
+
           <Card className="p-5">
             <div className="mb-3 flex items-center justify-between">
               <h3 className="font-display font-semibold">First step</h3>
@@ -427,17 +563,7 @@ function OverviewTab() {
             </Button>
           </Card>
 
-          <Card className="p-5">
-            <div className="mb-3 flex items-center justify-between">
-              <h3 className="font-display font-semibold">Recent</h3>
-              <Button variant="ghost" size="sm" className="text-primary h-7">
-                See all
-              </Button>
-            </div>
-            <div className="rounded-md border border-dashed border-border/70 bg-surface/60 p-4 text-center text-sm text-muted-foreground">
-              No activity yet. Anything you do here shows up in this feed.
-            </div>
-          </Card>
+          <RecentPeerInterviewsCard reports={peerReports} />
         </aside>
       </div>
 
@@ -915,11 +1041,12 @@ function StatCard({
   );
 }
 
-function LearningCurveCard() {
-  const hasData = learningCurve.length >= 2;
-  const latest = hasData ? learningCurve[learningCurve.length - 1].score : 0;
-  const first = hasData ? learningCurve[0].score : 0;
-  const delta = latest - first;
+function LearningCurveCard({ data }: { data: { week: string; score: number }[] }) {
+  const hasData = data.length >= 2;
+  const latest = hasData ? data[data.length - 1].score : 0;
+  const first = hasData ? data[0].score : 0;
+  const delta = Math.round((latest - first) * 10) / 10;
+  const deltaLabel = delta === 0 ? "±0" : `${delta > 0 ? "+" : ""}${delta}`;
   return (
     <Card className="p-4">
       <div className="flex items-center justify-between">
@@ -928,7 +1055,7 @@ function LearningCurveCard() {
         </div>
         {hasData ? (
           <span className="text-xs font-medium text-success">
-            +{delta} in {learningCurve.length} wks
+            {deltaLabel} in {data.length} wks
           </span>
         ) : (
           <span className="text-xs text-muted-foreground">No data yet</span>
@@ -943,7 +1070,7 @@ function LearningCurveCard() {
       <div className="mt-2 -mx-1 h-14">
         {hasData ? (
           <ResponsiveContainer width="100%" height="100%">
-            <AreaChart data={learningCurve} margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
+            <AreaChart data={data} margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
               <defs>
                 <linearGradient id="lc" x1="0" y1="0" x2="0" y2="1">
                   <stop offset="0%" stopColor="var(--color-primary)" stopOpacity={0.4} />
@@ -977,6 +1104,73 @@ function LearningCurveCard() {
           </div>
         )}
       </div>
+    </Card>
+  );
+}
+
+function RecentPeerInterviewsCard({ reports }: { reports: PeerReport[] | null }) {
+  if (reports === null) {
+    return (
+      <Card className="p-5">
+        <div className="mb-3 flex items-center justify-between">
+          <h3 className="font-display font-semibold">Recent</h3>
+        </div>
+        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+          <Loader2 className="h-4 w-4 animate-spin" /> Loading…
+        </div>
+      </Card>
+    );
+  }
+  if (reports.length === 0) {
+    return (
+      <Card className="p-5">
+        <div className="mb-3 flex items-center justify-between">
+          <h3 className="font-display font-semibold">Recent</h3>
+        </div>
+        <div className="rounded-md border border-dashed border-border/70 bg-surface/60 p-4 text-center text-sm text-muted-foreground">
+          No peer interviews yet. Complete one and your feedback lands here.
+        </div>
+      </Card>
+    );
+  }
+  const shown = reports.slice(0, 5);
+  return (
+    <Card className="p-5">
+      <div className="mb-3 flex items-center justify-between">
+        <h3 className="font-display font-semibold">Recent peer interviews</h3>
+        <Badge variant="outline">{reports.length}</Badge>
+      </div>
+      <ul className="space-y-2">
+        {shown.map((r) => {
+          const when = new Date(r.created_at);
+          const scoreLabel =
+            typeof r.overall_score === "number" ? `${r.overall_score}/100` : "—";
+          return (
+            <li key={r.id} className="rounded-md border border-border/60 bg-card p-3">
+              <div className="flex items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <div className="truncate text-sm font-medium">
+                    {r.partner_display_name || "Anonymous peer"}
+                  </div>
+                  <div className="text-[11px] text-muted-foreground">
+                    {when.toLocaleString(undefined, {
+                      month: "short",
+                      day: "numeric",
+                      hour: "2-digit",
+                      minute: "2-digit",
+                    })}
+                    {" · "}
+                    {r.role === "candidate" ? "as candidate" : "as interviewer"}
+                  </div>
+                </div>
+                <Badge variant="outline" className="shrink-0 font-mono text-[11px]">
+                  {scoreLabel}
+                </Badge>
+              </div>
+            </li>
+          );
+        })}
+      </ul>
     </Card>
   );
 }

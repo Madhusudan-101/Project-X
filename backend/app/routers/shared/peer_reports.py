@@ -103,5 +103,16 @@ def ingest_peer_report(
         logger.exception("peer_interview_reports insert failed")
         raise HTTPException(status_code=500, detail=f"Insert failed: {e}")
 
+    # If this room is tied to a scheduled meeting, mark it completed. Report
+    # arrival is the AUTHORITATIVE end-of-interview signal (never the clock,
+    # never a first-participant join). No-op for matchmaking rooms with no
+    # scheduled row. Failure here MUST NOT prevent the report row above from
+    # being reported as inserted -- the report is what matters most.
+    try:
+        from ..candidate.peer import _complete_scheduled_meeting_for_room
+        _complete_scheduled_meeting_for_room(body.room_id)
+    except Exception:  # noqa: BLE001
+        logger.exception("scheduled-meeting completion flip failed")
+
     inserted = (res.data or [{}])[0]
     return {"ok": True, "id": inserted.get("id")}
