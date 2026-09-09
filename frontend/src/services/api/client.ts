@@ -102,7 +102,9 @@ export async function request<T>(
   const isFormData = options.body instanceof FormData;
   const method = options.method ?? "GET";
   const body = options.body
-    ? (isFormData ? (options.body as any) : JSON.stringify(options.body))
+    ? isFormData
+      ? (options.body as FormData)
+      : JSON.stringify(options.body)
     : undefined;
 
   const buildHeaders = (token: string | undefined): Record<string, string> => {
@@ -134,14 +136,34 @@ export async function request<T>(
       // No (or no longer valid) refresh_token — refreshAccessToken() already
       // logged the user out. Surface a message the UI can actually act on
       // instead of leaking Supabase's raw "invalid JWT" string.
-      throw new ApiClientError("Your session has expired. Please log in again.", 401, "session_expired");
+      throw new ApiClientError(
+        "Your session has expired. Please log in again.",
+        401,
+        "session_expired",
+      );
     }
   }
 
   if (!res.ok) {
     const errBody = await res.json().catch(() => ({}));
-    const message =
-      typeof errBody.detail === "string" ? errBody.detail : (errBody.message ?? res.statusText);
+    let message: string;
+    if (typeof errBody.detail === "string") {
+      message = errBody.detail;
+    } else if (Array.isArray(errBody.detail)) {
+      // FastAPI / Pydantic request-validation errors come as an array of
+      // { loc, msg, type } — surface the messages instead of "Unprocessable Entity".
+      message =
+        errBody.detail
+          .map((e: unknown) =>
+            typeof e === "string"
+              ? e
+              : ((e as { msg?: string })?.msg ?? "").replace(/^Value error,\s*/, ""),
+          )
+          .filter(Boolean)
+          .join("; ") || res.statusText;
+    } else {
+      message = errBody.message ?? res.statusText;
+    }
     throw new ApiClientError(message, res.status, errBody.code);
   }
   if (res.status === 204) {

@@ -136,3 +136,32 @@ def require_company_role(current_user: dict = Depends(get_current_user)) -> dict
         raise HTTPException(status_code=403, detail="Company role required")
 
     return {**current_user, "profile_role": role}
+
+
+def require_candidate_role(current_user: dict = Depends(get_current_user)) -> dict:
+    """Load the caller's profile, assert Candidate portal user, and attach the
+    `domain` + `college_id` the student job board query needs.
+
+    Mirrors require_company_role. Self-heals a missing profile row by treating
+    the token's default role as candidate.
+    """
+    try:
+        res = db_client.table("profiles").select(
+            "id, role, domain, college_id"
+        ).eq("id", current_user["id"]).single().execute()
+    except APIError as e:
+        if getattr(e, "code", None) == "PGRST116":  # no profile row yet
+            return {**current_user, "profile_role": "candidate", "domain": None, "college_id": None}
+        raise HTTPException(status_code=403, detail=f"Profile lookup failed: {e.message}")
+
+    row = res.data or {}
+    role = row.get("role", "candidate")
+    if role != "candidate":
+        raise HTTPException(status_code=403, detail="Candidate role required")
+
+    return {
+        **current_user,
+        "profile_role": role,
+        "domain": row.get("domain"),
+        "college_id": row.get("college_id"),
+    }

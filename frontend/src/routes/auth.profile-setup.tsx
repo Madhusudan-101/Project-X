@@ -37,7 +37,14 @@ const schema = z.object({
   branch: z.string().trim().max(80).optional(),
   domain: z.enum(["tech", "non-tech"]).optional(),
   graduationYear: z
-    .union([z.literal(""), z.coerce.number().int().min(currentYear - 10).max(currentYear + 10)])
+    .union([
+      z.literal(""),
+      z.coerce
+        .number()
+        .int()
+        .min(currentYear - 10)
+        .max(currentYear + 10),
+    ])
     .optional(),
 });
 type FormValues = z.infer<typeof schema>;
@@ -69,7 +76,9 @@ function ProfileSetupPage() {
   const [skills, setSkills] = useState<SelectedSkill[]>(
     (session?.user.skills ?? []).map((name) => ({ name, isCustom: false })),
   );
-  const [interestedRoles, setInterestedRoles] = useState<string[]>(session?.user.interestedRoles ?? []);
+  const [interestedRoles, setInterestedRoles] = useState<string[]>(
+    session?.user.interestedRoles ?? [],
+  );
 
   const form = useForm<FormValues>({
     resolver: zodResolver(schema),
@@ -87,19 +96,16 @@ function ProfileSetupPage() {
   });
 
   const onSubmit = async (values: FormValues) => {
-    if (isCandidate && (!collegeName || skills.length === 0)) {
-      toast.error("College and at least one skill are required.");
+    if (isCandidate && (!collegeName || skills.length === 0 || !values.domain)) {
+      toast.error("College, domain, and at least one skill are required.");
       return;
     }
 
     setSubmitting(true);
     try {
       const name = `${values.firstName} ${values.lastName}`.trim();
-      // NOTE: degree / branch / domain / per-skill is_custom flag are captured
-      // above for review but intentionally NOT sent yet — they need the
-      // normalized candidate_colleges / skills / candidate_skills tables
-      // (incremental_migration_candidate_onboarding_v2.sql), which hasn't been
-      // approved or run yet. Only fields with existing backend/DB support go out.
+      // `branch` gates on-campus drive eligibility (job_drives.eligible_branches);
+      // `degree` is informational. `domain` filters the student job board.
       const updated = await authService.updateProfile({
         name,
         firstName: values.firstName,
@@ -110,6 +116,9 @@ function ProfileSetupPage() {
           skills: skills.map((s) => s.name),
           interestedRoles,
           graduationYear: values.graduationYear === "" ? undefined : values.graduationYear,
+          ...(values.domain ? { domain: values.domain } : {}),
+          ...(values.branch ? { branch: values.branch } : {}),
+          ...(values.degree ? { degree: values.degree } : {}),
         }),
       });
       updateUser(updated);
@@ -127,7 +136,9 @@ function ProfileSetupPage() {
   return (
     <div>
       <h1 className="font-display text-3xl font-bold">Complete your profile</h1>
-      <p className="mt-2 text-sm text-muted-foreground">A few details to personalize your experience.</p>
+      <p className="mt-2 text-sm text-muted-foreground">
+        A few details to personalize your experience.
+      </p>
 
       <div className="mt-6 flex items-center gap-4 rounded-xl border border-dashed border-border p-4">
         <div className="grid h-16 w-16 place-items-center rounded-full bg-gradient-brand text-lg font-semibold text-primary-foreground">
@@ -213,7 +224,12 @@ function ProfileSetupPage() {
               </div>
               <div className="space-y-2">
                 <Label htmlFor="graduationYear">Graduation year</Label>
-                <Input id="graduationYear" type="number" placeholder="2027" {...form.register("graduationYear")} />
+                <Input
+                  id="graduationYear"
+                  type="number"
+                  placeholder="2027"
+                  {...form.register("graduationYear")}
+                />
                 {form.formState.errors.graduationYear && (
                   <p className="text-xs text-destructive">Enter a valid year</p>
                 )}

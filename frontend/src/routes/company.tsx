@@ -1,6 +1,6 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ArrowRight,
   BarChart3,
@@ -11,6 +11,7 @@ import {
   LayoutDashboard,
   LineChart,
   LogOut,
+  Plus,
   Search,
   Settings,
   Sparkles,
@@ -38,9 +39,12 @@ import {
 import { useAuthStore } from "@/store/auth";
 import { useCompanyStore } from "@/store/company/company";
 import { companyService } from "@/services/api/company/company";
-import { rolesService } from "@/services/api/company/roles";
+import { jobsService } from "@/services/api/company/jobs";
+import { companyDashboardService } from "@/services/api/company/drives";
+import { JobFormDialog } from "@/components/company/jobs/JobFormDialog";
+import { DriveTemplateManager } from "@/components/company/jobs/DriveTemplateManager";
 import type { Company } from "@/types/company/company";
-import type { Role } from "@/types/company/role";
+import type { Job as JobSummary } from "@/types/jobs";
 
 // ── Route ──────────────────────────────────────────────────────────────
 
@@ -85,7 +89,9 @@ function CompanyPortal() {
   }, [session?.user.id]);
 
   const trustedStoredCompany =
-    storedCompany && session && storedCompany.ownerId === session.user.id ? storedCompany : undefined;
+    storedCompany && session && storedCompany.ownerId === session.user.id
+      ? storedCompany
+      : undefined;
 
   // ── Company profile (hydrate from store or fetch) ──────────────────
   const { data: company, isLoading: companyLoading } = useQuery<Company>({
@@ -164,7 +170,10 @@ function CompanyPortal() {
           <div className="ml-auto flex items-center gap-1">
             <Button variant="ghost" size="icon" className="relative" aria-label="Notifications">
               <Bell className="h-4 w-4" />
-              <span className="absolute right-2 top-2 h-1.5 w-1.5 rounded-full bg-primary" aria-hidden="true" />
+              <span
+                className="absolute right-2 top-2 h-1.5 w-1.5 rounded-full bg-primary"
+                aria-hidden="true"
+              />
             </Button>
             <Button
               variant="ghost"
@@ -307,22 +316,28 @@ interface DashboardTabProps {
   loading: boolean;
 }
 
-// Funnel counts have no backend yet (no applications pipeline exists) —
-// zeroed placeholders, not fabricated numbers, until Feature 3 is built.
+// Real aggregate counts from GET /company/dashboard/funnel.
 const FUNNEL_STAGES = [
-  { label: "New Applications", value: 0, icon: Briefcase },
-  { label: "Shortlisted", value: 0, icon: Star },
-  { label: "In Interview", value: 0, icon: Video },
-  { label: "Hired", value: 0, icon: CheckCircle2 },
-];
+  { key: "newApplications", label: "New Applications", icon: Briefcase },
+  { key: "shortlisted", label: "Shortlisted", icon: Star },
+  { key: "inInterview", label: "In Interview", icon: Video },
+  { key: "hired", label: "Hired", icon: CheckCircle2 },
+] as const;
 
 function DashboardTab({ company, loading }: DashboardTabProps) {
+  const { data: funnel, isLoading: funnelLoading } = useQuery({
+    queryKey: ["company-dashboard-funnel"],
+    queryFn: () => companyDashboardService.funnel(),
+    staleTime: 30_000,
+  });
+
   return (
     <div className="space-y-6">
       {/* Funnel view */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         {FUNNEL_STAGES.map((stage) => {
           const Icon = stage.icon;
+          const value = funnel ? funnel[stage.key] : 0;
           return (
             <Card key={stage.label} className="p-4">
               <div className="flex items-center justify-between">
@@ -330,7 +345,9 @@ function DashboardTab({ company, loading }: DashboardTabProps) {
                   <Icon className="h-4 w-4" aria-hidden="true" />
                 </div>
               </div>
-              <div className="mt-2 font-display text-2xl font-bold">{stage.value}</div>
+              <div className="mt-2 font-display text-2xl font-bold">
+                {funnelLoading ? <Skeleton className="h-7 w-10" /> : value}
+              </div>
               <div className="text-xs text-muted-foreground">{stage.label}</div>
             </Card>
           );
@@ -344,7 +361,10 @@ function DashboardTab({ company, loading }: DashboardTabProps) {
         transition={{ duration: 0.35 }}
       >
         <Card className="relative overflow-hidden border-primary/20 p-6">
-          <div className="absolute inset-0 -z-0 opacity-20 [background:radial-gradient(800px_200px_at_80%_-20%,oklch(0.72_0.19_265),transparent_60%)]" aria-hidden="true" />
+          <div
+            className="absolute inset-0 -z-0 opacity-20 [background:radial-gradient(800px_200px_at_80%_-20%,oklch(0.72_0.19_265),transparent_60%)]"
+            aria-hidden="true"
+          />
           <div className="relative">
             <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
               <div>
@@ -355,9 +375,7 @@ function DashboardTab({ company, loading }: DashboardTabProps) {
                   </div>
                 ) : company ? (
                   <>
-                    <h1 className="font-display text-2xl font-bold md:text-3xl">
-                      {company.name}
-                    </h1>
+                    <h1 className="font-display text-2xl font-bold md:text-3xl">{company.name}</h1>
                     <p className="mt-1 text-sm text-muted-foreground">
                       {company.industry} · {company.size} employees
                     </p>
@@ -433,24 +451,26 @@ function DashboardTab({ company, loading }: DashboardTabProps) {
   );
 }
 
-// ── Jobs tab entry (Feature 2: Role Posting) ───────────────────────────
+// ── Jobs tab entry (core loop: JD → board → application → scoring) ─────
 
 function JobsTabEntry() {
-  const { data: roles, isLoading } = useQuery<Role[]>({
-    queryKey: ["company-roles"],
-    queryFn: () => rolesService.list(),
+  const [createOpen, setCreateOpen] = useState(false);
+  const queryClient = useQueryClient();
+  const { data: jobs, isLoading } = useQuery<JobSummary[]>({
+    queryKey: ["company-jobs"],
+    queryFn: () => jobsService.list(),
     staleTime: 60 * 1000,
   });
 
   const counts = useMemo(() => {
-    const all = roles ?? [];
+    const all = jobs ?? [];
     return {
       total: all.length,
       draft: all.filter((r) => r.status === "draft").length,
-      published: all.filter((r) => r.status === "published").length,
-      archived: all.filter((r) => r.status === "archived").length,
+      live: all.filter((r) => r.status === "live").length,
+      closed: all.filter((r) => r.status === "closed").length,
     };
-  }, [roles]);
+  }, [jobs]);
 
   return (
     <motion.div
@@ -465,26 +485,36 @@ function JobsTabEntry() {
               <Briefcase className="h-6 w-6" aria-hidden="true" />
             </div>
             <div>
-              <h2 className="font-display text-lg font-semibold">Role Postings</h2>
+              <h2 className="font-display text-lg font-semibold">Job Postings</h2>
               <p className="mt-0.5 max-w-sm text-sm text-muted-foreground">
-                Create, publish, archive and manage every role you&apos;re hiring for.
+                Post a JD, set the per-job scoring weights, and review candidates ranked for that
+                job.
               </p>
             </div>
           </div>
-          <Link to="/company-roles">
-            <Button className="bg-gradient-brand text-primary-foreground shadow-soft">
-              Manage roles
-              <ArrowRight className="ml-2 h-4 w-4" />
+          <div className="flex shrink-0 gap-2">
+            <Button
+              onClick={() => setCreateOpen(true)}
+              className="bg-gradient-brand text-primary-foreground shadow-soft"
+            >
+              <Plus className="mr-2 h-4 w-4" />
+              Create job
             </Button>
-          </Link>
+            <Link to="/company-jobs">
+              <Button variant="outline">
+                Manage jobs
+                <ArrowRight className="ml-2 h-4 w-4" />
+              </Button>
+            </Link>
+          </div>
         </div>
 
         <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
           {[
             { label: "Total", value: counts.total },
             { label: "Draft", value: counts.draft },
-            { label: "Published", value: counts.published },
-            { label: "Archived", value: counts.archived },
+            { label: "Live", value: counts.live },
+            { label: "Closed", value: counts.closed },
           ].map((stat) => (
             <div
               key={stat.label}
@@ -500,6 +530,16 @@ function JobsTabEntry() {
           ))}
         </div>
       </Card>
+
+      <DriveTemplateManager />
+
+      <JobFormDialog
+        open={createOpen}
+        onOpenChange={setCreateOpen}
+        mode="create"
+        job={null}
+        onSuccess={() => queryClient.invalidateQueries({ queryKey: ["company-jobs"] })}
+      />
     </motion.div>
   );
 }
@@ -526,14 +566,10 @@ function ComingSoonTab({ icon: Icon, title, body, feature }: ComingSoonTabProps)
         </div>
         <h2 className="mt-4 font-display text-xl font-bold">{title}</h2>
         <p className="mx-auto mt-2 max-w-sm text-sm text-muted-foreground">{body}</p>
-        <Badge
-          variant="outline"
-          className="mt-4 border-primary/30 bg-primary/5 text-primary"
-        >
+        <Badge variant="outline" className="mt-4 border-primary/30 bg-primary/5 text-primary">
           {feature} — coming soon
         </Badge>
       </Card>
     </motion.div>
   );
 }
-

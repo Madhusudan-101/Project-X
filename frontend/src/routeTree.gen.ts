@@ -18,8 +18,10 @@ import { Route as AuthRouteImport } from './routes/auth'
 import { Route as AdminRouteImport } from './routes/admin'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as CompanyRolesIndexRouteImport } from './routes/company-roles/index'
+import { Route as CompanyJobsIndexRouteImport } from './routes/company-jobs/index'
 import { Route as CollegeIndexRouteImport } from './routes/college/index'
 import { Route as CompanyRolesRoleIdRouteImport } from './routes/company-roles/$roleId'
+import { Route as CompanyJobsJobIdRouteImport } from './routes/company-jobs/$jobId'
 import { Route as CollegeStudentsRouteImport } from './routes/college/students'
 import { Route as CollegeShortlistRouteImport } from './routes/college/shortlist'
 import { Route as CollegeReportsRouteImport } from './routes/college/reports'
@@ -27,6 +29,7 @@ import { Route as CollegePlacementCycleRouteImport } from './routes/college/plac
 import { Route as CollegeDrivesRouteImport } from './routes/college/drives'
 import { Route as CollegeDepartmentsRouteImport } from './routes/college/departments'
 import { Route as CollegeAnalyticsRouteImport } from './routes/college/analytics'
+import { Route as CandidateJobsJobIdRouteImport } from './routes/candidate-jobs/$jobId'
 import { Route as AuthSignupRouteImport } from './routes/auth.signup'
 import { Route as AuthSetPasswordRouteImport } from './routes/auth.set-password'
 import { Route as AuthResetPasswordRouteImport } from './routes/auth.reset-password'
@@ -85,6 +88,11 @@ const CompanyRolesIndexRoute = CompanyRolesIndexRouteImport.update({
   path: '/company-roles/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const CompanyJobsIndexRoute = CompanyJobsIndexRouteImport.update({
+  id: '/company-jobs/',
+  path: '/company-jobs/',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const CollegeIndexRoute = CollegeIndexRouteImport.update({
   id: '/',
   path: '/',
@@ -93,6 +101,11 @@ const CollegeIndexRoute = CollegeIndexRouteImport.update({
 const CompanyRolesRoleIdRoute = CompanyRolesRoleIdRouteImport.update({
   id: '/company-roles/$roleId',
   path: '/company-roles/$roleId',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const CompanyJobsJobIdRoute = CompanyJobsJobIdRouteImport.update({
+  id: '/company-jobs/$jobId',
+  path: '/company-jobs/$jobId',
   getParentRoute: () => rootRouteImport,
 } as any)
 const CollegeStudentsRoute = CollegeStudentsRouteImport.update({
@@ -129,6 +142,11 @@ const CollegeAnalyticsRoute = CollegeAnalyticsRouteImport.update({
   id: '/analytics',
   path: '/analytics',
   getParentRoute: () => CollegeRoute,
+} as any)
+const CandidateJobsJobIdRoute = CandidateJobsJobIdRouteImport.update({
+  id: '/candidate-jobs/$jobId',
+  path: '/candidate-jobs/$jobId',
+  getParentRoute: () => rootRouteImport,
 } as any)
 const AuthSignupRoute = AuthSignupRouteImport.update({
   id: '/signup',
@@ -212,6 +230,7 @@ export interface FileRoutesByFullPath {
   '/auth/reset-password': typeof AuthResetPasswordRoute
   '/auth/set-password': typeof AuthSetPasswordRoute
   '/auth/signup': typeof AuthSignupRoute
+  '/candidate-jobs/$jobId': typeof CandidateJobsJobIdRoute
   '/college/analytics': typeof CollegeAnalyticsRoute
   '/college/departments': typeof CollegeDepartmentsRoute
   '/college/drives': typeof CollegeDrivesRoute
@@ -219,8 +238,10 @@ export interface FileRoutesByFullPath {
   '/college/reports': typeof CollegeReportsRoute
   '/college/shortlist': typeof CollegeShortlistRoute
   '/college/students': typeof CollegeStudentsRoute
+  '/company-jobs/$jobId': typeof CompanyJobsJobIdRoute
   '/company-roles/$roleId': typeof CompanyRolesRoleIdRoute
   '/college/': typeof CollegeIndexRoute
+  '/company-jobs/': typeof CompanyJobsIndexRoute
   '/company-roles/': typeof CompanyRolesIndexRoute
 }
 export interface FileRoutesByTo {
@@ -243,6 +264,7 @@ export interface FileRoutesByTo {
   '/auth/reset-password': typeof AuthResetPasswordRoute
   '/auth/set-password': typeof AuthSetPasswordRoute
   '/auth/signup': typeof AuthSignupRoute
+  '/candidate-jobs/$jobId': typeof CandidateJobsJobIdRoute
   '/college/analytics': typeof CollegeAnalyticsRoute
   '/college/departments': typeof CollegeDepartmentsRoute
   '/college/drives': typeof CollegeDrivesRoute
@@ -250,8 +272,10 @@ export interface FileRoutesByTo {
   '/college/reports': typeof CollegeReportsRoute
   '/college/shortlist': typeof CollegeShortlistRoute
   '/college/students': typeof CollegeStudentsRoute
+  '/company-jobs/$jobId': typeof CompanyJobsJobIdRoute
   '/company-roles/$roleId': typeof CompanyRolesRoleIdRoute
   '/college': typeof CollegeIndexRoute
+  '/company-jobs': typeof CompanyJobsIndexRoute
   '/company-roles': typeof CompanyRolesIndexRoute
 }
 export interface FileRoutesById {
@@ -276,6 +300,7 @@ export interface FileRoutesById {
   '/auth/reset-password': typeof AuthResetPasswordRoute
   '/auth/set-password': typeof AuthSetPasswordRoute
   '/auth/signup': typeof AuthSignupRoute
+  '/candidate-jobs/$jobId': typeof CandidateJobsJobIdRoute
   '/college/analytics': typeof CollegeAnalyticsRoute
   '/college/departments': typeof CollegeDepartmentsRoute
   '/college/drives': typeof CollegeDrivesRoute
@@ -283,8 +308,10 @@ export interface FileRoutesById {
   '/college/reports': typeof CollegeReportsRoute
   '/college/shortlist': typeof CollegeShortlistRoute
   '/college/students': typeof CollegeStudentsRoute
+  '/company-jobs/$jobId': typeof CompanyJobsJobIdRoute
   '/company-roles/$roleId': typeof CompanyRolesRoleIdRoute
   '/college/': typeof CollegeIndexRoute
+  '/company-jobs/': typeof CompanyJobsIndexRoute
   '/company-roles/': typeof CompanyRolesIndexRoute
 }
 export interface FileRouteTypes {
@@ -310,6 +337,7 @@ export interface FileRouteTypes {
     | '/auth/reset-password'
     | '/auth/set-password'
     | '/auth/signup'
+    | '/candidate-jobs/$jobId'
     | '/college/analytics'
     | '/college/departments'
     | '/college/drives'
@@ -317,8 +345,10 @@ export interface FileRouteTypes {
     | '/college/reports'
     | '/college/shortlist'
     | '/college/students'
+    | '/company-jobs/$jobId'
     | '/company-roles/$roleId'
     | '/college/'
+    | '/company-jobs/'
     | '/company-roles/'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -341,6 +371,7 @@ export interface FileRouteTypes {
     | '/auth/reset-password'
     | '/auth/set-password'
     | '/auth/signup'
+    | '/candidate-jobs/$jobId'
     | '/college/analytics'
     | '/college/departments'
     | '/college/drives'
@@ -348,8 +379,10 @@ export interface FileRouteTypes {
     | '/college/reports'
     | '/college/shortlist'
     | '/college/students'
+    | '/company-jobs/$jobId'
     | '/company-roles/$roleId'
     | '/college'
+    | '/company-jobs'
     | '/company-roles'
   id:
     | '__root__'
@@ -373,6 +406,7 @@ export interface FileRouteTypes {
     | '/auth/reset-password'
     | '/auth/set-password'
     | '/auth/signup'
+    | '/candidate-jobs/$jobId'
     | '/college/analytics'
     | '/college/departments'
     | '/college/drives'
@@ -380,8 +414,10 @@ export interface FileRouteTypes {
     | '/college/reports'
     | '/college/shortlist'
     | '/college/students'
+    | '/company-jobs/$jobId'
     | '/company-roles/$roleId'
     | '/college/'
+    | '/company-jobs/'
     | '/company-roles/'
   fileRoutesById: FileRoutesById
 }
@@ -394,7 +430,10 @@ export interface RootRouteChildren {
   CompanyRoute: typeof CompanyRoute
   PortalsRoute: typeof PortalsRoute
   SitemapDotxmlRoute: typeof SitemapDotxmlRoute
+  CandidateJobsJobIdRoute: typeof CandidateJobsJobIdRoute
+  CompanyJobsJobIdRoute: typeof CompanyJobsJobIdRoute
   CompanyRolesRoleIdRoute: typeof CompanyRolesRoleIdRoute
+  CompanyJobsIndexRoute: typeof CompanyJobsIndexRoute
   CompanyRolesIndexRoute: typeof CompanyRolesIndexRoute
 }
 
@@ -463,6 +502,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof CompanyRolesIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/company-jobs/': {
+      id: '/company-jobs/'
+      path: '/company-jobs'
+      fullPath: '/company-jobs/'
+      preLoaderRoute: typeof CompanyJobsIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/college/': {
       id: '/college/'
       path: '/'
@@ -475,6 +521,13 @@ declare module '@tanstack/react-router' {
       path: '/company-roles/$roleId'
       fullPath: '/company-roles/$roleId'
       preLoaderRoute: typeof CompanyRolesRoleIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/company-jobs/$jobId': {
+      id: '/company-jobs/$jobId'
+      path: '/company-jobs/$jobId'
+      fullPath: '/company-jobs/$jobId'
+      preLoaderRoute: typeof CompanyJobsJobIdRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/college/students': {
@@ -525,6 +578,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/college/analytics'
       preLoaderRoute: typeof CollegeAnalyticsRouteImport
       parentRoute: typeof CollegeRoute
+    }
+    '/candidate-jobs/$jobId': {
+      id: '/candidate-jobs/$jobId'
+      path: '/candidate-jobs/$jobId'
+      fullPath: '/candidate-jobs/$jobId'
+      preLoaderRoute: typeof CandidateJobsJobIdRouteImport
+      parentRoute: typeof rootRouteImport
     }
     '/auth/signup': {
       id: '/auth/signup'
@@ -679,7 +739,10 @@ const rootRouteChildren: RootRouteChildren = {
   CompanyRoute: CompanyRoute,
   PortalsRoute: PortalsRoute,
   SitemapDotxmlRoute: SitemapDotxmlRoute,
+  CandidateJobsJobIdRoute: CandidateJobsJobIdRoute,
+  CompanyJobsJobIdRoute: CompanyJobsJobIdRoute,
   CompanyRolesRoleIdRoute: CompanyRolesRoleIdRoute,
+  CompanyJobsIndexRoute: CompanyJobsIndexRoute,
   CompanyRolesIndexRoute: CompanyRolesIndexRoute,
 }
 export const routeTree = rootRouteImport

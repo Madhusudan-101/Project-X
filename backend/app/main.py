@@ -13,7 +13,11 @@ logging.basicConfig(
 )
 from .routers.college import students, drives, dashboard, shortlist, departments
 from .routers.candidate import sync, analyze, practice, peer
+from .routers.candidate import jobs as candidate_jobs
 from .routers.company import company, roles as company_roles
+from .routers.company import jobs as company_jobs
+from .routers.company import applicants as company_applicants
+from .routers.company import drives as company_drives
 
 app = FastAPI(title="Mirracle API")
 
@@ -47,6 +51,10 @@ app.include_router(peer.router)
 app.include_router(peer_reports.router)
 app.include_router(company.router)
 app.include_router(company_roles.router)
+app.include_router(company_jobs.router)
+app.include_router(company_applicants.router)
+app.include_router(company_drives.router)
+app.include_router(candidate_jobs.router)
 
 @app.get("/")
 def root():

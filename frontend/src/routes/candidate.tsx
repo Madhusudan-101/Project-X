@@ -51,7 +51,11 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/component
 import { useAuthStore } from "@/store/auth";
 import { useCandidateGuard } from "@/hooks/candidate/use-candidate-guard";
 import { useResumeAnalysisStore } from "@/store/candidate/resumeAnalysis";
-import { ProfileAnalyzerPanel, ScoreRing, verdictTone } from "@/components/candidate/ProfileSyncPanel";
+import {
+  ProfileAnalyzerPanel,
+  ScoreRing,
+  verdictTone,
+} from "@/components/candidate/ProfileSyncPanel";
 import { computeDnaBreakdown, computeDnaScore, computeSkillDna } from "@/lib/skillDna";
 import { practiceService } from "@/services/api/candidate/practice";
 import { peerService } from "@/services/api/candidate/peer";
@@ -61,6 +65,15 @@ import { usePeerInterviewStore } from "@/store/candidate/peerInterview";
 import { extractLeetCodeUsername, syncService } from "@/services/api/candidate/sync";
 import { ApiClientError } from "@/services/api/client";
 import type { PracticeRecommendations } from "@/types/candidate/practice";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { candidateJobsService } from "@/services/api/candidate/jobs";
+import { ProfileSettingsDialog } from "@/components/candidate/ProfileSettingsDialog";
+import {
+  APPLICATION_STATUS_LABELS,
+  EXPERIENCE_LEVEL_LABELS,
+  type Application,
+  type JobBoardCard,
+} from "@/types/jobs";
 
 export const Route = createFileRoute("/candidate")({
   component: CandidatePortal,
@@ -84,6 +97,7 @@ const companyTracks: {
 
 function CandidatePortal() {
   const [tab, setTab] = useState("overview");
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const navigate = useNavigate();
   useCandidateGuard();
   const session = useAuthStore((s) => s.session);
@@ -124,7 +138,8 @@ function CandidatePortal() {
 
   const initials = useMemo(() => {
     const u = session?.user;
-    const source = u?.firstName || u?.lastName ? `${u?.firstName ?? ""} ${u?.lastName ?? ""}` : u?.name;
+    const source =
+      u?.firstName || u?.lastName ? `${u?.firstName ?? ""} ${u?.lastName ?? ""}` : u?.name;
     if (!source) return "C";
     return source
       .split(" ")
@@ -158,7 +173,10 @@ function CandidatePortal() {
 
           <div className="relative ml-2 hidden max-w-sm flex-1 md:block">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <Input placeholder="Jump to a problem, module, company…" className="h-9 rounded-lg pl-9" />
+            <Input
+              placeholder="Jump to a problem, module, company…"
+              className="h-9 rounded-lg pl-9"
+            />
           </div>
 
           <div className="ml-auto flex items-center gap-1">
@@ -166,12 +184,19 @@ function CandidatePortal() {
               <Bell className="h-4 w-4" />
               <span className="absolute right-2 top-2 h-1.5 w-1.5 rounded-full bg-primary" />
             </Button>
-            <Button variant="ghost" size="icon">
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => setSettingsOpen(true)}
+              aria-label="Profile settings"
+            >
               <Settings className="h-4 w-4" />
             </Button>
             <div className="ml-2 hidden text-right text-xs md:block">
               <div className="font-medium">{displayName || "New candidate"}</div>
-              <div className="text-muted-foreground">{session?.user?.email ?? "you@mirracle.ai"}</div>
+              <div className="text-muted-foreground">
+                {session?.user?.email ?? "you@mirracle.ai"}
+              </div>
             </div>
             <div className="ml-2 grid h-8 w-8 place-items-center rounded-full bg-primary/10 text-xs font-semibold text-primary">
               {initials}
@@ -188,6 +213,7 @@ function CandidatePortal() {
             <TabsList className="h-11 gap-1 bg-transparent p-0">
               {[
                 { v: "overview", label: "Overview", icon: Activity },
+                { v: "jobs", label: "Jobs", icon: Briefcase },
                 { v: "analyzer", label: "Analyzer", icon: Zap },
                 { v: "practice", label: "Practice", icon: TerminalSquare },
                 { v: "dna", label: "Skill DNA", icon: Dna },
@@ -216,6 +242,9 @@ function CandidatePortal() {
               <TabsContent value="overview" className="mt-0" forceMount>
                 <OverviewTab />
               </TabsContent>
+              <TabsContent value="jobs" className="mt-0">
+                <JobsTab />
+              </TabsContent>
               <TabsContent value="analyzer" className="mt-0" forceMount>
                 <AnalyzerTab />
               </TabsContent>
@@ -229,6 +258,8 @@ function CandidatePortal() {
           </Tabs>
         </div>
       </header>
+
+      <ProfileSettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} />
     </div>
   );
 }
@@ -238,10 +269,18 @@ function CandidatePortal() {
 function OverviewTab() {
   const session = useAuthStore((s) => s.session);
   const [peerModalOpen, setPeerModalOpen] = useState(false);
+  // Shares the ["candidate-applications"] cache with the Jobs tab — react-query
+  // dedupes, so this is not a second network call.
+  const { data: applications } = useQuery<Application[]>({
+    queryKey: ["candidate-applications"],
+    queryFn: () => candidateJobsService.listMyApplications(),
+    enabled: !!session,
+    staleTime: 30_000,
+  });
+  const applicationCount = applications?.length ?? 0;
   const activePeerRoom = usePeerInterviewStore((s) => s.activeRoom);
   const clearPeerRoom = usePeerInterviewStore((s) => s.clearActiveRoom);
-  const firstName =
-    session?.user?.firstName ?? session?.user?.name?.split(" ")[0] ?? "";
+  const firstName = session?.user?.firstName ?? session?.user?.name?.split(" ")[0] ?? "";
   const today = new Date().toLocaleDateString(undefined, {
     weekday: "long",
     month: "short",
@@ -274,8 +313,18 @@ function OverviewTab() {
 
       {/* Stat strip incl. Learning curve */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <StatCard icon={Target} label="Industry readiness" value="—" hint="Complete 1 mock to unlock" />
-        <StatCard icon={Briefcase} label="Applications" value="0" hint="No applications yet" />
+        <StatCard
+          icon={Target}
+          label="Industry readiness"
+          value="—"
+          hint="Complete 1 mock to unlock"
+        />
+        <StatCard
+          icon={Briefcase}
+          label="Applications"
+          value={String(applicationCount)}
+          hint={applicationCount === 0 ? "No applications yet" : `${applicationCount} active`}
+        />
         <StatCard icon={Flame} label="Streak" value="0 days" hint="Start today" />
         <LearningCurveCard />
       </div>
@@ -284,7 +333,12 @@ function OverviewTab() {
         <div className="lg:col-span-2">
           <SectionHeader title="Your workspace" hint="Small tools, one job each." />
           <div className="grid gap-3 sm:grid-cols-2">
-            <ModuleCard icon={Brain} title="AI Interview" body="Adaptive mocks, honest feedback." status="Live" />
+            <ModuleCard
+              icon={Brain}
+              title="AI Interview"
+              body="Adaptive mocks, honest feedback."
+              status="Live"
+            />
             {activePeerRoom ? (
               <ActivePeerRoomCard
                 roomId={activePeerRoom.roomId}
@@ -330,10 +384,30 @@ function OverviewTab() {
                 onClick={() => setPeerModalOpen(true)}
               />
             )}
-            <ModuleCard icon={Video} title="Expert Interview" body="Book seniors from real hiring loops." status="Beta" />
-            <ModuleCard icon={FileText} title="Resume Analyzer" body="ATS score, gaps, rewrites for the role." status="Live" />
-            <ModuleCard icon={TerminalSquare} title="LeetCode Practice" body="Company-wise DSA sets and timed rounds." status="Live" />
-            <ModuleCard icon={Dna} title="Skill DNA" body="What your work says you actually are." status="Beta" />
+            <ModuleCard
+              icon={Video}
+              title="Expert Interview"
+              body="Book seniors from real hiring loops."
+              status="Beta"
+            />
+            <ModuleCard
+              icon={FileText}
+              title="Resume Analyzer"
+              body="ATS score, gaps, rewrites for the role."
+              status="Live"
+            />
+            <ModuleCard
+              icon={TerminalSquare}
+              title="LeetCode Practice"
+              body="Company-wise DSA sets and timed rounds."
+              status="Live"
+            />
+            <ModuleCard
+              icon={Dna}
+              title="Skill DNA"
+              body="What your work says you actually are."
+              status="Beta"
+            />
           </div>
         </div>
 
@@ -341,18 +415,24 @@ function OverviewTab() {
           <Card className="p-5">
             <div className="mb-3 flex items-center justify-between">
               <h3 className="font-display font-semibold">First step</h3>
-              <Badge variant="outline" className="border-primary/30 text-primary">Focus</Badge>
+              <Badge variant="outline" className="border-primary/30 text-primary">
+                Focus
+              </Badge>
             </div>
             <p className="text-sm text-muted-foreground">
               A 10-minute intro mock benchmarks where you actually stand — no prep required.
             </p>
-            <Button size="sm" className="mt-4 bg-gradient-brand text-primary-foreground">Run intro mock</Button>
+            <Button size="sm" className="mt-4 bg-gradient-brand text-primary-foreground">
+              Run intro mock
+            </Button>
           </Card>
 
           <Card className="p-5">
             <div className="mb-3 flex items-center justify-between">
               <h3 className="font-display font-semibold">Recent</h3>
-              <Button variant="ghost" size="sm" className="text-primary h-7">See all</Button>
+              <Button variant="ghost" size="sm" className="text-primary h-7">
+                See all
+              </Button>
             </div>
             <div className="rounded-md border border-dashed border-border/70 bg-surface/60 p-4 text-center text-sm text-muted-foreground">
               No activity yet. Anything you do here shows up in this feed.
@@ -395,7 +475,9 @@ function ActivePeerRoomCard({
         </div>
       </div>
       <div className="mt-3 flex items-center gap-2">
-        <code className="flex-1 truncate rounded bg-muted px-2 py-1 font-mono text-xs">{roomId}</code>
+        <code className="flex-1 truncate rounded bg-muted px-2 py-1 font-mono text-xs">
+          {roomId}
+        </code>
         <Button size="sm" variant="outline" onClick={onCopy} aria-label="Copy room ID">
           <Copy className="h-3.5 w-3.5" />
         </Button>
@@ -439,7 +521,9 @@ function AnalyzerTab() {
       <ProfileAnalyzerPanel />
 
       {resumeResult && tone ? (
-        <div className={`relative overflow-hidden rounded-2xl border border-primary/20 bg-gradient-to-br ${tone.ring} via-surface to-surface p-6`}>
+        <div
+          className={`relative overflow-hidden rounded-2xl border border-primary/20 bg-gradient-to-br ${tone.ring} via-surface to-surface p-6`}
+        >
           <div className="flex flex-col gap-5 sm:flex-row sm:items-center">
             <ScoreRing score={resumeResult.overall_rating.score} />
             <div className="flex-1 space-y-2">
@@ -447,7 +531,9 @@ function AnalyzerTab() {
                 <Award className="h-3.5 w-3.5 text-primary" />
                 Latest Analysis{analyzedRole ? ` · ${analyzedRole}` : ""}
               </div>
-              <Badge className={`${tone.text} border-current/30 bg-current/10 text-base font-semibold px-3 py-1`}>
+              <Badge
+                className={`${tone.text} border-current/30 bg-current/10 text-base font-semibold px-3 py-1`}
+              >
                 {resumeResult.overall_rating.verdict}
               </Badge>
               <p className="text-lg leading-relaxed text-foreground/90">
@@ -461,7 +547,9 @@ function AnalyzerTab() {
           <div className="mb-4 flex items-center justify-between">
             <div>
               <h2 className="font-display text-xl font-semibold">No analysis yet</h2>
-              <p className="text-base text-muted-foreground">Your latest results will be summarized here.</p>
+              <p className="text-base text-muted-foreground">
+                Your latest results will be summarized here.
+              </p>
             </div>
             <Badge variant="outline">No runs yet</Badge>
           </div>
@@ -530,7 +618,9 @@ function PracticeTab() {
           <div className="mx-auto grid h-12 w-12 place-items-center rounded-xl bg-primary/10 text-primary">
             <Building2 className="h-5 w-5" />
           </div>
-          <h3 className="mt-3 font-display text-base font-semibold">No practice tracks loaded yet</h3>
+          <h3 className="mt-3 font-display text-base font-semibold">
+            No practice tracks loaded yet
+          </h3>
           <p className="mt-1 text-sm text-muted-foreground">
             Sync your LeetCode to auto-generate company DSA tracks tailored to your gaps.
           </p>
@@ -541,12 +631,17 @@ function PracticeTab() {
       ) : (
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
           {list.map((c) => (
-            <Card key={c.company} className="group cursor-pointer p-5 transition-all hover:-translate-y-0.5 hover:border-primary/30">
+            <Card
+              key={c.company}
+              className="group cursor-pointer p-5 transition-all hover:-translate-y-0.5 hover:border-primary/30"
+            >
               <div className="flex items-start justify-between">
                 <div className="grid h-10 w-10 place-items-center rounded-lg bg-primary/10 text-primary">
                   <Building2 className="h-5 w-5" />
                 </div>
-                <Badge variant="outline" className="text-xs">{c.tag}</Badge>
+                <Badge variant="outline" className="text-xs">
+                  {c.tag}
+                </Badge>
               </div>
               <div className="mt-3 flex items-center justify-between gap-2">
                 <div className="font-display text-base font-semibold">{c.company}</div>
@@ -580,7 +675,8 @@ function PracticeTab() {
           <div>
             <h2 className="font-display text-lg font-semibold">Prioritized practice</h2>
             <p className="text-sm text-muted-foreground">
-              Ranked by your weakest LeetCode topics — click any question to solve it on leetcode.com.
+              Ranked by your weakest LeetCode topics — click any question to solve it on
+              leetcode.com.
             </p>
           </div>
         </div>
@@ -610,20 +706,26 @@ function PracticeTab() {
           </div>
         )}
 
-        {syncError && (
-          <p className="mt-2 text-sm text-destructive">{syncError}</p>
-        )}
+        {syncError && <p className="mt-2 text-sm text-destructive">{syncError}</p>}
 
         {recommendations && (
           <div className="space-y-3">
             {recommendations.weak_topics.map((topic) => (
-              <Collapsible key={topic.tag_slug} defaultOpen className="rounded-md border border-border/70">
+              <Collapsible
+                key={topic.tag_slug}
+                defaultOpen
+                className="rounded-md border border-border/70"
+              >
                 <CollapsibleTrigger className="flex w-full items-center justify-between gap-3 p-4 text-left">
                   <div className="flex items-center gap-2">
-                    <Badge variant="outline" className="text-xs capitalize">{topic.tier}</Badge>
+                    <Badge variant="outline" className="text-xs capitalize">
+                      {topic.tier}
+                    </Badge>
                     <span className="text-sm font-semibold">{topic.tag_name}</span>
                   </div>
-                  <span className="text-xs text-muted-foreground">{topic.problems_solved} solved</span>
+                  <span className="text-xs text-muted-foreground">
+                    {topic.problems_solved} solved
+                  </span>
                 </CollapsibleTrigger>
                 <CollapsibleContent className="border-t border-border/70 px-4">
                   {topic.fetch_warning ? (
@@ -631,7 +733,10 @@ function PracticeTab() {
                   ) : (
                     <ul className="divide-y divide-border">
                       {topic.questions.map((q) => (
-                        <li key={q.title_slug} className="flex items-center justify-between gap-3 py-3">
+                        <li
+                          key={q.title_slug}
+                          className="flex items-center justify-between gap-3 py-3"
+                        >
                           <a
                             href={q.url}
                             target="_blank"
@@ -674,10 +779,7 @@ function PracticeTab() {
 function TechDnaTab() {
   const resumeResult = useResumeAnalysisStore((s) => s.result);
   const analyzedRole = useResumeAnalysisStore((s) => s.role);
-  const matchedSkills = useMemo(
-    () => resumeResult?.role_fit.matched_skills ?? [],
-    [resumeResult],
-  );
+  const matchedSkills = useMemo(() => resumeResult?.role_fit.matched_skills ?? [], [resumeResult]);
   const skillDna = useMemo(() => computeSkillDna(matchedSkills), [matchedSkills]);
   const dnaBreakdown = useMemo(() => computeDnaBreakdown(matchedSkills), [matchedSkills]);
   const dnaScore = useMemo(() => computeDnaScore(matchedSkills), [matchedSkills]);
@@ -711,7 +813,10 @@ function TechDnaTab() {
             <ResponsiveContainer width="100%" height="100%">
               <RadarChart data={skillDna} outerRadius="75%">
                 <PolarGrid stroke="var(--color-border)" />
-                <PolarAngleAxis dataKey="skill" tick={{ fill: "var(--color-muted-foreground)", fontSize: 12 }} />
+                <PolarAngleAxis
+                  dataKey="skill"
+                  tick={{ fill: "var(--color-muted-foreground)", fontSize: 12 }}
+                />
                 <Radar
                   dataKey="value"
                   stroke="var(--color-primary)"
@@ -719,7 +824,12 @@ function TechDnaTab() {
                   fillOpacity={hasData ? 0.25 : 0.05}
                 />
                 <Tooltip
-                  contentStyle={{ background: "var(--color-popover)", color: "var(--color-popover-foreground)", border: "1px solid var(--color-border)", borderRadius: 8 }}
+                  contentStyle={{
+                    background: "var(--color-popover)",
+                    color: "var(--color-popover-foreground)",
+                    border: "1px solid var(--color-border)",
+                    borderRadius: 8,
+                  }}
                 />
               </RadarChart>
             </ResponsiveContainer>
@@ -753,7 +863,9 @@ function TechDnaTab() {
         <div className="mb-3 flex items-center justify-between">
           <div>
             <h2 className="font-display text-lg font-semibold">What this actually means</h2>
-            <p className="text-sm text-muted-foreground">Written in plain English once we have enough signal.</p>
+            <p className="text-sm text-muted-foreground">
+              Written in plain English once we have enough signal.
+            </p>
           </div>
           <Award className="h-5 w-5 text-primary" />
         </div>
@@ -764,7 +876,8 @@ function TechDnaTab() {
           </div>
         ) : (
           <div className="rounded-lg border border-dashed border-border/70 bg-surface/60 p-6 text-center text-sm text-muted-foreground">
-            Your personal DNA read-out appears here after your first resume analysis — run one from the Analyzer tab.
+            Your personal DNA read-out appears here after your first resume analysis — run one from
+            the Analyzer tab.
           </div>
         )}
       </Card>
@@ -814,7 +927,9 @@ function LearningCurveCard() {
           <Activity className="h-4 w-4" />
         </div>
         {hasData ? (
-          <span className="text-xs font-medium text-success">+{delta} in {learningCurve.length} wks</span>
+          <span className="text-xs font-medium text-success">
+            +{delta} in {learningCurve.length} wks
+          </span>
         ) : (
           <span className="text-xs text-muted-foreground">No data yet</span>
         )}
@@ -839,9 +954,21 @@ function LearningCurveCard() {
               <YAxis hide domain={[0, 100]} />
               <Tooltip
                 cursor={{ stroke: "var(--color-border)" }}
-                contentStyle={{ fontSize: 12, borderRadius: 8, border: "1px solid var(--color-border)", background: "var(--color-popover)", color: "var(--color-popover-foreground)" }}
+                contentStyle={{
+                  fontSize: 12,
+                  borderRadius: 8,
+                  border: "1px solid var(--color-border)",
+                  background: "var(--color-popover)",
+                  color: "var(--color-popover-foreground)",
+                }}
               />
-              <Area type="monotone" dataKey="score" stroke="var(--color-primary)" strokeWidth={2} fill="url(#lc)" />
+              <Area
+                type="monotone"
+                dataKey="score"
+                stroke="var(--color-primary)"
+                strokeWidth={2}
+                fill="url(#lc)"
+              />
             </AreaChart>
           </ResponsiveContainer>
         ) : (
@@ -936,5 +1063,158 @@ function AnalyzerCard({
         {cta}
       </Button>
     </Card>
+  );
+}
+
+// ---------- Jobs (board + application tracker) ----------
+
+function JobsTab() {
+  const [applyingId, setApplyingId] = useState<string | null>(null);
+  const queryClient = useQueryClient();
+
+  const { data: board, isLoading: boardLoading } = useQuery<JobBoardCard[]>({
+    queryKey: ["candidate-job-board"],
+    queryFn: () => candidateJobsService.listBoard(),
+  });
+
+  const { data: applications } = useQuery<Application[]>({
+    queryKey: ["candidate-applications"],
+    queryFn: () => candidateJobsService.listMyApplications(),
+    refetchInterval: (q) =>
+      (q.state.data ?? []).some((a) => a.status === "scoring") ? 4000 : false,
+  });
+
+  const applyMutation = useMutation({
+    mutationFn: (jobId: string) => candidateJobsService.apply(jobId),
+    onMutate: (jobId) => setApplyingId(jobId),
+    onSuccess: () => {
+      toast.success("Application submitted — we're scoring you for this role now.");
+      queryClient.invalidateQueries({ queryKey: ["candidate-job-board"] });
+      queryClient.invalidateQueries({ queryKey: ["candidate-applications"] });
+    },
+    onError: (e: unknown) =>
+      toast.error(e instanceof Error ? e.message : "Could not submit your application."),
+    onSettled: () => setApplyingId(null),
+  });
+
+  return (
+    <div className="space-y-8">
+      {/* Board */}
+      <section className="space-y-4">
+        <div>
+          <h1 className="font-display text-2xl font-semibold">Job board</h1>
+          <p className="text-sm text-muted-foreground">
+            Roles matched to your domain and college. Applying runs a scoring pass tuned to that
+            job.
+          </p>
+        </div>
+
+        {boardLoading ? (
+          <div className="grid gap-3 sm:grid-cols-2">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <Card key={i} className="p-5">
+                <div className="h-24 animate-pulse rounded bg-muted" />
+              </Card>
+            ))}
+          </div>
+        ) : (board ?? []).length === 0 ? (
+          <Card className="p-10 text-center text-sm text-muted-foreground">
+            No open roles match your profile yet. Make sure your domain is set in your profile.
+          </Card>
+        ) : (
+          <div className="grid gap-3 sm:grid-cols-2">
+            {(board ?? []).map((job) => (
+              <Card key={job.id} className="flex flex-col p-5">
+                <div className="flex items-start justify-between gap-2">
+                  <div>
+                    <Link
+                      to="/candidate-jobs/$jobId"
+                      params={{ jobId: job.id }}
+                      className="font-display text-base font-semibold hover:underline"
+                    >
+                      {job.title}
+                    </Link>
+                    <p className="text-sm text-muted-foreground">{job.companyName}</p>
+                  </div>
+                  <Badge variant="outline" className="shrink-0 text-xs">
+                    {EXPERIENCE_LEVEL_LABELS[job.experienceLevel]}
+                  </Badge>
+                </div>
+                <p className="mt-2 line-clamp-3 text-sm text-muted-foreground">{job.summary}</p>
+                <div className="mt-3 flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
+                  <span>{job.location}</span>
+                  <span>· Apply by {new Date(job.deadline).toLocaleDateString()}</span>
+                </div>
+                <div className="mt-4 flex items-center gap-2">
+                  <Button
+                    size="sm"
+                    disabled={job.alreadyApplied || applyMutation.isPending}
+                    onClick={() => applyMutation.mutate(job.id)}
+                    className="bg-gradient-brand text-primary-foreground"
+                  >
+                    {applyingId === job.id ? (
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    ) : null}
+                    {job.alreadyApplied ? "Applied" : "Apply"}
+                  </Button>
+                </div>
+              </Card>
+            ))}
+          </div>
+        )}
+      </section>
+
+      {/* Tracker */}
+      <section className="space-y-4">
+        <h2 className="font-display text-lg font-semibold">Your applications</h2>
+        {(applications ?? []).length === 0 ? (
+          <Card className="p-6 text-center text-sm text-muted-foreground">
+            You haven&apos;t applied to any jobs yet.
+          </Card>
+        ) : (
+          <div className="space-y-2">
+            {(applications ?? []).map((app) => (
+              <Card key={app.id} className="flex items-center justify-between gap-3 p-4">
+                <div>
+                  <div className="text-sm font-medium">{app.jobTitle ?? "Job"}</div>
+                  <div className="text-xs text-muted-foreground">
+                    {app.companyName ?? ""} · applied {new Date(app.appliedAt).toLocaleDateString()}
+                  </div>
+                </div>
+                <div className="flex items-center gap-3">
+                  {app.totalRounds != null && app.totalRounds > 0 && app.currentRound != null && (
+                    <span className="text-xs tabular-nums text-muted-foreground">
+                      Round {app.currentRound} of {app.totalRounds}
+                    </span>
+                  )}
+                  {app.placementProbability != null && (
+                    <span className="text-xs tabular-nums text-muted-foreground">
+                      {Math.round(app.placementProbability)}% fit
+                    </span>
+                  )}
+                  <Badge
+                    variant="outline"
+                    className={
+                      app.status === "scoring"
+                        ? "border-primary/30 bg-primary/10 text-primary"
+                        : app.status === "hired"
+                          ? "border-success/40 bg-success/10 text-success"
+                          : app.status === "rejected"
+                            ? "border-destructive/30 bg-destructive/5 text-destructive"
+                            : "border-border text-muted-foreground"
+                    }
+                  >
+                    {app.status === "scoring" && (
+                      <Loader2 className="mr-1.5 h-3 w-3 animate-spin" />
+                    )}
+                    {APPLICATION_STATUS_LABELS[app.status]}
+                  </Badge>
+                </div>
+              </Card>
+            ))}
+          </div>
+        )}
+      </section>
+    </div>
   );
 }

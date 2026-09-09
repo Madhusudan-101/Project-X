@@ -18,6 +18,22 @@ export interface User {
   interestedRoles?: string[];
   collegeName?: string;
   graduationYear?: number;
+  /** "tech" | "non-tech" — drives which jobs show on the student board */
+  domain?: string;
+  /** id of the resolved public.colleges row for this candidate */
+  collegeId?: string;
+  /** Academic branch (CSE / IT / ECE …) — gates on-campus drive eligibility */
+  branch?: string | null;
+  degree?: string | null;
+  /** Stable candidate identity (job_drives_migration.sql, 1.6).
+   *  `gender` is aggregate-only — never shown to recruiters. */
+  cgpa?: number | null;
+  nationality?: string | null;
+  needsSponsorship?: boolean | null;
+  sponsorshipCountry?: string | null;
+  gender?: string | null;
+  preferredLocations?: string[];
+  willingToRelocate?: boolean | null;
 }
 
 export interface Session {

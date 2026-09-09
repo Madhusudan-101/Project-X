@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Check, ChevronsUpDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -12,24 +13,46 @@ import {
 } from "@/components/ui/command";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
+import { candidateJobsService } from "@/services/api/candidate/jobs";
 
-const PREDEFINED_COLLEGES = ["LNMIIT Jaipur", "NIT Jalandhar", "Chitkara University", "IIIT Hyderabad"];
+// Fallback used only if the colleges endpoint is unavailable / empty.
+const FALLBACK_COLLEGES = [
+  "LNMIIT Jaipur",
+  "NIT Jalandhar",
+  "Chitkara University",
+  "IIIT Hyderabad",
+];
 const OTHER = "Other";
 
 interface CollegeComboboxProps {
-  /** Resolved college name — either a predefined option or the custom-typed one. */
+  /** Resolved college name — either a listed option or the custom-typed one.
+   *  The backend resolves this name to a public.colleges row (case-insensitive),
+   *  which is the SAME table a company picks a drive's college from. */
   value: string;
   onChange: (name: string) => void;
 }
 
 export function CollegeCombobox({ value, onChange }: CollegeComboboxProps) {
   const [open, setOpen] = useState(false);
-  // "Other" mode is active once the current value isn't one of the predefined
-  // options (covers both a fresh "Other" pick and re-opening a saved custom value).
-  const isOtherMode = value !== "" && !PREDEFINED_COLLEGES.includes(value);
+
+  const { data: colleges, isLoading } = useQuery({
+    queryKey: ["candidate-colleges"],
+    queryFn: () => candidateJobsService.listColleges(),
+    staleTime: 10 * 60 * 1000,
+  });
+
+  const names = useMemo(() => {
+    const fromApi = (colleges ?? []).map((c) => c.name).filter(Boolean);
+    return fromApi.length > 0 ? fromApi : FALLBACK_COLLEGES;
+  }, [colleges]);
+
+  // "Other" mode: a non-empty value that isn't one of the listed colleges
+  // (covers a fresh "Other" pick and re-opening a saved custom value). While
+  // the list is still loading we don't flip to Other for an existing value.
+  const isOtherMode = value !== "" && !isLoading && !names.includes(value);
   const [customDraft, setCustomDraft] = useState(isOtherMode ? value : "");
 
-  const selectPredefined = (name: string) => {
+  const selectListed = (name: string) => {
     setCustomDraft("");
     onChange(name);
     setOpen(false);
@@ -61,11 +84,13 @@ export function CollegeCombobox({ value, onChange }: CollegeComboboxProps) {
           <Command>
             <CommandInput placeholder="Search colleges..." />
             <CommandList>
-              <CommandEmpty>No match — pick "Other" below.</CommandEmpty>
+              <CommandEmpty>No match — pick &quot;Other&quot; below.</CommandEmpty>
               <CommandGroup>
-                {PREDEFINED_COLLEGES.map((college) => (
-                  <CommandItem key={college} value={college} onSelect={() => selectPredefined(college)}>
-                    <Check className={cn("h-4 w-4", value === college ? "opacity-100" : "opacity-0")} />
+                {names.map((college) => (
+                  <CommandItem key={college} value={college} onSelect={() => selectListed(college)}>
+                    <Check
+                      className={cn("h-4 w-4", value === college ? "opacity-100" : "opacity-0")}
+                    />
                     {college}
                   </CommandItem>
                 ))}

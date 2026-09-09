@@ -32,6 +32,22 @@ Migrations
 
 - Run the SQL in `db/migrations.sql` in the SQL editor in the Supabase dashboard (or via psql).
 
+- Core platform loop (job posting → job board → application → job-scoped
+  scoring): run `db/jobs_and_applications_migration.sql` **after**
+  `db/migrations.sql`, `incremental_migration.sql`, `db/company_migration.sql`,
+  `db/company_onboarding_migration.sql`, and `db/resume_analysis_migration.sql`
+  have been applied (it depends on `public.profiles`, `public.colleges`,
+  `public.companies`, `public.current_company_id()`, `public.is_admin()`,
+  `public.trigger_set_updated_at()`, and `public.model_versions`). It is
+  idempotent (create-if-not-exists + drop-policy-if-exists). It also adds
+  `profiles.domain` and starts populating `profiles.college_id` for candidate
+  accounts via `PATCH /auth/profile`.
+
+- After applying it, verify end-to-end with `python verify_job_scoring.py`
+  (needs the API running and `GEMINI_API_KEY` set; set `SUPABASE_ANON_KEY`
+  too for the direct-RLS assertions). `python verify_job_scoring.py --reset`
+  removes only that script's own `verifyjs+*` seed rows.
+
 Frontend
 --------
 

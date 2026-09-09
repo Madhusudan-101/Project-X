@@ -22,7 +22,7 @@ from ...schemas import (
 )
 from ...crud import (
     upsert_profile, get_profile_by_id, update_profile, get_profile_by_email,
-    create_company, get_company_by_owner_id,
+    create_company, get_company_by_owner_id, find_or_create_college_by_name,
 )
 
 log = logging.getLogger(__name__)
@@ -45,6 +45,17 @@ def map_profile(row: dict) -> dict:
         "interestedRoles": row.get("interested_roles") or [],
         "collegeName": row.get("college_name"),
         "graduationYear": row.get("graduation_year"),
+        "domain": row.get("domain"),
+        "collegeId": row.get("college_id"),
+        "degree": row.get("degree"),
+        "branch": row.get("branch"),
+        "cgpa": (float(row["cgpa"]) if row.get("cgpa") is not None else None),
+        "nationality": row.get("nationality"),
+        "needsSponsorship": row.get("needs_sponsorship"),
+        "sponsorshipCountry": row.get("sponsorship_country"),
+        "gender": row.get("gender"),
+        "preferredLocations": row.get("preferred_locations") or [],
+        "willingToRelocate": row.get("willing_to_relocate"),
     }
 
 
@@ -558,8 +569,39 @@ def update_profile_route(
         update_data["interested_roles"] = payload.interestedRoles
     if payload.collegeName is not None:
         update_data["college_name"] = payload.collegeName
+        # Also resolve to a real public.colleges row so restricted-job
+        # visibility can match on profiles.college_id.
+        try:
+            college_id = find_or_create_college_by_name(payload.collegeName)
+            if college_id:
+                update_data["college_id"] = college_id
+        except APIError as e:
+            log.warning("Could not resolve college '%s' for %s: %s", payload.collegeName, user_id, e)
     if payload.graduationYear is not None:
         update_data["graduation_year"] = payload.graduationYear
+    if payload.domain is not None:
+        if payload.domain not in ("tech", "non-tech"):
+            raise HTTPException(status_code=422, detail="domain must be 'tech' or 'non-tech'.")
+        update_data["domain"] = payload.domain
+    if payload.degree is not None:
+        update_data["degree"] = payload.degree
+    if payload.branch is not None:
+        update_data["branch"] = payload.branch
+    # ── Stable candidate identity (job_drives_migration.sql, 1.6) ──
+    if payload.cgpa is not None:
+        update_data["cgpa"] = payload.cgpa
+    if payload.nationality is not None:
+        update_data["nationality"] = payload.nationality
+    if payload.needsSponsorship is not None:
+        update_data["needs_sponsorship"] = payload.needsSponsorship
+    if payload.sponsorshipCountry is not None:
+        update_data["sponsorship_country"] = payload.sponsorshipCountry
+    if payload.gender is not None:
+        update_data["gender"] = payload.gender
+    if payload.preferredLocations is not None:
+        update_data["preferred_locations"] = payload.preferredLocations
+    if payload.willingToRelocate is not None:
+        update_data["willing_to_relocate"] = payload.willingToRelocate
 
     try:
         existing = get_profile_by_id(user_id)
