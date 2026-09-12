@@ -32,11 +32,13 @@ from ...crud import (
     create_job,
     get_company_by_owner_id,
     get_job,
+    get_job_screening_questions,
     get_job_skill_names,
     get_job_visible_college_ids,
     get_job_weights,
     list_jobs_by_company,
     resolve_skill_ids,
+    set_job_screening_questions,
     set_job_skills,
     set_job_visible_colleges,
     update_job,
@@ -108,6 +110,15 @@ def _job_out(job: dict) -> JobOut:
         ppo_ctc_min=job.get("ppo_ctc_min"),
         ppo_ctc_max=job.get("ppo_ctc_max"),
         perks=job.get("perks") or [],
+        screening_questions=[
+            {
+                "id": q["id"],
+                "question_text": q["question_text"],
+                "required": bool(q.get("required", True)),
+                "position": int(q.get("position", 0)),
+            }
+            for q in get_job_screening_questions(job["id"])
+        ],
         created_at=str(job.get("created_at", "")),
         updated_at=str(job.get("updated_at", "")),
     )
@@ -211,6 +222,10 @@ def create_job_route(
             job["id"],
             payload.visible_college_ids if payload.visibility == "restricted" else [],
         )
+        if payload.screening_questions is not None:
+            set_job_screening_questions(
+                job["id"], [q.model_dump() for q in payload.screening_questions]
+            )
         # DB CHECK (job_weights_sum_100) re-validates the sum server-side.
         upsert_job_weights(job["id"], payload.weights.model_dump())
     except APIError as exc:
@@ -287,6 +302,10 @@ def update_job_route(
         if payload.skills is not None:
             skill_ids, _ = resolve_skill_ids(payload.skills)
             set_job_skills(job_id, skill_ids)
+        if payload.screening_questions is not None:
+            set_job_screening_questions(
+                job_id, [q.model_dump() for q in payload.screening_questions]
+            )
         if payload.visible_college_ids is not None or payload.visibility is not None:
             set_job_visible_colleges(
                 job_id,

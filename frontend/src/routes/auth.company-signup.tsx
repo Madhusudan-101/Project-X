@@ -173,9 +173,7 @@ function CompanySignupPage() {
       }
     } catch (err: unknown) {
       const message =
-        err instanceof Error
-          ? err.message
-          : "Could not create account. Please try again.";
+        err instanceof Error ? err.message : "Could not create account. Please try again.";
 
       if (message.includes("already exists") || message.includes("already registered")) {
         form.setError("email", {
@@ -236,7 +234,7 @@ function CompanySignupPage() {
                 <Label htmlFor="firstName">First name</Label>
                 <Input
                   id="firstName"
-                  placeholder="Alex"
+                  placeholder="Enter your first name"
                   aria-required="true"
                   aria-invalid={!!form.formState.errors.firstName}
                   {...form.register("firstName")}
@@ -251,7 +249,7 @@ function CompanySignupPage() {
                 <Label htmlFor="lastName">Last name</Label>
                 <Input
                   id="lastName"
-                  placeholder="Kumar"
+                  placeholder="Enter your last name"
                   aria-required="true"
                   aria-invalid={!!form.formState.errors.lastName}
                   {...form.register("lastName")}
@@ -337,7 +335,7 @@ function CompanySignupPage() {
               <Label htmlFor="companyName">Company name</Label>
               <Input
                 id="companyName"
-                placeholder="Acme Corp"
+                placeholder="Enter your company's full name"
                 aria-required="true"
                 aria-invalid={!!form.formState.errors.companyName}
                 {...form.register("companyName")}
@@ -379,9 +377,7 @@ function CompanySignupPage() {
               </div>
               <div className="space-y-1.5">
                 <Label htmlFor="size">Company size</Label>
-                <Select
-                  onValueChange={(v) => form.setValue("size", v, { shouldValidate: true })}
-                >
+                <Select onValueChange={(v) => form.setValue("size", v, { shouldValidate: true })}>
                   <SelectTrigger
                     id="size"
                     aria-required="true"
@@ -453,11 +449,9 @@ function CompanySignupPage() {
                   autoComplete="off"
                 />
                 <datalist id="domain-suggestions">
-                  {HIRING_DOMAIN_SUGGESTIONS.filter((s) => !hiringDomains.includes(s)).map(
-                    (s) => (
-                      <option key={s} value={s} />
-                    ),
-                  )}
+                  {HIRING_DOMAIN_SUGGESTIONS.filter((s) => !hiringDomains.includes(s)).map((s) => (
+                    <option key={s} value={s} />
+                  ))}
                 </datalist>
                 <Button
                   type="button"

@@ -192,7 +192,7 @@ export function ProfileSettingsDialog({ open, onOpenChange }: ProfileSettingsDia
               <Input
                 id="ps-year"
                 type="number"
-                placeholder="2027"
+                placeholder="e.g. 2027"
                 value={graduationYear}
                 onChange={(e) => setGraduationYear(e.target.value)}
               />
@@ -335,7 +335,7 @@ export function ProfileSettingsDialog({ open, onOpenChange }: ProfileSettingsDia
               <Label htmlFor="ps-locations">Preferred locations</Label>
               <Input
                 id="ps-locations"
-                placeholder="Bengaluru, Remote, Pune"
+                placeholder="e.g. Bengaluru, Remote, Pune"
                 value={preferredLocations}
                 onChange={(e) => setPreferredLocations(e.target.value)}
               />

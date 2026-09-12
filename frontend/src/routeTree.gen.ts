@@ -20,6 +20,7 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as CompanyRolesIndexRouteImport } from './routes/company-roles/index'
 import { Route as CompanyJobsIndexRouteImport } from './routes/company-jobs/index'
 import { Route as CollegeIndexRouteImport } from './routes/college/index'
+import { Route as ResumeTailorApplicationIdRouteImport } from './routes/resume-tailor/$applicationId'
 import { Route as CompanyRolesRoleIdRouteImport } from './routes/company-roles/$roleId'
 import { Route as CompanyJobsJobIdRouteImport } from './routes/company-jobs/$jobId'
 import { Route as CollegeStudentsRouteImport } from './routes/college/students'
@@ -98,6 +99,12 @@ const CollegeIndexRoute = CollegeIndexRouteImport.update({
   path: '/',
   getParentRoute: () => CollegeRoute,
 } as any)
+const ResumeTailorApplicationIdRoute =
+  ResumeTailorApplicationIdRouteImport.update({
+    id: '/resume-tailor/$applicationId',
+    path: '/resume-tailor/$applicationId',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const CompanyRolesRoleIdRoute = CompanyRolesRoleIdRouteImport.update({
   id: '/company-roles/$roleId',
   path: '/company-roles/$roleId',
@@ -240,6 +247,7 @@ export interface FileRoutesByFullPath {
   '/college/students': typeof CollegeStudentsRoute
   '/company-jobs/$jobId': typeof CompanyJobsJobIdRoute
   '/company-roles/$roleId': typeof CompanyRolesRoleIdRoute
+  '/resume-tailor/$applicationId': typeof ResumeTailorApplicationIdRoute
   '/college/': typeof CollegeIndexRoute
   '/company-jobs/': typeof CompanyJobsIndexRoute
   '/company-roles/': typeof CompanyRolesIndexRoute
@@ -274,6 +282,7 @@ export interface FileRoutesByTo {
   '/college/students': typeof CollegeStudentsRoute
   '/company-jobs/$jobId': typeof CompanyJobsJobIdRoute
   '/company-roles/$roleId': typeof CompanyRolesRoleIdRoute
+  '/resume-tailor/$applicationId': typeof ResumeTailorApplicationIdRoute
   '/college': typeof CollegeIndexRoute
   '/company-jobs': typeof CompanyJobsIndexRoute
   '/company-roles': typeof CompanyRolesIndexRoute
@@ -310,6 +319,7 @@ export interface FileRoutesById {
   '/college/students': typeof CollegeStudentsRoute
   '/company-jobs/$jobId': typeof CompanyJobsJobIdRoute
   '/company-roles/$roleId': typeof CompanyRolesRoleIdRoute
+  '/resume-tailor/$applicationId': typeof ResumeTailorApplicationIdRoute
   '/college/': typeof CollegeIndexRoute
   '/company-jobs/': typeof CompanyJobsIndexRoute
   '/company-roles/': typeof CompanyRolesIndexRoute
@@ -347,6 +357,7 @@ export interface FileRouteTypes {
     | '/college/students'
     | '/company-jobs/$jobId'
     | '/company-roles/$roleId'
+    | '/resume-tailor/$applicationId'
     | '/college/'
     | '/company-jobs/'
     | '/company-roles/'
@@ -381,6 +392,7 @@ export interface FileRouteTypes {
     | '/college/students'
     | '/company-jobs/$jobId'
     | '/company-roles/$roleId'
+    | '/resume-tailor/$applicationId'
     | '/college'
     | '/company-jobs'
     | '/company-roles'
@@ -416,6 +428,7 @@ export interface FileRouteTypes {
     | '/college/students'
     | '/company-jobs/$jobId'
     | '/company-roles/$roleId'
+    | '/resume-tailor/$applicationId'
     | '/college/'
     | '/company-jobs/'
     | '/company-roles/'
@@ -433,6 +446,7 @@ export interface RootRouteChildren {
   CandidateJobsJobIdRoute: typeof CandidateJobsJobIdRoute
   CompanyJobsJobIdRoute: typeof CompanyJobsJobIdRoute
   CompanyRolesRoleIdRoute: typeof CompanyRolesRoleIdRoute
+  ResumeTailorApplicationIdRoute: typeof ResumeTailorApplicationIdRoute
   CompanyJobsIndexRoute: typeof CompanyJobsIndexRoute
   CompanyRolesIndexRoute: typeof CompanyRolesIndexRoute
 }
@@ -515,6 +529,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/college/'
       preLoaderRoute: typeof CollegeIndexRouteImport
       parentRoute: typeof CollegeRoute
+    }
+    '/resume-tailor/$applicationId': {
+      id: '/resume-tailor/$applicationId'
+      path: '/resume-tailor/$applicationId'
+      fullPath: '/resume-tailor/$applicationId'
+      preLoaderRoute: typeof ResumeTailorApplicationIdRouteImport
+      parentRoute: typeof rootRouteImport
     }
     '/company-roles/$roleId': {
       id: '/company-roles/$roleId'
@@ -742,6 +763,7 @@ const rootRouteChildren: RootRouteChildren = {
   CandidateJobsJobIdRoute: CandidateJobsJobIdRoute,
   CompanyJobsJobIdRoute: CompanyJobsJobIdRoute,
   CompanyRolesRoleIdRoute: CompanyRolesRoleIdRoute,
+  ResumeTailorApplicationIdRoute: ResumeTailorApplicationIdRoute,
   CompanyJobsIndexRoute: CompanyJobsIndexRoute,
   CompanyRolesIndexRoute: CompanyRolesIndexRoute,
 }

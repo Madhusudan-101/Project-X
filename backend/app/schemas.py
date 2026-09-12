@@ -277,6 +277,19 @@ COMPANY_SETTABLE_APPLICATION_STATUSES = (
 SCORING_DIMENSIONS = ("resume", "github", "leetcode", "interview", "assessment")
 
 
+class ScreeningQuestionIn(BaseModel):
+    question_text: str = Field(min_length=1, max_length=500)
+    required: bool = True
+    position: int = 0
+
+
+class ScreeningQuestionOut(BaseModel):
+    id: str
+    question_text: str
+    required: bool = True
+    position: int = 0
+
+
 class JobWeightsIn(BaseModel):
     """The five weight sliders. Must sum to exactly 100 — validated here
     AND re-checked against the DB CHECK constraint on job_weights."""
@@ -320,6 +333,9 @@ class JobCreateIn(BaseModel):
     # colleges.id values — required (non-empty) only when visibility='restricted'.
     visible_college_ids: List[str] = Field(default_factory=list)
     weights: JobWeightsIn
+    # Optional screening questions (screening_questions_migration.sql) — no AI
+    # on the company side; just persisted against the job.
+    screening_questions: Optional[List[ScreeningQuestionIn]] = None
     # If true the job is created directly as 'live' (after full validation);
     # otherwise it starts as 'draft'.
     publish: bool = False
@@ -411,6 +427,7 @@ class JobUpdateIn(BaseModel):
     skills: Optional[List[str]] = None
     visible_college_ids: Optional[List[str]] = None
     weights: Optional[JobWeightsIn] = None
+    screening_questions: Optional[List[ScreeningQuestionIn]] = None
 
     # ── Eligibility & offer detail (all optional on update) ──
     employment_type: Optional[str] = None
@@ -507,6 +524,7 @@ class JobOut(BaseModel):
     ppo_ctc_min: Optional[float] = None
     ppo_ctc_max: Optional[float] = None
     perks: List[str] = Field(default_factory=list)
+    screening_questions: List[ScreeningQuestionOut] = Field(default_factory=list)
     created_at: str
     updated_at: str
 
@@ -534,6 +552,9 @@ class JobBoardCardOut(BaseModel):
     ctc_currency: Optional[str] = "INR"
     is_on_campus: bool = True
     eligible: bool = True
+    # True when the job has screening questions — the board card uses this to
+    # decide whether "Apply" opens the ApplicationFormModal or fires directly.
+    has_screening_questions: bool = False
 
 
 class JobDriveRoundOut(BaseModel):
@@ -554,6 +575,9 @@ class JobDetailOut(JobBoardCardOut):
     required_skills: List[str] = Field(default_factory=list)
     openings_count: int
     application_status: Optional[str] = None
+    # The student's own application id for this job (None until they apply) —
+    # entry point for Prep Plan / Resume Tailoring.
+    application_id: Optional[str] = None
     interview_mode: str = "ai"
     # Internship offer detail + perks.
     stipend_min: Optional[float] = None
@@ -569,6 +593,7 @@ class JobDetailOut(JobBoardCardOut):
     oa_window_end: Optional[str] = None
     rounds: List[JobDriveRoundOut] = Field(default_factory=list)
     ineligible_reason: Optional[str] = None
+    screening_questions: List[ScreeningQuestionOut] = Field(default_factory=list)
 
 
 class DraftJDIn(BaseModel):
@@ -624,6 +649,36 @@ class ApplicationDetailOut(ApplicationOut):
     round_results: List[ApplicationRoundResultOut] = Field(default_factory=list)
 
 
+# ── Screener questions + cover letter at apply (screening_questions_migration.sql) ──
+
+
+class DraftedScreenerAnswerOut(BaseModel):
+    question_id: str
+    question_text: str
+    required: bool = True
+    answer: str = ""
+    student_input_required: bool = False
+
+
+class ApplicationDraftOut(BaseModel):
+    """AI-drafted cover letter + per-question answers, returned when the
+    ApplicationFormModal opens. Nothing is persisted here."""
+    cover_letter: str = ""
+    screening_answers: List[DraftedScreenerAnswerOut] = Field(default_factory=list)
+
+
+class SubmittedScreenerAnswerIn(BaseModel):
+    question_id: str
+    answer: str = ""
+
+
+class ApplyIn(BaseModel):
+    """Optional body for POST /candidate/jobs/{job_id}/apply. Absent entirely
+    when the job has no screening questions (the modal never opens)."""
+    cover_letter: Optional[str] = None
+    screening_answers: List[SubmittedScreenerAnswerIn] = Field(default_factory=list)
+
+
 class ApplicationStatusUpdateIn(BaseModel):
     status: str
 
@@ -637,6 +692,12 @@ class ApplicationStatusUpdateIn(BaseModel):
         return v
 
 
+class CompanyScreeningAnswerOut(BaseModel):
+    question_text: str
+    required: bool
+    answer: Optional[str] = None
+
+
 class ApplicationAnalysisOut(BaseModel):
     id: str
     application_id: str
@@ -648,6 +709,87 @@ class ApplicationAnalysisOut(BaseModel):
     weighted_composite: float
     weights_snapshot: Dict[str, Any]
     generated_at: str
+    # What the student submitted at apply time — read back on the company's
+    # applicant detail panel (and echoed to the student on their own view).
+    cover_letter: Optional[str] = None
+    screening_answers: List[CompanyScreeningAnswerOut] = Field(default_factory=list)
+
+
+# ── Personalized preparation plan (prep_plan_migration.sql) ───────────
+
+
+class PrepPriorityOut(BaseModel):
+    title: str
+    why: str
+
+
+class PrepPhaseOut(BaseModel):
+    name: str
+    applies: bool
+    timeframe: str
+    action_items: List[str] = Field(default_factory=list)
+
+
+class PrepPlanOut(BaseModel):
+    application_id: str
+    headline: str
+    standing_summary: str
+    priority_focus: PrepPriorityOut
+    phases: List[PrepPhaseOut] = Field(default_factory=list)
+    estimated_prep_time: str
+    generated_at: str
+
+
+# ── Resume tailoring (resume_tailoring_migration.sql) ─────────────────
+
+
+class TailorHunkOut(BaseModel):
+    id: str
+    hunk_index: int
+    section: Optional[str] = None
+    original_bullet: str = ""
+    rewritten_bullet: str = ""
+    # [{op: 'equal'|'insert'|'delete', text}]
+    word_diff: List[Dict[str, str]] = Field(default_factory=list)
+    decision: str = "pending"
+
+
+class TailorRunOut(BaseModel):
+    run_id: str
+    application_id: str
+    original_text: str
+    rewritten_text: Optional[str] = None
+    final_text: Optional[str] = None
+    pdf_ready: bool = False
+    # Ordered reconstruction plan: [{kind:'keep', text} | {kind:'hunk', i}]
+    segments: List[Dict[str, Any]] = Field(default_factory=list)
+    hunks: List[TailorHunkOut] = Field(default_factory=list)
+    generated_at: str
+
+
+class TailorDecisionIn(BaseModel):
+    hunk_id: str
+    decision: str
+
+    @field_validator("decision")
+    @classmethod
+    def _d(cls, v: str) -> str:
+        if v not in ("accepted", "rejected"):
+            raise ValueError("decision must be 'accepted' or 'rejected'.")
+        return v
+
+
+class TailorDecisionsIn(BaseModel):
+    decisions: List[TailorDecisionIn] = Field(default_factory=list)
+
+
+class TailorApplyOut(BaseModel):
+    run_id: str
+    final_text: str
+
+
+class TailorPdfOut(BaseModel):
+    url: str
 
 
 class RankedApplicantOut(BaseModel):

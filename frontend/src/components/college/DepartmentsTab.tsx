@@ -273,7 +273,7 @@ function DepartmentFormDialog({
               id="dept-name"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="Computer Science"
+              placeholder="e.g. Computer Science"
             />
           </div>
           <div className="grid grid-cols-2 gap-3">
@@ -283,7 +283,7 @@ function DepartmentFormDialog({
                 id="dept-code"
                 value={code}
                 onChange={(e) => setCode(e.target.value)}
-                placeholder="CSE"
+                placeholder="e.g. CSE"
               />
             </div>
             <div className="grid gap-1.5">
@@ -292,7 +292,7 @@ function DepartmentFormDialog({
                 id="dept-hod"
                 value={hodName}
                 onChange={(e) => setHodName(e.target.value)}
-                placeholder="Dr. Sharma"
+                placeholder="Enter the HOD's name"
               />
             </div>
           </div>

@@ -10,7 +10,9 @@ visible to them, their own applications, and their own analyses.
 
 from __future__ import annotations
 
+import asyncio
 import logging
+from datetime import datetime, timezone
 from typing import List, Optional
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
@@ -19,11 +21,19 @@ from postgrest.exceptions import APIError
 from ...deps import db_client, require_candidate_role
 from ...schemas import (
     ApplicationAnalysisOut,
+    ApplicationDraftOut,
     ApplicationOut,
     ApplicationRoundResultOut,
+    ApplyIn,
+    CompanyScreeningAnswerOut,
+    DraftedScreenerAnswerOut,
     JobBoardCardOut,
     JobDetailOut,
     JobDriveRoundOut,
+    PrepPhaseOut,
+    PrepPlanOut,
+    PrepPriorityOut,
+    ScreeningQuestionOut,
 )
 from ...crud import (
     compute_eligibility,
@@ -34,8 +44,14 @@ from ...crud import (
     get_company_names,
     get_drive_for_job_college,
     get_job,
+    get_job_screening_questions,
     get_job_skill_names,
+    get_job_weights,
+    get_prep_plan,
     get_profile_eligibility_fields,
+    get_screening_answers_for_application,
+    insert_application_screening_answers,
+    job_ids_with_screening_questions,
     list_applications_for_student,
     list_live_drives_for_student,
     list_round_results_for_application,
@@ -43,11 +59,17 @@ from ...crud import (
     list_rounds_for_drive,
     list_rounds_for_drives,
     set_application_status,
+    upsert_prep_plan,
 )
+from ...services.candidate import prep_plan_agent
 from ...services.candidate.application_scoring_service import (
     run_scoring_for_application,
     student_has_scoring_inputs,
 )
+from ...services.candidate.cover_letter_agent import draft_cover_letter
+from ...services.candidate.prep_plan_agent import generate_prep_plan
+from ...services.candidate.resume_history_service import load_previous_analysis
+from ...services.candidate.screener_answer_agent import draft_screener_answers
 
 log = logging.getLogger(__name__)
 router = APIRouter(prefix="/candidate/jobs", tags=["candidate-jobs"])
@@ -79,6 +101,7 @@ def job_board_route(
             a["job_id"] for a in list_applications_for_student(current_user["id"])
         }
         profile = get_profile_eligibility_fields(current_user["id"])
+        screener_job_ids = job_ids_with_screening_questions([p["job"]["id"] for p in pairs])
     except APIError as exc:
         log.error("DB error building job board for %s: %s", current_user["id"], exc)
         raise HTTPException(status_code=500, detail="Failed to load the job board.")
@@ -103,6 +126,7 @@ def job_board_route(
             ctc_currency=j.get("ctc_currency") or "INR",
             is_on_campus=bool(d.get("is_on_campus", True)),
             eligible=eligible,
+            has_screening_questions=j["id"] in screener_job_ids,
         ))
     return cards
 
@@ -204,6 +228,8 @@ def my_application_analysis_route(
     if not analysis:
         raise HTTPException(status_code=409, detail="Scoring is not complete yet.")
 
+    screening_answers = get_screening_answers_for_application(application_id, application["job_id"])
+
     return ApplicationAnalysisOut(
         id=analysis["id"],
         application_id=analysis["application_id"],
@@ -215,6 +241,8 @@ def my_application_analysis_route(
         weighted_composite=float(analysis["weighted_composite"]),
         weights_snapshot=analysis["weights_snapshot"],
         generated_at=str(analysis["generated_at"]),
+        cover_letter=application.get("cover_letter"),
+        screening_answers=[CompanyScreeningAnswerOut(**a) for a in screening_answers],
     )
 
 
@@ -295,6 +323,110 @@ def my_application_rounds_route(
     return out
 
 
+# ── GET /candidate/jobs/applications/{application_id}/prep-plan ─────
+
+def _prep_plan_out(application_id: str, plan: dict, generated_at: str) -> PrepPlanOut:
+    pf = plan.get("priority_focus") or {}
+    return PrepPlanOut(
+        application_id=application_id,
+        headline=plan.get("headline", ""),
+        standing_summary=plan.get("standing_summary", ""),
+        priority_focus=PrepPriorityOut(
+            title=pf.get("title", ""), why=pf.get("why", "")
+        ),
+        phases=[
+            PrepPhaseOut(
+                name=p.get("name", ""),
+                applies=bool(p.get("applies", False)),
+                timeframe=p.get("timeframe", ""),
+                action_items=p.get("action_items") or [],
+            )
+            for p in (plan.get("phases") or [])
+        ],
+        estimated_prep_time=plan.get("estimated_prep_time", ""),
+        generated_at=generated_at,
+    )
+
+
+def _days_from_now(iso: Optional[str]) -> Optional[int]:
+    if not iso:
+        return None
+    try:
+        dt = datetime.fromisoformat(str(iso).replace("Z", "+00:00"))
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return max(0, (dt - datetime.now(timezone.utc)).days)
+    except (ValueError, TypeError):
+        return None
+
+
+@router.get("/applications/{application_id}/prep-plan", response_model=PrepPlanOut)
+async def my_prep_plan_route(
+    application_id: str,
+    refresh: bool = False,
+    current_user: dict = Depends(require_candidate_role),
+) -> PrepPlanOut:
+    """A personalized, time-boxed prep plan built from this application's
+    existing scoring breakdown + the drive's actual round list. Cached;
+    pass ?refresh=true to regenerate."""
+    application = get_application(application_id)
+    if not application or application["student_id"] != current_user["id"]:
+        raise HTTPException(status_code=404, detail="Application not found.")
+
+    if not refresh:
+        cached = get_prep_plan(application_id)
+        if cached:
+            return _prep_plan_out(
+                application_id, cached["plan_json"], str(cached["generated_at"])
+            )
+
+    analysis = get_application_analysis(application_id)
+    if not analysis:
+        raise HTTPException(
+            status_code=409,
+            detail="Scoring isn't complete yet — a plan needs your job score first.",
+        )
+
+    job = get_job(application["job_id"])
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found.")
+    weights = get_job_weights(application["job_id"]) or {}
+    required_skills = get_job_skill_names(application["job_id"])
+    drive = get_drive_for_job_college(application["job_id"], current_user.get("college_id"))
+    rounds = list_rounds_for_drive(drive["id"]) if drive else []
+
+    try:
+        result = await generate_prep_plan(
+            job=job,
+            required_skills=required_skills,
+            weights=weights,
+            analysis_json=analysis["analysis_json"],
+            weighted_composite=float(analysis["weighted_composite"]),
+            placement_probability=float(analysis["placement_probability"]),
+            rounds=rounds,
+            days_until_oa=_days_from_now(drive.get("oa_window_start")) if drive else None,
+            days_until_deadline=_days_from_now(drive.get("apply_deadline")) if drive else None,
+        )
+    except RuntimeError as exc:  # missing API key
+        raise HTTPException(status_code=503, detail=str(exc))
+    except Exception as exc:  # noqa: BLE001
+        log.exception("Prep-plan generation failed for application %s", application_id)
+        raise HTTPException(status_code=502, detail=f"Could not build a preparation plan: {exc}")
+
+    plan_json = result.model_dump(mode="json")
+    try:
+        upsert_prep_plan({
+            "application_id": application_id,
+            "student_id": current_user["id"],
+            "plan_json": plan_json,
+            "model_version": prep_plan_agent.MODEL_VERSION_LABEL,
+        })
+    except APIError as exc:
+        log.warning("Could not cache prep plan for %s: %s", application_id, exc)
+
+    return _prep_plan_out(application_id, plan_json, datetime.now(timezone.utc).isoformat())
+
+
 # ── GET /candidate/jobs/{job_id}  (JD detail) ──────────────────────
 
 @router.get("/{job_id}", response_model=JobDetailOut)
@@ -308,6 +440,7 @@ def job_detail_route(
     existing = get_application_by_student_job(current_user["id"], job_id)
     profile = get_profile_eligibility_fields(current_user["id"])
     eligible, reason = compute_eligibility(drive, profile)
+    _questions = get_job_screening_questions(job_id)
 
     return JobDetailOut(
         id=job["id"],
@@ -323,6 +456,7 @@ def job_detail_route(
         required_skills=get_job_skill_names(job_id),
         openings_count=int(job.get("openings_count", 1)),
         application_status=existing["status"] if existing else None,
+        application_id=existing["id"] if existing else None,
         employment_type=job.get("employment_type", "full-time"),
         ctc_min=job.get("ctc_min"),
         ctc_max=job.get("ctc_max"),
@@ -342,6 +476,82 @@ def job_detail_route(
         oa_window_start=str(drive["oa_window_start"]) if drive.get("oa_window_start") else None,
         oa_window_end=str(drive["oa_window_end"]) if drive.get("oa_window_end") else None,
         rounds=_drive_rounds_out(drive["id"]),
+        screening_questions=[
+            ScreeningQuestionOut(
+                id=q["id"],
+                question_text=q["question_text"],
+                required=bool(q.get("required", True)),
+                position=int(q.get("position", 0)),
+            )
+            for q in _questions
+        ],
+        has_screening_questions=bool(_questions),
+    )
+
+
+# ── POST /candidate/jobs/{job_id}/application-drafts ────────────────
+# Called when the ApplicationFormModal opens (only for jobs that HAVE
+# screening questions). Runs the cover-letter and screener agents
+# concurrently — same context, no reason to fire them back to back — and
+# persists nothing.
+
+@router.post("/{job_id}/application-drafts", response_model=ApplicationDraftOut)
+async def application_drafts_route(
+    job_id: str,
+    current_user: dict = Depends(require_candidate_role),
+) -> ApplicationDraftOut:
+    job, drive = _visible_job_and_drive(job_id, current_user)
+
+    profile = get_profile_eligibility_fields(current_user["id"])
+    eligible, reason = compute_eligibility(drive, profile)
+    if not eligible:
+        raise HTTPException(status_code=403, detail=reason or "You are not eligible for this drive.")
+
+    prev = load_previous_analysis(current_user["id"])
+    if prev is None:
+        raise HTTPException(
+            status_code=409,
+            detail="Run your resume analysis first — the drafts are built from your resume.",
+        )
+
+    questions = get_job_screening_questions(job_id)
+    required_skills = get_job_skill_names(job_id)
+    resume_text = prev.resume_text or ""
+
+    try:
+        cover_letter, drafted = await asyncio.gather(
+            draft_cover_letter(resume_text=resume_text, job=job, required_skills=required_skills),
+            draft_screener_answers(
+                resume_text=resume_text,
+                job=job,
+                required_skills=required_skills,
+                questions=[
+                    {"id": q["id"], "question_text": q["question_text"], "required": q.get("required", True)}
+                    for q in questions
+                ],
+            ),
+        )
+    except RuntimeError as exc:  # missing API key
+        raise HTTPException(status_code=503, detail=str(exc))
+    except Exception as exc:  # noqa: BLE001
+        log.exception("Application-draft generation failed for job %s", job_id)
+        raise HTTPException(status_code=502, detail=f"Could not draft your application: {exc}")
+
+    by_id = {d.question_id: d for d in drafted}
+    return ApplicationDraftOut(
+        cover_letter=cover_letter,
+        screening_answers=[
+            DraftedScreenerAnswerOut(
+                question_id=q["id"],
+                question_text=q["question_text"],
+                required=bool(q.get("required", True)),
+                answer=(by_id.get(q["id"]).answer if by_id.get(q["id"]) else ""),
+                student_input_required=(
+                    by_id.get(q["id"]).student_input_required if by_id.get(q["id"]) else True
+                ),
+            )
+            for q in questions
+        ],
     )
 
 
@@ -351,6 +561,7 @@ def job_detail_route(
 def apply_route(
     job_id: str,
     background_tasks: BackgroundTasks,
+    payload: Optional[ApplyIn] = None,
     current_user: dict = Depends(require_candidate_role),
 ) -> ApplicationOut:
     job, drive = _visible_job_and_drive(job_id, current_user)
@@ -372,8 +583,29 @@ def apply_route(
             detail="Run your resume analysis first — the job score is built from it.",
         )
 
+    # Screening questions — validate BEFORE creating the application: every
+    # required question must have a non-empty answer.
+    questions = get_job_screening_questions(job_id)
+    answers_by_qid = {a.question_id: (a.answer or "").strip() for a in (payload.screening_answers if payload else [])}
+    valid_qids = {q["id"] for q in questions}
+    if questions:
+        missing = [
+            q["question_text"]
+            for q in questions
+            if q.get("required", True) and not answers_by_qid.get(q["id"])
+        ]
+        if missing:
+            raise HTTPException(
+                status_code=400,
+                detail="Answer every required screening question: " + "; ".join(missing),
+            )
+
+    cover_letter = (payload.cover_letter.strip() if payload and payload.cover_letter else None) or None
+
     try:
-        application = create_application(current_user["id"], job_id, job["company_id"])
+        application = create_application(
+            current_user["id"], job_id, job["company_id"], cover_letter=cover_letter
+        )
     except APIError as exc:
         if "duplicate key" in str(exc).lower() or getattr(exc, "code", "") == "23505":
             raise HTTPException(status_code=409, detail="You have already applied to this job.")
@@ -383,6 +615,20 @@ def apply_route(
 
     if not application:
         raise HTTPException(status_code=400, detail="Could not submit your application.")
+
+    # Persist the submitted screening answers (only for known question ids).
+    if questions:
+        try:
+            insert_application_screening_answers(
+                application["id"],
+                [
+                    {"question_id": qid, "answer": ans}
+                    for qid, ans in answers_by_qid.items()
+                    if qid in valid_qids
+                ],
+            )
+        except APIError as exc:
+            log.error("Could not store screening answers for application %s: %s", application["id"], exc)
 
     # Optimistically flip to 'scoring' so the tracker shows processing
     # immediately; the background task owns the rest of the lifecycle.

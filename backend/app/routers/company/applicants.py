@@ -19,6 +19,7 @@ from ...schemas import (
     ApplicationAnalysisOut,
     ApplicationOut,
     ApplicationStatusUpdateIn,
+    CompanyScreeningAnswerOut,
     RankedApplicantOut,
 )
 from ...crud import (
@@ -28,6 +29,7 @@ from ...crud import (
     get_company_by_owner_id,
     get_job,
     get_profiles_basic,
+    get_screening_answers_for_application,
     list_applications_for_job,
     update_application_status_for_company,
 )
@@ -128,6 +130,8 @@ def get_applicant_analysis_route(
     if not analysis:
         raise HTTPException(status_code=409, detail="Scoring for this application is not complete yet.")
 
+    screening_answers = get_screening_answers_for_application(application_id, job_id)
+
     return ApplicationAnalysisOut(
         id=analysis["id"],
         application_id=analysis["application_id"],
@@ -139,6 +143,8 @@ def get_applicant_analysis_route(
         weighted_composite=float(analysis["weighted_composite"]),
         weights_snapshot=analysis["weights_snapshot"],
         generated_at=str(analysis["generated_at"]),
+        cover_letter=application.get("cover_letter"),
+        screening_answers=[CompanyScreeningAnswerOut(**a) for a in screening_answers],
     )
 
 

@@ -233,6 +233,86 @@ def set_job_visible_colleges(job_id: str, college_ids: list) -> None:
         ).execute()
 
 
+# ── Screening questions (screening_questions_migration.sql) ──────────
+
+def set_job_screening_questions(job_id: str, questions: list) -> None:
+    """Delete-and-reinsert the job's screening questions. `questions` is a
+    list of {question_text, required, position} dicts."""
+    db_client.table("job_screening_questions").delete().eq("job_id", job_id).execute()
+    if questions:
+        db_client.table("job_screening_questions").insert([
+            {
+                "job_id": job_id,
+                "question_text": q["question_text"],
+                "required": bool(q.get("required", True)),
+                "position": int(q.get("position", i)),
+            }
+            for i, q in enumerate(questions)
+        ]).execute()
+
+
+def get_job_screening_questions(job_id: str) -> list:
+    res = (
+        db_client.table("job_screening_questions")
+        .select("*")
+        .eq("job_id", job_id)
+        .order("position", desc=False)
+        .order("created_at", desc=False)
+        .execute()
+    )
+    return res.data or []
+
+
+def get_screening_answers_for_application(
+    application_id: str, job_id: str
+) -> list:
+    """One row per question on this job, in position order, with this
+    application's answer merged in (None if the student left an optional
+    question blank or the job has no questions)."""
+    questions = get_job_screening_questions(job_id)  # already ordered
+    res = (
+        db_client.table("application_screening_answers")
+        .select("question_id, answer")
+        .eq("application_id", application_id)
+        .execute()
+    )
+    answers_by_qid = {r["question_id"]: r["answer"] for r in (res.data or [])}
+    return [
+        {
+            "question_text": q["question_text"],
+            "required": bool(q.get("required", True)),
+            "answer": answers_by_qid.get(q["id"]),
+        }
+        for q in questions
+    ]
+
+
+def job_ids_with_screening_questions(job_ids: list) -> set:
+    ids = [j for j in set(job_ids) if j]
+    if not ids:
+        return set()
+    res = (
+        db_client.table("job_screening_questions")
+        .select("job_id")
+        .in_("job_id", ids)
+        .execute()
+    )
+    return {r["job_id"] for r in (res.data or [])}
+
+
+def insert_application_screening_answers(application_id: str, answers: list) -> None:
+    """`answers` is a list of {question_id, answer} dicts."""
+    rows = [
+        {"application_id": application_id, "question_id": a["question_id"], "answer": a.get("answer")}
+        for a in answers
+        if a.get("question_id")
+    ]
+    if rows:
+        db_client.table("application_screening_answers").upsert(
+            rows, on_conflict="application_id,question_id"
+        ).execute()
+
+
 def upsert_job_weights(job_id: str, weights: dict) -> Optional[Dict[str, Any]]:
     res = (
         db_client.table("job_weights")
@@ -358,12 +438,17 @@ def get_company_names(company_ids: list) -> Dict[str, str]:
 
 # ── Applications ──────────────────────────────────────────────────────
 
-def create_application(student_id: str, job_id: str, company_id: str) -> Optional[Dict[str, Any]]:
-    res = (
-        db_client.table("applications")
-        .insert({"student_id": student_id, "job_id": job_id, "company_id": company_id})
-        .execute()
-    )
+def create_application(
+    student_id: str, job_id: str, company_id: str, cover_letter: Optional[str] = None
+) -> Optional[Dict[str, Any]]:
+    row: Dict[str, Any] = {
+        "student_id": student_id,
+        "job_id": job_id,
+        "company_id": company_id,
+    }
+    if cover_letter is not None:
+        row["cover_letter"] = cover_letter
+    res = db_client.table("applications").insert(row).execute()
     return res.data[0] if res.data else None
 
 
@@ -458,6 +543,91 @@ def upsert_application_analysis(payload: dict) -> Optional[Dict[str, Any]]:
         .execute()
     )
     return res.data[0] if res.data else None
+
+
+# ── Preparation plans (prep_plan_migration.sql) ──────────────────────
+
+
+def get_prep_plan(application_id: str) -> Optional[Dict[str, Any]]:
+    res = (
+        db_client.table("application_prep_plans")
+        .select("*")
+        .eq("application_id", application_id)
+        .limit(1)
+        .execute()
+    )
+    return res.data[0] if res.data else None
+
+
+def upsert_prep_plan(payload: dict) -> Optional[Dict[str, Any]]:
+    res = (
+        db_client.table("application_prep_plans")
+        .upsert(payload, on_conflict="application_id")
+        .execute()
+    )
+    return res.data[0] if res.data else None
+
+
+# ── Resume tailoring (resume_tailoring_migration.sql) ────────────────
+
+
+def create_tailoring_run(payload: dict) -> Optional[Dict[str, Any]]:
+    res = db_client.table("resume_tailoring_runs").insert(payload).execute()
+    return res.data[0] if res.data else None
+
+
+def get_tailoring_run(run_id: str) -> Optional[Dict[str, Any]]:
+    res = (
+        db_client.table("resume_tailoring_runs")
+        .select("*")
+        .eq("id", run_id)
+        .limit(1)
+        .execute()
+    )
+    return res.data[0] if res.data else None
+
+
+def get_latest_tailoring_run_for_application(application_id: str) -> Optional[Dict[str, Any]]:
+    res = (
+        db_client.table("resume_tailoring_runs")
+        .select("*")
+        .eq("application_id", application_id)
+        .order("created_at", desc=True)
+        .limit(1)
+        .execute()
+    )
+    return res.data[0] if res.data else None
+
+
+def update_tailoring_run(run_id: str, patch: dict) -> Optional[Dict[str, Any]]:
+    if not patch:
+        return get_tailoring_run(run_id)
+    res = db_client.table("resume_tailoring_runs").update(patch).eq("id", run_id).execute()
+    return res.data[0] if res.data else None
+
+
+def insert_tailoring_hunks(run_id: str, hunks: list) -> list:
+    if not hunks:
+        return []
+    res = db_client.table("resume_tailoring_hunks").insert(
+        [{"run_id": run_id, **h} for h in hunks]
+    ).execute()
+    return res.data or []
+
+
+def list_tailoring_hunks(run_id: str) -> list:
+    res = (
+        db_client.table("resume_tailoring_hunks")
+        .select("*")
+        .eq("run_id", run_id)
+        .order("hunk_index", desc=False)
+        .execute()
+    )
+    return res.data or []
+
+
+def set_tailoring_hunk_decision(hunk_id: str, decision: str) -> None:
+    db_client.table("resume_tailoring_hunks").update({"decision": decision}).eq("id", hunk_id).execute()
 
 
 def get_analyses_for_job(job_id: str) -> Dict[str, Dict[str, Any]]:

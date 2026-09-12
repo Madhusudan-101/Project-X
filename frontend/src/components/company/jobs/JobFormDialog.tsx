@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog,
   DialogContent,
@@ -161,6 +162,7 @@ export function JobFormDialog({ open, onOpenChange, mode, job, onSuccess }: JobF
   const [drives, setDrives] = useState<DraftDrive[]>([]);
   const [perks, setPerks] = useState<string[]>([]);
   const [perkInput, setPerkInput] = useState("");
+  const [screeningQs, setScreeningQs] = useState<{ questionText: string; required: boolean }[]>([]);
   const [brief, setBrief] = useState("");
   const [drafting, setDrafting] = useState(false);
 
@@ -219,12 +221,19 @@ export function JobFormDialog({ open, onOpenChange, mode, job, onSuccess }: JobF
       setSkills(job.skills.map((name) => ({ name, isCustom: false })));
       setWeights(job.weights ?? ZERO_WEIGHTS);
       setPerks(job.perks ?? []);
+      setScreeningQs(
+        (job.screeningQuestions ?? []).map((q) => ({
+          questionText: q.questionText,
+          required: q.required,
+        })),
+      );
       setDrives([]);
     } else {
       form.reset(EMPTY_VALUES);
       setSkills([]);
       setWeights(ZERO_WEIGHTS);
       setPerks([]);
+      setScreeningQs([]);
       setDrives([]);
     }
   }, [open, mode, job, form]);
@@ -405,6 +414,13 @@ export function JobFormDialog({ open, onOpenChange, mode, job, onSuccess }: JobF
         interviewMode: values.interviewMode,
         ctcCurrency: values.ctcCurrency.trim() || "INR",
         perks,
+        screeningQuestions: screeningQs
+          .filter((q) => q.questionText.trim())
+          .map((q, i) => ({
+            questionText: q.questionText.trim(),
+            required: q.required,
+            position: i,
+          })),
         // Full-time CTC vs. internship stipend / duration / PPO — only one
         // set is relevant, the other is cleared.
         ctcMin: isIntern ? null : toNum(values.ctcMin),
@@ -679,7 +695,7 @@ export function JobFormDialog({ open, onOpenChange, mode, job, onSuccess }: JobF
                         id="job-stipend-min"
                         type="number"
                         min={0}
-                        placeholder="25000"
+                        placeholder="e.g. 25000"
                         {...form.register("stipendMin")}
                       />
                       {form.formState.errors.stipendMin && (
@@ -694,7 +710,7 @@ export function JobFormDialog({ open, onOpenChange, mode, job, onSuccess }: JobF
                         id="job-stipend-max"
                         type="number"
                         min={0}
-                        placeholder="50000"
+                        placeholder="e.g. 50000"
                         {...form.register("stipendMax")}
                       />
                       {form.formState.errors.stipendMax && (
@@ -712,7 +728,7 @@ export function JobFormDialog({ open, onOpenChange, mode, job, onSuccess }: JobF
                         id="job-ctc-min"
                         type="number"
                         min={0}
-                        placeholder="600000"
+                        placeholder="e.g. 600000"
                         {...form.register("ctcMin")}
                       />
                       {form.formState.errors.ctcMin && (
@@ -727,7 +743,7 @@ export function JobFormDialog({ open, onOpenChange, mode, job, onSuccess }: JobF
                         id="job-ctc-max"
                         type="number"
                         min={0}
-                        placeholder="1200000"
+                        placeholder="e.g. 1200000"
                         {...form.register("ctcMax")}
                       />
                       {form.formState.errors.ctcMax && (
@@ -768,7 +784,7 @@ export function JobFormDialog({ open, onOpenChange, mode, job, onSuccess }: JobF
                       type="number"
                       min={1}
                       max={24}
-                      placeholder="6"
+                      placeholder="e.g. 6"
                       {...form.register("internshipDuration")}
                     />
                     {form.formState.errors.internshipDuration && (
@@ -783,7 +799,7 @@ export function JobFormDialog({ open, onOpenChange, mode, job, onSuccess }: JobF
                       id="job-ppo-min"
                       type="number"
                       min={0}
-                      placeholder="1200000"
+                      placeholder="e.g. 1200000"
                       {...form.register("ppoCtcMin")}
                     />
                     {form.formState.errors.ppoCtcMin && (
@@ -798,7 +814,7 @@ export function JobFormDialog({ open, onOpenChange, mode, job, onSuccess }: JobF
                       id="job-ppo-max"
                       type="number"
                       min={0}
-                      placeholder="1800000"
+                      placeholder="e.g. 1800000"
                       {...form.register("ppoCtcMax")}
                     />
                     {form.formState.errors.ppoCtcMax && (
@@ -818,7 +834,7 @@ export function JobFormDialog({ open, onOpenChange, mode, job, onSuccess }: JobF
                   <Label htmlFor="job-location">Location</Label>
                   <Input
                     id="job-location"
-                    placeholder="Remote / Bengaluru"
+                    placeholder="e.g. Remote / Bengaluru"
                     {...form.register("location")}
                   />
                   {form.formState.errors.location && (
@@ -891,6 +907,69 @@ export function JobFormDialog({ open, onOpenChange, mode, job, onSuccess }: JobF
                 <p className="text-[11px] text-muted-foreground">
                   Relocation assistance, accommodation, health insurance, certificate &amp; LoR…
                 </p>
+              </div>
+
+              {/* Screening questions — optional; asked at apply time. */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <Label>Screening questions</Label>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="h-7 px-2 text-xs"
+                    onClick={() =>
+                      setScreeningQs((qs) => [...qs, { questionText: "", required: true }])
+                    }
+                  >
+                    Add question
+                  </Button>
+                </div>
+                {screeningQs.length === 0 ? (
+                  <p className="text-[11px] text-muted-foreground">
+                    Optional. Candidates answer these when they apply (a cover letter + answers are
+                    AI-drafted from their resume for them to edit).
+                  </p>
+                ) : (
+                  <div className="space-y-2">
+                    {screeningQs.map((q, i) => (
+                      <div key={i} className="flex items-start gap-2">
+                        <Input
+                          placeholder="e.g. How many years have you worked with Kubernetes?"
+                          value={q.questionText}
+                          onChange={(e) =>
+                            setScreeningQs((qs) =>
+                              qs.map((x, j) =>
+                                j === i ? { ...x, questionText: e.target.value } : x,
+                              ),
+                            )
+                          }
+                        />
+                        <label className="flex shrink-0 items-center gap-1.5 pt-2 text-[11px] text-muted-foreground">
+                          <Checkbox
+                            checked={q.required}
+                            onCheckedChange={(v) =>
+                              setScreeningQs((qs) =>
+                                qs.map((x, j) => (j === i ? { ...x, required: v === true } : x)),
+                              )
+                            }
+                          />
+                          Required
+                        </label>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="h-9 w-9 shrink-0"
+                          aria-label="Remove question"
+                          onClick={() => setScreeningQs((qs) => qs.filter((_, j) => j !== i))}
+                        >
+                          <span aria-hidden>×</span>
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             </>
           )}

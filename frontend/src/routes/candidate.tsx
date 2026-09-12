@@ -71,10 +71,13 @@ import type { PracticeRecommendations } from "@/types/candidate/practice";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { candidateJobsService } from "@/services/api/candidate/jobs";
 import { ProfileSettingsDialog } from "@/components/candidate/ProfileSettingsDialog";
+import { PrepPlanDialog } from "@/components/candidate/PrepPlanDialog";
+import { ApplicationFormModal } from "@/components/candidate/ApplicationFormModal";
 import {
   APPLICATION_STATUS_LABELS,
   EXPERIENCE_LEVEL_LABELS,
   type Application,
+  type ApplySubmission,
   type JobBoardCard,
 } from "@/types/jobs";
 
@@ -102,7 +105,7 @@ interface PeerStats {
   // PeerMeet/server/src/interviewAssistant.js rubric), not 0-10; the
   // dashboard renders it as `<n>/100`.
   readinessScore: number | null;
-  streakDays: number;            // consecutive days with at least one report ending today or yesterday
+  streakDays: number; // consecutive days with at least one report ending today or yesterday
   interviewCount: number;
   // Per-ISO-week average `overall_score`, most recent 8 weeks. Same 0-100
   // scale as `readinessScore`.
@@ -117,16 +120,12 @@ function derivePeerStats(reports: PeerReport[]): PeerStats {
   }
   const scored = reports.filter((r) => typeof r.overall_score === "number");
   const readinessScore = scored.length
-    ? Math.round(
-        (scored.reduce((s, r) => s + (r.overall_score ?? 0), 0) / scored.length) * 10,
-      ) / 10
+    ? Math.round((scored.reduce((s, r) => s + (r.overall_score ?? 0), 0) / scored.length) * 10) / 10
     : null;
 
   // Streak: unique YYYY-MM-DD days with a report, counting backwards from
   // today (grace of one day so a report at 2am UTC doesn't reset the streak).
-  const dayKeys = new Set(
-    reports.map((r) => new Date(r.created_at).toISOString().slice(0, 10)),
-  );
+  const dayKeys = new Set(reports.map((r) => new Date(r.created_at).toISOString().slice(0, 10)));
   let streakDays = 0;
   const cursor = new Date();
   // Grace: if today has no entry but yesterday does, still start the streak.
@@ -1143,8 +1142,7 @@ function RecentPeerInterviewsCard({ reports }: { reports: PeerReport[] | null })
       <ul className="space-y-2">
         {shown.map((r) => {
           const when = new Date(r.created_at);
-          const scoreLabel =
-            typeof r.overall_score === "number" ? `${r.overall_score}/100` : "—";
+          const scoreLabel = typeof r.overall_score === "number" ? `${r.overall_score}/100` : "—";
           return (
             <li key={r.id} className="rounded-md border border-border/60 bg-card p-3">
               <div className="flex items-center justify-between gap-3">
@@ -1264,6 +1262,8 @@ function AnalyzerCard({
 
 function JobsTab() {
   const [applyingId, setApplyingId] = useState<string | null>(null);
+  const [prepFor, setPrepFor] = useState<Application | null>(null);
+  const [screenerFor, setScreenerFor] = useState<JobBoardCard | null>(null);
   const queryClient = useQueryClient();
 
   const { data: board, isLoading: boardLoading } = useQuery<JobBoardCard[]>({
@@ -1279,10 +1279,12 @@ function JobsTab() {
   });
 
   const applyMutation = useMutation({
-    mutationFn: (jobId: string) => candidateJobsService.apply(jobId),
-    onMutate: (jobId) => setApplyingId(jobId),
+    mutationFn: ({ jobId, submission }: { jobId: string; submission?: ApplySubmission }) =>
+      candidateJobsService.apply(jobId, submission),
+    onMutate: ({ jobId }) => setApplyingId(jobId),
     onSuccess: () => {
       toast.success("Application submitted — we're scoring you for this role now.");
+      setScreenerFor(null);
       queryClient.invalidateQueries({ queryKey: ["candidate-job-board"] });
       queryClient.invalidateQueries({ queryKey: ["candidate-applications"] });
     },
@@ -1290,6 +1292,11 @@ function JobsTab() {
       toast.error(e instanceof Error ? e.message : "Could not submit your application."),
     onSettled: () => setApplyingId(null),
   });
+
+  const startApply = (job: JobBoardCard) => {
+    if (job.hasScreeningQuestions) setScreenerFor(job);
+    else applyMutation.mutate({ jobId: job.id });
+  };
 
   return (
     <div className="space-y-8">
@@ -1343,7 +1350,7 @@ function JobsTab() {
                   <Button
                     size="sm"
                     disabled={job.alreadyApplied || applyMutation.isPending}
-                    onClick={() => applyMutation.mutate(job.id)}
+                    onClick={() => startApply(job)}
                     className="bg-gradient-brand text-primary-foreground"
                   >
                     {applyingId === job.id ? (
@@ -1386,6 +1393,16 @@ function JobsTab() {
                       {Math.round(app.placementProbability)}% fit
                     </span>
                   )}
+                  {app.placementProbability != null && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-7 px-2 text-xs"
+                      onClick={() => setPrepFor(app)}
+                    >
+                      Prep plan
+                    </Button>
+                  )}
                   <Badge
                     variant="outline"
                     className={
@@ -1409,6 +1426,24 @@ function JobsTab() {
           </div>
         )}
       </section>
+
+      <PrepPlanDialog
+        open={!!prepFor}
+        onOpenChange={(o) => !o && setPrepFor(null)}
+        applicationId={prepFor?.id ?? null}
+        jobTitle={prepFor?.jobTitle}
+      />
+
+      {screenerFor && (
+        <ApplicationFormModal
+          open={!!screenerFor}
+          onOpenChange={(o) => !o && setScreenerFor(null)}
+          jobId={screenerFor.id}
+          jobTitle={screenerFor.title}
+          submitting={applyMutation.isPending}
+          onSubmit={(s) => applyMutation.mutate({ jobId: screenerFor.id, submission: s })}
+        />
+      )}
     </div>
   );
 }

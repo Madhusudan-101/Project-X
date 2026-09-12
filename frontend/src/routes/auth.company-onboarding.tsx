@@ -286,7 +286,7 @@ function CompanyOnboardingPage() {
               <Label htmlFor="companyName">Company name</Label>
               <Input
                 id="companyName"
-                placeholder="Acme Corp"
+                placeholder="Enter your company's full name"
                 aria-invalid={!!form.formState.errors.companyName}
                 {...form.register("companyName")}
               />

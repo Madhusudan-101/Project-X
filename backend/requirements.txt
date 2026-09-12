@@ -8,3 +8,8 @@ python-multipart
 google-genai
 pypdf
 pyjwt
+# Resume-tailoring PDF rendering. Needs system libs on Debian/Ubuntu:
+#   apt-get install libpango-1.0-0 libpangocairo-1.0-0 libgdk-pixbuf-2.0-0 libffi-dev
+# The /render-pdf route degrades to a 503 with a clear message if this
+# (or its system deps) is missing, so the rest of the feature still works.
+weasyprint

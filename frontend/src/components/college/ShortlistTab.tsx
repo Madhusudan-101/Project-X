@@ -91,7 +91,7 @@ export function ShortlistTab() {
               id="sl-branch"
               value={branch}
               onChange={(e) => setBranch(e.target.value)}
-              placeholder="CSE"
+              placeholder="e.g. CSE"
             />
           </div>
           <div className="grid gap-1.5">
@@ -101,7 +101,7 @@ export function ShortlistTab() {
               type="number"
               value={graduationYear}
               onChange={(e) => setGraduationYear(e.target.value)}
-              placeholder="2027"
+              placeholder="e.g. 2027"
             />
           </div>
           <div className="grid gap-1.5">
@@ -111,7 +111,7 @@ export function ShortlistTab() {
               type="number"
               value={minimumScore}
               onChange={(e) => setMinimumScore(e.target.value)}
-              placeholder="70"
+              placeholder="e.g. 70"
             />
           </div>
           <div className="grid gap-1.5">

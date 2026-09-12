@@ -45,7 +45,13 @@ const COLLEGE_TYPES = [
 
 const DESIGNATIONS = ["TPO", "Placement Coordinator", "Faculty Coordinator", "Other"];
 
-const STUDENT_STRENGTH_RANGES = ["Under 500", "500-2,000", "2,000-5,000", "5,000-10,000", "10,000+"];
+const STUDENT_STRENGTH_RANGES = [
+  "Under 500",
+  "500-2,000",
+  "2,000-5,000",
+  "5,000-10,000",
+  "10,000+",
+];
 
 const CYCLE_STATUSES: { value: string; label: string }[] = [
   { value: "mid_cycle", label: "Mid-cycle" },
@@ -60,7 +66,13 @@ const PLATFORM_INTENTS: { value: string; label: string }[] = [
   { value: "weakness_analysis", label: "Batch weakness analysis" },
 ];
 
-const STEPS = ["Institute identity", "Point of contact", "Scale & context", "Platform intent", "Legal & consent"] as const;
+const STEPS = [
+  "Institute identity",
+  "Point of contact",
+  "Scale & context",
+  "Platform intent",
+  "Legal & consent",
+] as const;
 
 // ── Validation ─────────────────────────────────────────────────────────
 
@@ -162,7 +174,9 @@ function CollegeOnboardingPage() {
   };
 
   const toggleIntent = (value: string) => {
-    setSelectedIntents((prev) => (prev.includes(value) ? prev.filter((v) => v !== value) : [...prev, value]));
+    setSelectedIntents((prev) =>
+      prev.includes(value) ? prev.filter((v) => v !== value) : [...prev, value],
+    );
   };
 
   const form = useForm<FormValues>({
@@ -245,7 +259,9 @@ function CollegeOnboardingPage() {
         </div>
         <div>
           <h1 className="font-display text-xl font-bold">You're in, {firstName}!</h1>
-          <p className="text-sm text-muted-foreground">A few details before your workspace is ready.</p>
+          <p className="text-sm text-muted-foreground">
+            A few details before your workspace is ready.
+          </p>
         </div>
       </div>
 
@@ -255,12 +271,16 @@ function CollegeOnboardingPage() {
           <div key={label} className="flex items-center gap-2">
             <span
               className={`inline-flex h-5 w-5 items-center justify-center rounded-full text-[10px] font-bold ${
-                i <= step ? "bg-primary text-primary-foreground" : "border border-border text-muted-foreground"
+                i <= step
+                  ? "bg-primary text-primary-foreground"
+                  : "border border-border text-muted-foreground"
               }`}
             >
               {i + 1}
             </span>
-            <span className={i === step ? "font-medium text-foreground" : "text-muted-foreground"}>{label}</span>
+            <span className={i === step ? "font-medium text-foreground" : "text-muted-foreground"}>
+              {label}
+            </span>
             {i < STEPS.length - 1 && <ChevronRight className="h-3 w-3 text-muted-foreground" />}
           </div>
         ))}
@@ -272,9 +292,15 @@ function CollegeOnboardingPage() {
           <fieldset className="space-y-4">
             <div className="space-y-1.5">
               <Label htmlFor="collegeName">College name</Label>
-              <Input id="collegeName" placeholder="LNM Institute of Information Technology" {...form.register("collegeName")} />
+              <Input
+                id="collegeName"
+                placeholder="Enter your institution's full name"
+                {...form.register("collegeName")}
+              />
               {form.formState.errors.collegeName && (
-                <p className="text-xs text-destructive">{form.formState.errors.collegeName.message}</p>
+                <p className="text-xs text-destructive">
+                  {form.formState.errors.collegeName.message}
+                </p>
               )}
             </div>
 
@@ -283,7 +309,12 @@ function CollegeOnboardingPage() {
                 <Globe className="h-3.5 w-3.5 text-muted-foreground" />
                 College website
               </Label>
-              <Input id="website" type="url" placeholder="https://yourcollege.edu" {...form.register("website")} />
+              <Input
+                id="website"
+                type="url"
+                placeholder="https://yourcollege.edu"
+                {...form.register("website")}
+              />
               {form.formState.errors.website && (
                 <p className="text-xs text-destructive">{form.formState.errors.website.message}</p>
               )}
@@ -292,14 +323,14 @@ function CollegeOnboardingPage() {
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-1.5">
                 <Label htmlFor="city">City</Label>
-                <Input id="city" placeholder="Jaipur" {...form.register("city")} />
+                <Input id="city" placeholder="Enter your city" {...form.register("city")} />
                 {form.formState.errors.city && (
                   <p className="text-xs text-destructive">{form.formState.errors.city.message}</p>
                 )}
               </div>
               <div className="space-y-1.5">
                 <Label htmlFor="state">State</Label>
-                <Input id="state" placeholder="Rajasthan" {...form.register("state")} />
+                <Input id="state" placeholder="Enter your state" {...form.register("state")} />
                 {form.formState.errors.state && (
                   <p className="text-xs text-destructive">{form.formState.errors.state.message}</p>
                 )}
@@ -327,7 +358,11 @@ function CollegeOnboardingPage() {
             {type === "Other" && (
               <div className="space-y-1.5">
                 <Label htmlFor="customType">Enter institution type</Label>
-                <Input id="customType" placeholder="e.g. Autonomous College" {...form.register("customType")} />
+                <Input
+                  id="customType"
+                  placeholder="e.g. Autonomous College"
+                  {...form.register("customType")}
+                />
               </div>
             )}
 
@@ -336,7 +371,11 @@ function CollegeOnboardingPage() {
               <div className="flex items-center gap-4">
                 <div className="grid h-16 w-16 shrink-0 place-items-center overflow-hidden rounded-xl border border-dashed border-border bg-surface">
                   {logoPreviewUrl ? (
-                    <img src={logoPreviewUrl} alt="Logo preview" className="h-full w-full object-cover" />
+                    <img
+                      src={logoPreviewUrl}
+                      alt="Logo preview"
+                      className="h-full w-full object-cover"
+                    />
                   ) : (
                     <Building2 className="h-6 w-6 text-muted-foreground" />
                   )}
@@ -349,11 +388,18 @@ function CollegeOnboardingPage() {
                     className="hidden"
                     onChange={(e) => handleLogoSelect(e.target.files?.[0] ?? null)}
                   />
-                  <Button type="button" size="sm" variant="outline" onClick={() => logoInputRef.current?.click()}>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={() => logoInputRef.current?.click()}
+                  >
                     <Upload className="mr-2 h-3.5 w-3.5" />
                     {logoFile ? "Change logo" : "Upload logo"}
                   </Button>
-                  <p className="text-xs text-muted-foreground">PNG, JPG, SVG or WEBP · optional, skippable</p>
+                  <p className="text-xs text-muted-foreground">
+                    PNG, JPG, SVG or WEBP · optional, skippable
+                  </p>
                 </div>
               </div>
             </div>
@@ -366,7 +412,9 @@ function CollegeOnboardingPage() {
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-1.5">
                 <Label htmlFor="designation">Your designation</Label>
-                <Select onValueChange={(v) => form.setValue("designation", v, { shouldValidate: true })}>
+                <Select
+                  onValueChange={(v) => form.setValue("designation", v, { shouldValidate: true })}
+                >
                   <SelectTrigger id="designation">
                     <SelectValue placeholder="Select designation" />
                   </SelectTrigger>
@@ -379,18 +427,29 @@ function CollegeOnboardingPage() {
                   </SelectContent>
                 </Select>
                 {form.formState.errors.designation && (
-                  <p className="text-xs text-destructive">{form.formState.errors.designation.message}</p>
+                  <p className="text-xs text-destructive">
+                    {form.formState.errors.designation.message}
+                  </p>
                 )}
               </div>
               <div className="space-y-1.5">
                 <Label htmlFor="phone">Phone number</Label>
-                <Input id="phone" type="tel" placeholder="+91 98765 43210" {...form.register("phone")} />
+                <Input
+                  id="phone"
+                  type="tel"
+                  placeholder="+91 98765 43210"
+                  {...form.register("phone")}
+                />
               </div>
             </div>
             {designation === "Other" && (
               <div className="space-y-1.5">
                 <Label htmlFor="customDesignation">Enter your designation</Label>
-                <Input id="customDesignation" placeholder="e.g. Dean of Placements" {...form.register("customDesignation")} />
+                <Input
+                  id="customDesignation"
+                  placeholder="e.g. Dean of Placements"
+                  {...form.register("customDesignation")}
+                />
               </div>
             )}
           </fieldset>
@@ -402,7 +461,11 @@ function CollegeOnboardingPage() {
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-1.5">
                 <Label htmlFor="studentStrength">Total student strength</Label>
-                <Select onValueChange={(v) => form.setValue("studentStrength", v, { shouldValidate: true })}>
+                <Select
+                  onValueChange={(v) =>
+                    form.setValue("studentStrength", v, { shouldValidate: true })
+                  }
+                >
                   <SelectTrigger id="studentStrength">
                     <SelectValue placeholder="Select range" />
                   </SelectTrigger>
@@ -415,12 +478,16 @@ function CollegeOnboardingPage() {
                   </SelectContent>
                 </Select>
                 {form.formState.errors.studentStrength && (
-                  <p className="text-xs text-destructive">{form.formState.errors.studentStrength.message}</p>
+                  <p className="text-xs text-destructive">
+                    {form.formState.errors.studentStrength.message}
+                  </p>
                 )}
               </div>
               <div className="space-y-1.5">
                 <Label htmlFor="cycleStatus">Current placement cycle status</Label>
-                <Select onValueChange={(v) => form.setValue("cycleStatus", v, { shouldValidate: true })}>
+                <Select
+                  onValueChange={(v) => form.setValue("cycleStatus", v, { shouldValidate: true })}
+                >
                   <SelectTrigger id="cycleStatus">
                     <SelectValue placeholder="Select status" />
                   </SelectTrigger>
@@ -433,7 +500,9 @@ function CollegeOnboardingPage() {
                   </SelectContent>
                 </Select>
                 {form.formState.errors.cycleStatus && (
-                  <p className="text-xs text-destructive">{form.formState.errors.cycleStatus.message}</p>
+                  <p className="text-xs text-destructive">
+                    {form.formState.errors.cycleStatus.message}
+                  </p>
                 )}
               </div>
             </div>
@@ -443,7 +512,11 @@ function CollegeOnboardingPage() {
                 Departments / branches offered <span className="text-destructive">*</span>
               </Label>
               {departments.length > 0 && (
-                <div className="flex flex-wrap gap-1.5" role="list" aria-label="Selected departments">
+                <div
+                  className="flex flex-wrap gap-1.5"
+                  role="list"
+                  aria-label="Selected departments"
+                >
                   {departments.map((d) => (
                     <Badge
                       key={d}
@@ -474,7 +547,14 @@ function CollegeOnboardingPage() {
                   placeholder='e.g. "Computer Science" then press Enter'
                   autoComplete="off"
                 />
-                <Button type="button" variant="outline" size="icon" onClick={addDepartment} aria-label="Add department" className="shrink-0">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  onClick={addDepartment}
+                  aria-label="Add department"
+                  className="shrink-0"
+                >
                   <Plus className="h-4 w-4" />
                 </Button>
               </div>
@@ -495,7 +575,9 @@ function CollegeOnboardingPage() {
                     key={intent.value}
                     htmlFor={`intent-${intent.value}`}
                     className={`flex cursor-pointer items-center gap-2 rounded-lg border p-3 text-left text-sm transition-colors ${
-                      checked ? "border-primary/40 bg-primary/5" : "border-border/60 hover:border-primary/30"
+                      checked
+                        ? "border-primary/40 bg-primary/5"
+                        : "border-border/60 hover:border-primary/30"
                     }`}
                   >
                     <Checkbox
@@ -517,30 +599,39 @@ function CollegeOnboardingPage() {
             <div className="flex items-start gap-2">
               <Checkbox
                 id="tosAccepted"
-                onCheckedChange={(v) => form.setValue("tosAccepted", (v === true) as true, { shouldValidate: true })}
+                onCheckedChange={(v) =>
+                  form.setValue("tosAccepted", (v === true) as true, { shouldValidate: true })
+                }
               />
               <Label htmlFor="tosAccepted" className="text-sm font-normal leading-tight">
                 I agree to the Terms of Service <span className="text-destructive">*</span>
               </Label>
             </div>
             {form.formState.errors.tosAccepted && (
-              <p className="text-xs text-destructive">{form.formState.errors.tosAccepted.message}</p>
+              <p className="text-xs text-destructive">
+                {form.formState.errors.tosAccepted.message}
+              </p>
             )}
 
             <div className="flex items-start gap-2">
               <Checkbox
                 id="dataConsentAccepted"
                 onCheckedChange={(v) =>
-                  form.setValue("dataConsentAccepted", (v === true) as true, { shouldValidate: true })
+                  form.setValue("dataConsentAccepted", (v === true) as true, {
+                    shouldValidate: true,
+                  })
                 }
               />
               <Label htmlFor="dataConsentAccepted" className="text-sm font-normal leading-tight">
                 We acknowledge that our college will have access to student evaluation data through
-                this platform, and will handle it responsibly. <span className="text-destructive">*</span>
+                this platform, and will handle it responsibly.{" "}
+                <span className="text-destructive">*</span>
               </Label>
             </div>
             {form.formState.errors.dataConsentAccepted && (
-              <p className="text-xs text-destructive">{form.formState.errors.dataConsentAccepted.message}</p>
+              <p className="text-xs text-destructive">
+                {form.formState.errors.dataConsentAccepted.message}
+              </p>
             )}
           </fieldset>
         )}
@@ -554,12 +645,20 @@ function CollegeOnboardingPage() {
             </Button>
           )}
           {step < STEPS.length - 1 ? (
-            <Button type="button" onClick={goNext} className="flex-1 bg-gradient-brand text-primary-foreground shadow-soft">
+            <Button
+              type="button"
+              onClick={goNext}
+              className="flex-1 bg-gradient-brand text-primary-foreground shadow-soft"
+            >
               Continue
               <ArrowRight className="ml-2 h-4 w-4" />
             </Button>
           ) : (
-            <Button type="submit" disabled={submitting} className="flex-1 bg-gradient-brand text-primary-foreground shadow-soft">
+            <Button
+              type="submit"
+              disabled={submitting}
+              className="flex-1 bg-gradient-brand text-primary-foreground shadow-soft"
+            >
               {submitting ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />

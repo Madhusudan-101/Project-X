@@ -70,6 +70,19 @@ export const BRANCH_OPTIONS = [
   { code: "CIV", label: "Civil" },
 ] as const;
 
+export interface ScreeningQuestion {
+  id: string;
+  questionText: string;
+  required: boolean;
+  position: number;
+}
+
+export interface ScreeningQuestionInput {
+  questionText: string;
+  required: boolean;
+  position: number;
+}
+
 export interface JobWeights {
   resumeWeight: number;
   githubWeight: number;
@@ -127,6 +140,7 @@ export interface Job {
   ppoCtcMax: number | null;
   // Perks / benefits — free-form list, any job
   perks: string[];
+  screeningQuestions: ScreeningQuestion[];
   createdAt: string;
   updatedAt: string;
 }
@@ -161,6 +175,7 @@ export interface JobCreatePayload {
   ppoCtcMin?: number | null;
   ppoCtcMax?: number | null;
   perks?: string[];
+  screeningQuestions?: ScreeningQuestionInput[];
 }
 
 export type JobUpdatePayload = Partial<JobCreatePayload>;
@@ -181,6 +196,7 @@ export interface JobBoardCard {
   ctcCurrency: string | null;
   isOnCampus: boolean;
   eligible: boolean;
+  hasScreeningQuestions: boolean;
 }
 
 export interface DriveRound {
@@ -198,6 +214,7 @@ export interface JobDetail extends JobBoardCard {
   requiredSkills: string[];
   openingsCount: number;
   applicationStatus: ApplicationStatus | null;
+  applicationId: string | null;
   interviewMode: JobInterviewMode;
   driveId: string | null;
   applyDeadline: string | null;
@@ -211,6 +228,60 @@ export interface JobDetail extends JobBoardCard {
   ppoCtcMin: number | null;
   ppoCtcMax: number | null;
   perks: string[];
+  screeningQuestions: ScreeningQuestion[];
+}
+
+// ── Application draft (cover letter + screener answers) at apply time ──
+
+export interface DraftedScreenerAnswer {
+  questionId: string;
+  questionText: string;
+  required: boolean;
+  answer: string;
+  studentInputRequired: boolean;
+}
+
+export interface ApplicationDraft {
+  coverLetter: string;
+  screeningAnswers: DraftedScreenerAnswer[];
+}
+
+export interface ApplySubmission {
+  coverLetter?: string | null;
+  screeningAnswers: { questionId: string; answer: string }[];
+}
+
+// ── Resume tailoring (diff + PDF) ──────────────────────────────────
+
+export type TailorDecision = "pending" | "accepted" | "rejected";
+
+export interface TailorWordToken {
+  op: "equal" | "insert" | "delete";
+  text: string;
+}
+
+export interface TailorHunk {
+  id: string;
+  hunkIndex: number;
+  section: string | null;
+  originalBullet: string;
+  rewrittenBullet: string;
+  wordDiff: TailorWordToken[];
+  decision: TailorDecision;
+}
+
+export type TailorSegment = { kind: "keep"; text: string } | { kind: "hunk"; i: number };
+
+export interface TailorRun {
+  runId: string;
+  applicationId: string;
+  originalText: string;
+  rewrittenText: string | null;
+  finalText: string | null;
+  pdfReady: boolean;
+  segments: TailorSegment[];
+  hunks: TailorHunk[];
+  generatedAt: string;
 }
 
 export interface CollegeOption {
@@ -314,6 +385,8 @@ export interface ApplicationAnalysis {
     assessment_weight: number;
   };
   generatedAt: string;
+  coverLetter: string | null;
+  screeningAnswers: { questionText: string; required: boolean; answer: string | null }[];
 }
 
 export interface RankedApplicant {
@@ -432,4 +505,28 @@ export interface CompanyFunnel {
   shortlisted: number;
   inInterview: number;
   hired: number;
+}
+
+// ── Personalized preparation plan ──────────────────────────────────
+
+export interface PrepPriority {
+  title: string;
+  why: string;
+}
+
+export interface PrepPhase {
+  name: string;
+  applies: boolean;
+  timeframe: string;
+  actionItems: string[];
+}
+
+export interface PrepPlan {
+  applicationId: string;
+  headline: string;
+  standingSummary: string;
+  priorityFocus: PrepPriority;
+  phases: PrepPhase[];
+  estimatedPrepTime: string;
+  generatedAt: string;
 }

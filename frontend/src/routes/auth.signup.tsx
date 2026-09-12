@@ -96,14 +96,22 @@ function SignupPage() {
         <div className="grid gap-4 sm:grid-cols-2">
           <div className="space-y-2">
             <Label htmlFor="firstName">First name</Label>
-            <Input id="firstName" placeholder="Alex" {...form.register("firstName")} />
+            <Input
+              id="firstName"
+              placeholder="Enter your first name"
+              {...form.register("firstName")}
+            />
             {form.formState.errors.firstName && (
               <p className="text-xs text-destructive">{form.formState.errors.firstName.message}</p>
             )}
           </div>
           <div className="space-y-2">
             <Label htmlFor="lastName">Surname</Label>
-            <Input id="lastName" placeholder="Kumar" {...form.register("lastName")} />
+            <Input
+              id="lastName"
+              placeholder="Enter your last name"
+              {...form.register("lastName")}
+            />
             {form.formState.errors.lastName && (
               <p className="text-xs text-destructive">{form.formState.errors.lastName.message}</p>
             )}

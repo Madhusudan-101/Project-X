@@ -157,14 +157,22 @@ function ProfileSetupPage() {
         <div className="grid gap-4 sm:grid-cols-2">
           <div className="space-y-2">
             <Label htmlFor="firstName">First name</Label>
-            <Input id="firstName" placeholder="Alex" {...form.register("firstName")} />
+            <Input
+              id="firstName"
+              placeholder="Enter your first name"
+              {...form.register("firstName")}
+            />
             {form.formState.errors.firstName && (
               <p className="text-xs text-destructive">{form.formState.errors.firstName.message}</p>
             )}
           </div>
           <div className="space-y-2">
             <Label htmlFor="lastName">Surname</Label>
-            <Input id="lastName" placeholder="Kumar" {...form.register("lastName")} />
+            <Input
+              id="lastName"
+              placeholder="Enter your last name"
+              {...form.register("lastName")}
+            />
             {form.formState.errors.lastName && (
               <p className="text-xs text-destructive">{form.formState.errors.lastName.message}</p>
             )}
@@ -173,11 +181,19 @@ function ProfileSetupPage() {
         <div className="grid gap-4 sm:grid-cols-2">
           <div className="space-y-2">
             <Label htmlFor="headline">Headline</Label>
-            <Input id="headline" placeholder="Frontend Engineer" {...form.register("headline")} />
+            <Input
+              id="headline"
+              placeholder="e.g. Frontend Engineer"
+              {...form.register("headline")}
+            />
           </div>
           <div className="space-y-2">
             <Label htmlFor="location">Location</Label>
-            <Input id="location" placeholder="Bengaluru, India" {...form.register("location")} />
+            <Input
+              id="location"
+              placeholder="e.g. Bengaluru, India"
+              {...form.register("location")}
+            />
           </div>
         </div>
         <div className="space-y-2">
@@ -220,14 +236,18 @@ function ProfileSetupPage() {
               </div>
               <div className="space-y-2">
                 <Label htmlFor="branch">Branch</Label>
-                <Input id="branch" placeholder="Computer Science" {...form.register("branch")} />
+                <Input
+                  id="branch"
+                  placeholder="e.g. Computer Science"
+                  {...form.register("branch")}
+                />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="graduationYear">Graduation year</Label>
                 <Input
                   id="graduationYear"
                   type="number"
-                  placeholder="2027"
+                  placeholder="e.g. 2027"
                   {...form.register("graduationYear")}
                 />
                 {form.formState.errors.graduationYear && (

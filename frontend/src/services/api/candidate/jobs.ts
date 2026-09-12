@@ -24,9 +24,13 @@ import type {
   JobEmploymentType,
   JobExperienceLevel,
   JobInterviewMode,
+  PrepPlan,
+  ApplicationDraft,
+  ApplySubmission,
   RoundMode,
   RoundResultStatus,
   RoundType,
+  ScreeningQuestion,
 } from "@/types/jobs";
 
 type Raw = Record<string, unknown>;
@@ -48,6 +52,16 @@ function normalizeCard(raw: Raw): JobBoardCard {
     ctcCurrency: (raw.ctc_currency as string | null) ?? "INR",
     isOnCampus: raw.is_on_campus === undefined ? true : Boolean(raw.is_on_campus),
     eligible: raw.eligible === undefined ? true : Boolean(raw.eligible),
+    hasScreeningQuestions: Boolean(raw.has_screening_questions),
+  };
+}
+
+function normalizeScreeningQuestion(raw: Raw): ScreeningQuestion {
+  return {
+    id: raw.id as string,
+    questionText: raw.question_text as string,
+    required: raw.required === undefined ? true : Boolean(raw.required),
+    position: Number(raw.position ?? 0),
   };
 }
 
@@ -70,6 +84,7 @@ function normalizeDetail(raw: Raw): JobDetail {
     requiredSkills: (raw.required_skills as string[]) ?? [],
     openingsCount: Number(raw.openings_count ?? 1),
     applicationStatus: (raw.application_status as ApplicationStatus | null) ?? null,
+    applicationId: (raw.application_id as string | null) ?? null,
     interviewMode: (raw.interview_mode as JobInterviewMode) ?? "ai",
     driveId: (raw.drive_id as string | null) ?? null,
     applyDeadline: (raw.apply_deadline as string | null) ?? null,
@@ -84,6 +99,7 @@ function normalizeDetail(raw: Raw): JobDetail {
     ppoCtcMin: raw.ppo_ctc_min == null ? null : Number(raw.ppo_ctc_min),
     ppoCtcMax: raw.ppo_ctc_max == null ? null : Number(raw.ppo_ctc_max),
     perks: (raw.perks as string[]) ?? [],
+    screeningQuestions: ((raw.screening_questions as Raw[]) ?? []).map(normalizeScreeningQuestion),
   };
 }
 
@@ -132,6 +148,12 @@ function normalizeAnalysis(raw: Raw): ApplicationAnalysis {
     weightedComposite: Number(raw.weighted_composite),
     weightsSnapshot: raw.weights_snapshot as ApplicationAnalysis["weightsSnapshot"],
     generatedAt: raw.generated_at as string,
+    coverLetter: (raw.cover_letter as string | null) ?? null,
+    screeningAnswers: ((raw.screening_answers as Raw[]) ?? []).map((a) => ({
+      questionText: a.question_text as string,
+      required: Boolean(a.required),
+      answer: (a.answer as string | null) ?? null,
+    })),
   };
 }
 
@@ -142,8 +164,33 @@ export const candidateJobsService = {
   getJob: (jobId: string): Promise<JobDetail> =>
     request<Raw>(`/candidate/jobs/${jobId}`).then(normalizeDetail),
 
-  apply: (jobId: string): Promise<Application> =>
-    request<Raw>(`/candidate/jobs/${jobId}/apply`, { method: "POST" }).then(normalizeApplication),
+  apply: (jobId: string, submission?: ApplySubmission): Promise<Application> =>
+    request<Raw>(`/candidate/jobs/${jobId}/apply`, {
+      method: "POST",
+      body: submission
+        ? {
+            cover_letter: submission.coverLetter ?? null,
+            screening_answers: submission.screeningAnswers.map((a) => ({
+              question_id: a.questionId,
+              answer: a.answer,
+            })),
+          }
+        : undefined,
+    }).then(normalizeApplication),
+
+  // Drafts the cover letter + screener answers in one round trip. Only used
+  // by the ApplicationFormModal (jobs that HAVE screening questions).
+  createApplicationDraft: (jobId: string): Promise<ApplicationDraft> =>
+    request<Raw>(`/candidate/jobs/${jobId}/application-drafts`, { method: "POST" }).then((raw) => ({
+      coverLetter: (raw.cover_letter as string) ?? "",
+      screeningAnswers: ((raw.screening_answers as Raw[]) ?? []).map((a) => ({
+        questionId: a.question_id as string,
+        questionText: a.question_text as string,
+        required: a.required === undefined ? true : Boolean(a.required),
+        answer: (a.answer as string) ?? "",
+        studentInputRequired: Boolean(a.student_input_required),
+      })),
+    })),
 
   listMyApplications: (): Promise<Application[]> =>
     request<Raw[]>("/candidate/jobs/applications").then((rows) => rows.map(normalizeApplication)),
@@ -167,4 +214,30 @@ export const candidateJobsService = {
         state: (r.state as string | null) ?? null,
       })),
     ),
+
+  // Personalized prep plan for one application. Cached server-side; pass
+  // refresh=true to regenerate.
+  getPrepPlan: (applicationId: string, refresh = false): Promise<PrepPlan> =>
+    request<Raw>(
+      `/candidate/jobs/applications/${applicationId}/prep-plan${refresh ? "?refresh=true" : ""}`,
+    ).then((raw) => {
+      const pf = (raw.priority_focus as Raw) ?? {};
+      return {
+        applicationId: raw.application_id as string,
+        headline: raw.headline as string,
+        standingSummary: raw.standing_summary as string,
+        priorityFocus: {
+          title: (pf.title as string) ?? "",
+          why: (pf.why as string) ?? "",
+        },
+        phases: ((raw.phases as Raw[]) ?? []).map((p) => ({
+          name: p.name as string,
+          applies: Boolean(p.applies),
+          timeframe: p.timeframe as string,
+          actionItems: (p.action_items as string[]) ?? [],
+        })),
+        estimatedPrepTime: raw.estimated_prep_time as string,
+        generatedAt: raw.generated_at as string,
+      };
+    }),
 };

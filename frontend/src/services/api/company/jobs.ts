@@ -34,6 +34,7 @@ import type {
   JobVisibility,
   JobWeights,
   RankedApplicant,
+  ScreeningQuestion,
 } from "@/types/jobs";
 
 type Raw = Record<string, unknown>;
@@ -95,6 +96,12 @@ function normalizeJob(raw: Raw): Job {
     ppoCtcMin: raw.ppo_ctc_min == null ? null : Number(raw.ppo_ctc_min),
     ppoCtcMax: raw.ppo_ctc_max == null ? null : Number(raw.ppo_ctc_max),
     perks: (raw.perks as string[]) ?? [],
+    screeningQuestions: ((raw.screening_questions as Raw[]) ?? []).map((q) => ({
+      id: q.id as string,
+      questionText: q.question_text as string,
+      required: q.required === undefined ? true : Boolean(q.required),
+      position: Number(q.position ?? 0),
+    })) as ScreeningQuestion[],
     createdAt: raw.created_at as string,
     updatedAt: raw.updated_at as string,
   };
@@ -127,6 +134,12 @@ function normalizeAnalysis(raw: Raw): ApplicationAnalysis {
     weightedComposite: Number(raw.weighted_composite),
     weightsSnapshot: raw.weights_snapshot as ApplicationAnalysis["weightsSnapshot"],
     generatedAt: raw.generated_at as string,
+    coverLetter: (raw.cover_letter as string | null) ?? null,
+    screeningAnswers: ((raw.screening_answers as Raw[]) ?? []).map((a) => ({
+      questionText: a.question_text as string,
+      required: Boolean(a.required),
+      answer: (a.answer as string | null) ?? null,
+    })),
   };
 }
 
@@ -177,6 +190,12 @@ function toJobPayload(p: JobCreatePayload | JobUpdatePayload) {
   if (p.ppoCtcMin !== undefined) body.ppo_ctc_min = p.ppoCtcMin;
   if (p.ppoCtcMax !== undefined) body.ppo_ctc_max = p.ppoCtcMax;
   if (p.perks !== undefined) body.perks = p.perks;
+  if (p.screeningQuestions !== undefined)
+    body.screening_questions = p.screeningQuestions.map((q, i) => ({
+      question_text: q.questionText,
+      required: q.required,
+      position: q.position ?? i,
+    }));
   return body;
 }
 

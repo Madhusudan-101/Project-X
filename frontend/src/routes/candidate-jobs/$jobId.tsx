@@ -1,4 +1,5 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
@@ -17,12 +18,14 @@ import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useCandidateGuard } from "@/hooks/candidate/use-candidate-guard";
 import { candidateJobsService } from "@/services/api/candidate/jobs";
+import { ApplicationFormModal } from "@/components/candidate/ApplicationFormModal";
 import {
   APPLICATION_STATUS_LABELS,
   EMPLOYMENT_TYPE_LABELS,
   EXPERIENCE_LEVEL_LABELS,
   ROUND_MODE_LABELS,
   ROUND_TYPE_LABELS,
+  type ApplySubmission,
   type JobDetail,
 } from "@/types/jobs";
 
@@ -88,10 +91,13 @@ function CandidateJobDetailPage() {
     retry: false,
   });
 
+  const [formOpen, setFormOpen] = useState(false);
+
   const applyMutation = useMutation({
-    mutationFn: () => candidateJobsService.apply(jobId),
+    mutationFn: (submission?: ApplySubmission) => candidateJobsService.apply(jobId, submission),
     onSuccess: () => {
       toast.success("Application submitted — scoring in progress. You can leave this page.");
+      setFormOpen(false);
       queryClient.invalidateQueries({ queryKey: ["candidate-job", jobId] });
       queryClient.invalidateQueries({ queryKey: ["candidate-applications"] });
       queryClient.invalidateQueries({ queryKey: ["candidate-job-board"] });
@@ -99,6 +105,11 @@ function CandidateJobDetailPage() {
     onError: (e: unknown) =>
       toast.error(e instanceof Error ? e.message : "Could not submit your application."),
   });
+
+  const startApply = () => {
+    if (job?.hasScreeningQuestions) setFormOpen(true);
+    else applyMutation.mutate(undefined);
+  };
 
   if (!session) return null;
 
@@ -363,7 +374,7 @@ function CandidateJobDetailPage() {
             )}
 
             {/* 6. Apply */}
-            <div className="flex items-center gap-3">
+            <div className="flex flex-wrap items-center gap-3">
               {applied ? (
                 <Badge
                   variant="outline"
@@ -376,7 +387,7 @@ function CandidateJobDetailPage() {
               ) : (
                 <div className="flex flex-col gap-1.5">
                   <Button
-                    onClick={() => applyMutation.mutate()}
+                    onClick={startApply}
                     disabled={applyMutation.isPending || !job.eligible}
                     className="bg-gradient-brand text-primary-foreground shadow-soft"
                   >
@@ -390,6 +401,24 @@ function CandidateJobDetailPage() {
                   )}
                 </div>
               )}
+
+              {job.applicationId &&
+                job.applicationStatus &&
+                ["scored", "shortlisted", "in_interview", "hired", "rejected"].includes(
+                  job.applicationStatus,
+                ) && (
+                  <Button
+                    variant="outline"
+                    onClick={() =>
+                      navigate({
+                        to: "/resume-tailor/$applicationId",
+                        params: { applicationId: job.applicationId as string },
+                      })
+                    }
+                  >
+                    Tailor my resume for this role
+                  </Button>
+                )}
             </div>
             {applied && (
               <p className="text-xs text-muted-foreground">
@@ -399,6 +428,17 @@ function CandidateJobDetailPage() {
           </div>
         )}
       </main>
+
+      {job && (
+        <ApplicationFormModal
+          open={formOpen}
+          onOpenChange={setFormOpen}
+          jobId={jobId}
+          jobTitle={job.title}
+          submitting={applyMutation.isPending}
+          onSubmit={(s) => applyMutation.mutate(s)}
+        />
+      )}
     </div>
   );
 }

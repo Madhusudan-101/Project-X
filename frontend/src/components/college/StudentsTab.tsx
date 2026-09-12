@@ -312,7 +312,7 @@ function AddStudentDialog() {
         <div className="grid gap-3">
           <div className="grid gap-1.5">
             <Label htmlFor="add-name">Full name</Label>
-            <Input id="add-name" placeholder="Jane Doe" disabled />
+            <Input id="add-name" placeholder="e.g. Jane Doe" disabled />
           </div>
           <div className="grid gap-1.5">
             <Label htmlFor="add-email">Email</Label>
@@ -321,11 +321,11 @@ function AddStudentDialog() {
           <div className="grid grid-cols-2 gap-3">
             <div className="grid gap-1.5">
               <Label htmlFor="add-branch">Branch</Label>
-              <Input id="add-branch" placeholder="CSE" disabled />
+              <Input id="add-branch" placeholder="e.g. CSE" disabled />
             </div>
             <div className="grid gap-1.5">
               <Label htmlFor="add-grad">Graduation year</Label>
-              <Input id="add-grad" type="number" placeholder="2027" disabled />
+              <Input id="add-grad" type="number" placeholder="e.g. 2027" disabled />
             </div>
           </div>
         </div>

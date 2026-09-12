@@ -51,6 +51,48 @@ export function ApplicantAnalysisPanel({ analysis }: Props) {
         </div>
       </div>
 
+      {/* Application materials — what the student submitted at apply time */}
+      {(analysis.coverLetter || analysis.screeningAnswers.length > 0) && (
+        <div className="space-y-3 rounded-lg border border-border/70 p-4">
+          <h3 className="text-sm font-semibold">Application materials</h3>
+
+          {analysis.coverLetter && (
+            <div className="space-y-1">
+              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                Cover letter
+              </p>
+              <p className="whitespace-pre-wrap text-sm leading-relaxed">{analysis.coverLetter}</p>
+            </div>
+          )}
+
+          {analysis.screeningAnswers.length > 0 && (
+            <div className="space-y-2">
+              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                Screening questions
+              </p>
+              <dl className="space-y-2.5">
+                {analysis.screeningAnswers.map((qa, i) => (
+                  <div key={i}>
+                    <dt className="text-xs font-medium">
+                      {qa.questionText}
+                      {qa.required && <span className="text-destructive"> *</span>}
+                    </dt>
+                    <dd
+                      className={cn(
+                        "mt-0.5 whitespace-pre-wrap text-sm leading-relaxed",
+                        qa.answer ? "text-foreground" : "italic text-muted-foreground",
+                      )}
+                    >
+                      {qa.answer || "Not answered"}
+                    </dd>
+                  </div>
+                ))}
+              </dl>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Recruiter verdict */}
       <div className="rounded-lg border border-border/70 p-4">
         <div className="flex items-center justify-between">

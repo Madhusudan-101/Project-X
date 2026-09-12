@@ -272,7 +272,7 @@ function CreateDriveDialog({ onCreated }: { onCreated: () => void }) {
                 id="drive-company"
                 value={companyName}
                 onChange={(e) => setCompanyName(e.target.value)}
-                placeholder="Acme Corp"
+                placeholder="Enter the company's name"
               />
             </div>
             <div className="grid gap-1.5">
@@ -281,7 +281,7 @@ function CreateDriveDialog({ onCreated }: { onCreated: () => void }) {
                 id="drive-role"
                 value={role}
                 onChange={(e) => setRole(e.target.value)}
-                placeholder="SDE-1"
+                placeholder="e.g. SDE-1"
               />
             </div>
           </div>
@@ -315,7 +315,7 @@ function CreateDriveDialog({ onCreated }: { onCreated: () => void }) {
               id="drive-branch"
               value={branch}
               onChange={(e) => setBranch(e.target.value)}
-              placeholder="CSE, IT"
+              placeholder="e.g. CSE, IT"
             />
           </div>
           <div className="grid grid-cols-2 gap-3">
@@ -326,7 +326,7 @@ function CreateDriveDialog({ onCreated }: { onCreated: () => void }) {
                 type="number"
                 value={graduationYear}
                 onChange={(e) => setGraduationYear(e.target.value)}
-                placeholder="2027"
+                placeholder="e.g. 2027"
               />
             </div>
             <div className="grid gap-1.5">
@@ -336,7 +336,7 @@ function CreateDriveDialog({ onCreated }: { onCreated: () => void }) {
                 type="number"
                 value={minimumScore}
                 onChange={(e) => setMinimumScore(e.target.value)}
-                placeholder="70"
+                placeholder="e.g. 70"
               />
             </div>
           </div>
