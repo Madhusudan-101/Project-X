@@ -1,6 +1,7 @@
 from pydantic import BaseModel, Field, field_validator, model_validator
 from typing import Optional, List, Union, Dict, Any
 from datetime import date
+from datetime import date as _date  # alias for use in `Optional[...] = None` fields literally named `date`
 
 from .utils.email_rules import is_valid_email_format
 
@@ -153,6 +154,47 @@ class DriveIn(BaseModel):
     eligibility: DriveEligibilityIn = Field(default_factory=DriveEligibilityIn)
     date: date
     status: str = "Active"
+
+
+class DriveUpdateIn(BaseModel):
+    companyName: Optional[str] = None
+    role: Optional[str] = None
+    eligibility: Optional[DriveEligibilityIn] = None
+    # `Optional[date] = None` here breaks under Pydantic/CPython: the class body
+    # assigns the default (None) to the attribute named `date` BEFORE evaluating
+    # the annotation, so `Optional[date]` sees the just-assigned None instead of
+    # datetime.date and silently collapses to a None-only field. Verified via a
+    # minimal repro; the `_date` alias sidesteps the name collision.
+    date: Optional[_date] = None
+    status: Optional[str] = None
+
+
+class StudentIn(BaseModel):
+    name: str
+    email: str
+    branch: str
+    graduationYear: int
+
+    @field_validator("email")
+    @classmethod
+    def _validate_email_format(cls, v: str) -> str:
+        if not is_valid_email_format(v):
+            raise ValueError("Enter a valid email address.")
+        return v
+
+
+class StudentUpdateIn(BaseModel):
+    name: Optional[str] = None
+    email: Optional[str] = None
+    branch: Optional[str] = None
+    graduationYear: Optional[int] = None
+
+    @field_validator("email")
+    @classmethod
+    def _validate_email_format(cls, v: Optional[str]) -> Optional[str]:
+        if v is not None and not is_valid_email_format(v):
+            raise ValueError("Enter a valid email address.")
+        return v
 
 
 class ShortlistFilterIn(BaseModel):

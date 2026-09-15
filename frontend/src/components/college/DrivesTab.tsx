@@ -1,7 +1,17 @@
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { useListAnimation } from "@/hooks/use-list-animation";
-import { CalendarCheck, MoreHorizontal, Pencil, Plus, Trash2, Users } from "lucide-react";
+import { CalendarCheck, Loader2, MoreHorizontal, Pencil, Plus, Trash2, Users } from "lucide-react";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -38,7 +48,6 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { PendingEndpointNotice } from "@/components/college/PendingEndpointNotice";
 import { drivesService } from "@/services/api/college/college";
 import type { Drive, DriveStatus, Student } from "@/types/college/college";
 
@@ -123,7 +132,7 @@ export function DrivesTab() {
                       <Button variant="ghost" size="sm" onClick={() => setEligibleFor(d)}>
                         <Users className="mr-1.5 h-4 w-4" /> Eligible
                       </Button>
-                      <RowActions />
+                      <RowActions drive={d} onChanged={fetchDrives} />
                     </div>
                   </TableCell>
                 </TableRow>
@@ -167,31 +176,294 @@ function StatusBadge({ status }: { status: DriveStatus }) {
   );
 }
 
-function RowActions() {
+function RowActions({ drive, onChanged }: { drive: Drive; onChanged: () => void }) {
+  const [editOpen, setEditOpen] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button variant="ghost" size="icon">
-          <MoreHorizontal className="h-4 w-4" />
-        </Button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end">
-        <PendingEndpointNotice reason="Editing a drive needs a PUT/PATCH /api/drives/{id} endpoint, which doesn't exist yet.">
-          <DropdownMenuItem disabled onSelect={(e) => e.preventDefault()}>
+    <>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button variant="ghost" size="icon">
+            <MoreHorizontal className="h-4 w-4" />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end">
+          <DropdownMenuItem
+            onSelect={(e) => {
+              e.preventDefault();
+              setEditOpen(true);
+            }}
+          >
             <Pencil className="mr-2 h-4 w-4" /> Edit
           </DropdownMenuItem>
-        </PendingEndpointNotice>
-        <PendingEndpointNotice reason="Deleting a drive needs a DELETE /api/drives/{id} endpoint, which doesn't exist yet.">
           <DropdownMenuItem
-            disabled
-            onSelect={(e) => e.preventDefault()}
+            onSelect={(e) => {
+              e.preventDefault();
+              setDeleteOpen(true);
+            }}
             className="text-destructive"
           >
             <Trash2 className="mr-2 h-4 w-4" /> Delete
           </DropdownMenuItem>
-        </PendingEndpointNotice>
-      </DropdownMenuContent>
-    </DropdownMenu>
+        </DropdownMenuContent>
+      </DropdownMenu>
+      <EditDriveDialog
+        drive={drive}
+        open={editOpen}
+        onOpenChange={setEditOpen}
+        onUpdated={onChanged}
+      />
+      <DeleteDriveDialog
+        drive={drive}
+        open={deleteOpen}
+        onOpenChange={setDeleteOpen}
+        onDeleted={onChanged}
+      />
+    </>
+  );
+}
+
+function DeleteDriveDialog({
+  drive,
+  open,
+  onOpenChange,
+  onDeleted,
+}: {
+  drive: Drive;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  onDeleted: () => void;
+}) {
+  const [deleting, setDeleting] = useState(false);
+
+  const handleDelete = async () => {
+    setDeleting(true);
+    try {
+      const result = await drivesService.remove(drive.id);
+      toast.success(result.message);
+      onOpenChange(false);
+      onDeleted();
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Failed to delete drive";
+      toast.error(message);
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  return (
+    <AlertDialog open={open} onOpenChange={(next) => !deleting && onOpenChange(next)}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Delete this drive?</AlertDialogTitle>
+          <AlertDialogDescription>
+            {`"${drive.companyName} — ${drive.role}" will be permanently deleted. This action cannot be undone.`}
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel disabled={deleting}>Cancel</AlertDialogCancel>
+          <AlertDialogAction
+            onClick={(e) => {
+              e.preventDefault();
+              handleDelete();
+            }}
+            disabled={deleting}
+            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+          >
+            {deleting ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Deleting…
+              </>
+            ) : (
+              "Delete drive"
+            )}
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+  );
+}
+
+function EditDriveDialog({
+  drive,
+  open,
+  onOpenChange,
+  onUpdated,
+}: {
+  drive: Drive;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  onUpdated: () => void;
+}) {
+  const [submitting, setSubmitting] = useState(false);
+  const [companyName, setCompanyName] = useState(drive.companyName);
+  const [role, setRole] = useState(drive.role);
+  const [date, setDate] = useState(drive.date);
+  const [status, setStatus] = useState<DriveStatus>(drive.status);
+  const [branch, setBranch] = useState(
+    Array.isArray(drive.eligibility.branch)
+      ? drive.eligibility.branch.join(", ")
+      : (drive.eligibility.branch ?? ""),
+  );
+  const [graduationYear, setGraduationYear] = useState(
+    drive.eligibility.graduationYear ? String(drive.eligibility.graduationYear) : "",
+  );
+  const [minimumScore, setMinimumScore] = useState(
+    drive.eligibility.minimumScore ? String(drive.eligibility.minimumScore) : "",
+  );
+
+  // Re-sync the form to this row's current values each time the dialog opens
+  // (guards against stale edits from a previously opened row).
+  useEffect(() => {
+    if (open) {
+      setCompanyName(drive.companyName);
+      setRole(drive.role);
+      setDate(drive.date);
+      setStatus(drive.status);
+      setBranch(
+        Array.isArray(drive.eligibility.branch)
+          ? drive.eligibility.branch.join(", ")
+          : (drive.eligibility.branch ?? ""),
+      );
+      setGraduationYear(
+        drive.eligibility.graduationYear ? String(drive.eligibility.graduationYear) : "",
+      );
+      setMinimumScore(drive.eligibility.minimumScore ? String(drive.eligibility.minimumScore) : "");
+    }
+  }, [open, drive]);
+
+  const handleSave = async () => {
+    if (!companyName || !role || !date) {
+      toast.error("Company, role, and date are required");
+      return;
+    }
+    setSubmitting(true);
+    try {
+      await drivesService.update(drive.id, {
+        companyName,
+        role,
+        date,
+        status,
+        eligibility: {
+          branch: branch
+            ? branch
+                .split(",")
+                .map((b) => b.trim())
+                .filter(Boolean)
+            : undefined,
+          graduationYear: graduationYear ? Number(graduationYear) : undefined,
+          minimumScore: minimumScore ? Number(minimumScore) : undefined,
+        },
+      });
+      toast.success("Campus drive updated");
+      onOpenChange(false);
+      onUpdated();
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : "Failed to update drive");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={(next) => !submitting && onOpenChange(next)}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Edit campus drive</DialogTitle>
+          <DialogDescription>
+            Update details or eligibility — students are re-matched automatically.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="grid gap-3">
+          <div className="grid grid-cols-2 gap-3">
+            <div className="grid gap-1.5">
+              <Label htmlFor="edit-drive-company">Company</Label>
+              <Input
+                id="edit-drive-company"
+                value={companyName}
+                onChange={(e) => setCompanyName(e.target.value)}
+                disabled={submitting}
+              />
+            </div>
+            <div className="grid gap-1.5">
+              <Label htmlFor="edit-drive-role">Role</Label>
+              <Input
+                id="edit-drive-role"
+                value={role}
+                onChange={(e) => setRole(e.target.value)}
+                disabled={submitting}
+              />
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="grid gap-1.5">
+              <Label htmlFor="edit-drive-date">Drive date</Label>
+              <Input
+                id="edit-drive-date"
+                type="date"
+                value={date}
+                onChange={(e) => setDate(e.target.value)}
+                disabled={submitting}
+              />
+            </div>
+            <div className="grid gap-1.5">
+              <Label>Status</Label>
+              <Select value={status} onValueChange={(v) => setStatus(v as DriveStatus)}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="Active">Active</SelectItem>
+                  <SelectItem value="Draft">Draft</SelectItem>
+                  <SelectItem value="Closed">Closed</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <div className="grid gap-1.5">
+            <Label htmlFor="edit-drive-branch">Eligible branches (comma-separated, optional)</Label>
+            <Input
+              id="edit-drive-branch"
+              value={branch}
+              onChange={(e) => setBranch(e.target.value)}
+              disabled={submitting}
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="grid gap-1.5">
+              <Label htmlFor="edit-drive-grad">Graduation year (optional)</Label>
+              <Input
+                id="edit-drive-grad"
+                type="number"
+                value={graduationYear}
+                onChange={(e) => setGraduationYear(e.target.value)}
+                disabled={submitting}
+              />
+            </div>
+            <div className="grid gap-1.5">
+              <Label htmlFor="edit-drive-score">Minimum score (optional)</Label>
+              <Input
+                id="edit-drive-score"
+                type="number"
+                value={minimumScore}
+                onChange={(e) => setMinimumScore(e.target.value)}
+                disabled={submitting}
+              />
+            </div>
+          </div>
+        </div>
+        <DialogFooter>
+          <Button
+            onClick={handleSave}
+            disabled={submitting}
+            className="bg-gradient-brand text-primary-foreground"
+          >
+            {submitting ? "Saving…" : "Save changes"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 

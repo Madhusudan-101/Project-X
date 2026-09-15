@@ -7,7 +7,7 @@ from postgrest.exceptions import APIError
 from supabase import Client
 
 from ...deps import get_current_tpo, get_user_supabase
-from ...schemas import DriveIn
+from ...schemas import DriveIn, DriveUpdateIn
 from ...utils.college.branch import branch_matches
 
 router = APIRouter(prefix="/api/drives", tags=["drives"])
@@ -66,6 +66,85 @@ def create_drive(
     if not row:
         raise HTTPException(status_code=500, detail="Insert returned no row")
     return {"message": "Company drive created successfully", "drive": _drive_to_out(row)}
+
+
+@router.put("/{drive_id}")
+def update_drive(
+    drive_id: str,
+    payload: DriveUpdateIn,
+    tpo: dict = Depends(get_current_tpo),
+    sb: Client = Depends(get_user_supabase),
+):
+    patch = {}
+    if payload.companyName is not None:
+        patch["company_name"] = payload.companyName
+    if payload.role is not None:
+        patch["role"] = payload.role
+    if payload.eligibility is not None:
+        # Full replace, same normalisation as create_drive — never an
+        # undocumented partial merge of the existing eligibility JSON.
+        elig = payload.eligibility.model_dump(exclude_none=True)
+        if isinstance(elig.get("branch"), str):
+            elig["branch"] = [elig["branch"]]
+        patch["eligibility"] = elig
+    if payload.date is not None:
+        patch["drive_date"] = payload.date.isoformat()
+    if payload.status is not None:
+        patch["status"] = payload.status
+
+    if not patch:
+        try:
+            res = (
+                sb.table("company_drives")
+                .select("*")
+                .eq("college_id", tpo["college_id"])
+                .eq("id", drive_id)
+                .single()
+                .execute()
+            )
+        except APIError as e:
+            if e.code == "PGRST116":
+                raise HTTPException(status_code=404, detail="Drive not found")
+            raise HTTPException(status_code=500, detail=e.message)
+        return {"message": "Company drive updated successfully", "drive": _drive_to_out(res.data)}
+
+    try:
+        res = (
+            sb.table("company_drives")
+            .update(patch)
+            .eq("college_id", tpo["college_id"])
+            .eq("id", drive_id)
+            .execute()
+        )
+    except APIError as e:
+        raise HTTPException(status_code=400, detail=e.message)
+
+    row = (res.data or [None])[0]
+    if not row:
+        raise HTTPException(status_code=404, detail="Drive not found")
+    return {"message": "Company drive updated successfully", "drive": _drive_to_out(row)}
+
+
+@router.delete("/{drive_id}", status_code=200)
+def delete_drive(
+    drive_id: str,
+    tpo: dict = Depends(get_current_tpo),
+    sb: Client = Depends(get_user_supabase),
+):
+    try:
+        res = (
+            sb.table("company_drives")
+            .delete()
+            .eq("college_id", tpo["college_id"])
+            .eq("id", drive_id)
+            .execute()
+        )
+    except APIError as e:
+        raise HTTPException(status_code=500, detail=e.message)
+
+    if not res.data:
+        raise HTTPException(status_code=404, detail="Drive not found")
+    return {"message": "Company drive deleted successfully"}
 
 
 @router.get("/{drive_id}/eligible")

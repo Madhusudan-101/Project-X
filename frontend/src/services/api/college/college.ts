@@ -2,9 +2,7 @@
  * College Portal API service — talks to the real FastAPI routers shipped in
  * Phase 4 (backend/app/routers/{dashboard,students,drives,shortlist}.py).
  *
- * IMPORTANT: this file intentionally does NOT expose add/edit/delete-student,
- * edit/delete-drive, or full-roster-export functions — those endpoints do not
- * exist on the backend yet. Only wrap real routes here.
+ * Only wrap real backend routes here.
  */
 
 import { ApiClientError, getApiBaseUrl, getAuthHeader, request } from "../client";
@@ -22,6 +20,7 @@ import type {
   ShortlistFilters,
   ShortlistResult,
   Student,
+  StudentCreateInput,
   StudentListFilters,
 } from "@/types/college/college";
 
@@ -51,7 +50,7 @@ export const dashboardService = {
   scoreDistribution: () => request<ScoreDistribution>("/api/dashboard/score-distribution"),
 };
 
-// ── Students — GET /api/students/, GET /api/students/{id}, POST /api/students/upload ──
+// ── Students — GET /api/students/, POST /api/students/, GET/PUT/DELETE /api/students/{id}, POST /api/students/upload, GET /api/students/export ──
 export const studentsService = {
   list: (filters: StudentListFilters = {}) =>
     request<Student[]>(
@@ -62,7 +61,24 @@ export const studentsService = {
       })}`,
     ),
 
+  create: (payload: StudentCreateInput) =>
+    request<{ message: string; student: Student }>("/api/students/", {
+      method: "POST",
+      body: payload,
+    }),
+
   get: (studentId: string) => request<Student>(`/api/students/${studentId}`),
+
+  update: (studentId: string, payload: Partial<StudentCreateInput>) =>
+    request<{ message: string; student: Student }>(`/api/students/${studentId}`, {
+      method: "PUT",
+      body: payload,
+    }),
+
+  remove: (studentId: string) =>
+    request<{ message: string }>(`/api/students/${studentId}`, {
+      method: "DELETE",
+    }),
 
   /** POST /api/students/upload — multipart CSV bulk upload. Bypasses request() because it needs FormData. */
   uploadCsv: async (file: File): Promise<CsvUploadResult> => {
@@ -84,9 +100,22 @@ export const studentsService = {
     }
     return res.json() as Promise<CsvUploadResult>;
   },
+
+  /** GET /api/students/export — full roster CSV. Bypasses request() because the response isn't JSON. */
+  exportCsv: async (): Promise<Blob> => {
+    const res = await fetch(`${getApiBaseUrl()}/api/students/export`, {
+      headers: { ...(await getAuthHeader()) },
+    });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      const message = typeof body?.detail === "string" ? body.detail : "Failed to export students.";
+      throw new ApiClientError(message, res.status);
+    }
+    return res.blob();
+  },
 };
 
-// ── Drives — GET /api/drives/, POST /api/drives/, GET /api/drives/{id}/eligible ──
+// ── Drives — GET /api/drives/, POST /api/drives/, PUT/DELETE /api/drives/{id}, GET /api/drives/{id}/eligible ──
 export const drivesService = {
   list: () => request<Drive[]>("/api/drives/"),
 
@@ -94,6 +123,17 @@ export const drivesService = {
     request<{ message: string; drive: Drive }>("/api/drives/", {
       method: "POST",
       body: payload,
+    }),
+
+  update: (driveId: string, payload: Partial<DriveCreateInput>) =>
+    request<{ message: string; drive: Drive }>(`/api/drives/${driveId}`, {
+      method: "PUT",
+      body: payload,
+    }),
+
+  remove: (driveId: string) =>
+    request<{ message: string }>(`/api/drives/${driveId}`, {
+      method: "DELETE",
     }),
 
   eligibleStudents: (driveId: string) =>

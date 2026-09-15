@@ -3,6 +3,7 @@ import { toast } from "sonner";
 import { useListAnimation } from "@/hooks/use-list-animation";
 import {
   Download,
+  Loader2,
   MoreHorizontal,
   Pencil,
   Plus,
@@ -11,6 +12,16 @@ import {
   Upload,
   UserRoundPlus,
 } from "lucide-react";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -48,8 +59,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { PendingEndpointNotice } from "@/components/college/PendingEndpointNotice";
-import { CsvUploadError, studentsService } from "@/services/api/college/college";
+import { CsvUploadError, downloadCsvBlob, studentsService } from "@/services/api/college/college";
 import type { CsvUploadInvalidRow, Student } from "@/types/college/college";
 
 const PAGE_SIZE = 10;
@@ -68,6 +78,7 @@ export function StudentsTab() {
   // Client-side only — the backend has no `search` param
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
+  const [exporting, setExporting] = useState(false);
 
   const fetchStudents = () => {
     setLoading(true);
@@ -88,6 +99,20 @@ export function StudentsTab() {
   useEffect(fetchStudents, [branch, graduationYear, minimumScore]);
 
   useEffect(() => setPage(1), [search, branch, graduationYear, minimumScore]);
+
+  const handleExport = async () => {
+    setExporting(true);
+    try {
+      const blob = await studentsService.exportCsv();
+      downloadCsvBlob(blob, "students.csv");
+      toast.success("Roster CSV downloaded");
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Failed to export students";
+      toast.error(message);
+    } finally {
+      setExporting(false);
+    }
+  };
 
   const filtered = useMemo(() => {
     const needle = search.trim().toLowerCase();
@@ -113,12 +138,14 @@ export function StudentsTab() {
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <UploadCsvDialog onUploaded={fetchStudents} />
-          <AddStudentDialog />
-          <PendingEndpointNotice reason="Exporting the full roster needs a GET /api/students/export endpoint, which doesn't exist yet. Use the Shortlist tab to export a filtered CSV instead.">
-            <Button variant="outline" disabled>
-              <Download className="mr-2 h-4 w-4" /> Export CSV
-            </Button>
-          </PendingEndpointNotice>
+          <AddStudentDialog onAdded={fetchStudents} />
+          <Button
+            variant="outline"
+            onClick={handleExport}
+            disabled={exporting || (!loading && students.length === 0)}
+          >
+            <Download className="mr-2 h-4 w-4" /> {exporting ? "Exporting…" : "Export CSV"}
+          </Button>
         </div>
       </div>
 
@@ -197,7 +224,7 @@ export function StudentsTab() {
                     <VerificationBadge status={s.verification_status} />
                   </TableCell>
                   <TableCell className="text-right">
-                    <RowActions />
+                    <RowActions student={s} onChanged={fetchStudents} />
                   </TableCell>
                 </TableRow>
               ))}
@@ -264,36 +291,271 @@ function VerificationBadge({ status }: { status: Student["verification_status"] 
   );
 }
 
-function RowActions() {
+function RowActions({ student, onChanged }: { student: Student; onChanged: () => void }) {
+  const [editOpen, setEditOpen] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button variant="ghost" size="icon">
-          <MoreHorizontal className="h-4 w-4" />
-        </Button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end">
-        <PendingEndpointNotice reason="Editing a student needs a PUT/PATCH /api/students/{id} endpoint, which doesn't exist yet.">
-          <DropdownMenuItem disabled onSelect={(e) => e.preventDefault()}>
+    <>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button variant="ghost" size="icon">
+            <MoreHorizontal className="h-4 w-4" />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end">
+          <DropdownMenuItem
+            onSelect={(e) => {
+              e.preventDefault();
+              setEditOpen(true);
+            }}
+          >
             <Pencil className="mr-2 h-4 w-4" /> Edit
           </DropdownMenuItem>
-        </PendingEndpointNotice>
-        <PendingEndpointNotice reason="Deleting a student needs a DELETE /api/students/{id} endpoint, which doesn't exist yet.">
           <DropdownMenuItem
-            disabled
-            onSelect={(e) => e.preventDefault()}
+            onSelect={(e) => {
+              e.preventDefault();
+              setDeleteOpen(true);
+            }}
             className="text-destructive"
           >
             <Trash2 className="mr-2 h-4 w-4" /> Delete
           </DropdownMenuItem>
-        </PendingEndpointNotice>
-      </DropdownMenuContent>
-    </DropdownMenu>
+        </DropdownMenuContent>
+      </DropdownMenu>
+      <EditStudentDialog
+        student={student}
+        open={editOpen}
+        onOpenChange={setEditOpen}
+        onUpdated={onChanged}
+      />
+      <DeleteStudentDialog
+        student={student}
+        open={deleteOpen}
+        onOpenChange={setDeleteOpen}
+        onDeleted={onChanged}
+      />
+    </>
   );
 }
 
-function AddStudentDialog() {
+function DeleteStudentDialog({
+  student,
+  open,
+  onOpenChange,
+  onDeleted,
+}: {
+  student: Student;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  onDeleted: () => void;
+}) {
+  const [deleting, setDeleting] = useState(false);
+
+  const handleDelete = async () => {
+    setDeleting(true);
+    try {
+      const result = await studentsService.remove(student.id);
+      toast.success(result.message);
+      onOpenChange(false);
+      onDeleted();
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Failed to delete student";
+      toast.error(message);
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  return (
+    <AlertDialog open={open} onOpenChange={(next) => !deleting && onOpenChange(next)}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Delete this student?</AlertDialogTitle>
+          <AlertDialogDescription>
+            {`"${student.name}" will be permanently removed from the roster. This action cannot be undone.`}
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel disabled={deleting}>Cancel</AlertDialogCancel>
+          <AlertDialogAction
+            onClick={(e) => {
+              e.preventDefault();
+              handleDelete();
+            }}
+            disabled={deleting}
+            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+          >
+            {deleting ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Deleting…
+              </>
+            ) : (
+              "Delete student"
+            )}
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+  );
+}
+
+function EditStudentDialog({
+  student,
+  open,
+  onOpenChange,
+  onUpdated,
+}: {
+  student: Student;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  onUpdated: () => void;
+}) {
+  const [name, setName] = useState(student.name);
+  const [email, setEmail] = useState(student.email);
+  const [branch, setBranch] = useState(student.branch);
+  const [graduationYear, setGraduationYear] = useState(String(student.graduation_year));
+  const [submitting, setSubmitting] = useState(false);
+
+  // Re-sync the form to this row's current values each time the dialog opens
+  // (guards against stale edits from a previously opened row).
+  useEffect(() => {
+    if (open) {
+      setName(student.name);
+      setEmail(student.email);
+      setBranch(student.branch);
+      setGraduationYear(String(student.graduation_year));
+    }
+  }, [open, student]);
+
+  const isValid =
+    name.trim() !== "" && EMAIL_RE.test(email.trim()) && branch.trim() !== "" && graduationYear !== "";
+
+  const handleSave = async () => {
+    if (!isValid) return;
+    setSubmitting(true);
+    try {
+      const result = await studentsService.update(student.id, {
+        name: name.trim(),
+        email: email.trim(),
+        branch: branch.trim(),
+        graduationYear: Number(graduationYear),
+      });
+      toast.success(result.message);
+      onOpenChange(false);
+      onUpdated();
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Failed to update student";
+      toast.error(message);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={(next) => !submitting && onOpenChange(next)}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Edit student</DialogTitle>
+          <DialogDescription>Update this student's roster details.</DialogDescription>
+        </DialogHeader>
+        <div className="grid gap-3">
+          <div className="grid gap-1.5">
+            <Label htmlFor="edit-name">Full name</Label>
+            <Input
+              id="edit-name"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              disabled={submitting}
+            />
+          </div>
+          <div className="grid gap-1.5">
+            <Label htmlFor="edit-email">Email</Label>
+            <Input
+              id="edit-email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              disabled={submitting}
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="grid gap-1.5">
+              <Label htmlFor="edit-branch">Branch</Label>
+              <Input
+                id="edit-branch"
+                value={branch}
+                onChange={(e) => setBranch(e.target.value)}
+                disabled={submitting}
+              />
+            </div>
+            <div className="grid gap-1.5">
+              <Label htmlFor="edit-grad">Graduation year</Label>
+              <Input
+                id="edit-grad"
+                type="number"
+                value={graduationYear}
+                onChange={(e) => setGraduationYear(e.target.value)}
+                disabled={submitting}
+              />
+            </div>
+          </div>
+        </div>
+        <DialogFooter>
+          <Button
+            onClick={handleSave}
+            disabled={!isValid || submitting}
+            className="bg-gradient-brand text-primary-foreground"
+          >
+            {submitting ? "Saving…" : "Save changes"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
+
+function AddStudentDialog({ onAdded }: { onAdded: () => void }) {
   const [open, setOpen] = useState(false);
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [branch, setBranch] = useState("");
+  const [graduationYear, setGraduationYear] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+
+  const isValid =
+    name.trim() !== "" && EMAIL_RE.test(email.trim()) && branch.trim() !== "" && graduationYear !== "";
+
+  const resetForm = () => {
+    setName("");
+    setEmail("");
+    setBranch("");
+    setGraduationYear("");
+  };
+
+  const handleAdd = async () => {
+    if (!isValid) return;
+    setSubmitting(true);
+    try {
+      const result = await studentsService.create({
+        name: name.trim(),
+        email: email.trim(),
+        branch: branch.trim(),
+        graduationYear: Number(graduationYear),
+      });
+      toast.success(result.message);
+      setOpen(false);
+      resetForm();
+      onAdded();
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Failed to add student";
+      toast.error(message);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
@@ -304,37 +566,61 @@ function AddStudentDialog() {
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Add student</DialogTitle>
-          <DialogDescription>
-            Adding a single student needs a POST /api/students/ endpoint, which doesn't exist on the
-            backend yet. The form below is ready to wire up as soon as it ships.
-          </DialogDescription>
+          <DialogDescription>Add a single student to the roster.</DialogDescription>
         </DialogHeader>
         <div className="grid gap-3">
           <div className="grid gap-1.5">
             <Label htmlFor="add-name">Full name</Label>
-            <Input id="add-name" placeholder="e.g. Jane Doe" disabled />
+            <Input
+              id="add-name"
+              placeholder="e.g. Jane Doe"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              disabled={submitting}
+            />
           </div>
           <div className="grid gap-1.5">
             <Label htmlFor="add-email">Email</Label>
-            <Input id="add-email" placeholder="jane@college.edu" disabled />
+            <Input
+              id="add-email"
+              placeholder="jane@college.edu"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              disabled={submitting}
+            />
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div className="grid gap-1.5">
               <Label htmlFor="add-branch">Branch</Label>
-              <Input id="add-branch" placeholder="e.g. CSE" disabled />
+              <Input
+                id="add-branch"
+                placeholder="e.g. CSE"
+                value={branch}
+                onChange={(e) => setBranch(e.target.value)}
+                disabled={submitting}
+              />
             </div>
             <div className="grid gap-1.5">
               <Label htmlFor="add-grad">Graduation year</Label>
-              <Input id="add-grad" type="number" placeholder="e.g. 2027" disabled />
+              <Input
+                id="add-grad"
+                type="number"
+                placeholder="e.g. 2027"
+                value={graduationYear}
+                onChange={(e) => setGraduationYear(e.target.value)}
+                disabled={submitting}
+              />
             </div>
           </div>
         </div>
         <DialogFooter>
-          <PendingEndpointNotice reason="POST /api/students/ doesn't exist on the backend yet.">
-            <Button disabled className="bg-gradient-brand text-primary-foreground">
-              <Plus className="mr-2 h-4 w-4" /> Add student
-            </Button>
-          </PendingEndpointNotice>
+          <Button
+            onClick={handleAdd}
+            disabled={!isValid || submitting}
+            className="bg-gradient-brand text-primary-foreground"
+          >
+            <Plus className="mr-2 h-4 w-4" /> {submitting ? "Adding…" : "Add student"}
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

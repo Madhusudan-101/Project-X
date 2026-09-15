@@ -29,6 +29,14 @@ export interface StudentListFilters {
   minimumScore?: number;
 }
 
+/** Payload for POST /api/students/ (camelCase, mapped to DB columns on the backend). */
+export interface StudentCreateInput {
+  name: string;
+  email: string;
+  branch: string;
+  graduationYear: number;
+}
+
 export interface CsvUploadResult {
   message: string;
   addedStudents: number;
