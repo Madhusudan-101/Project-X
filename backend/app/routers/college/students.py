@@ -17,13 +17,23 @@ from postgrest.exceptions import APIError
 from supabase import Client
 
 from ...deps import get_current_tpo, get_user_supabase
-from ...schemas import StudentIn, StudentUpdateIn
+from ...schemas import StudentBulkPlacementIn, StudentIn, StudentUpdateIn
 from ...utils.college.branch import normalize_branch
 from ...utils.college.csv_students import parse_students_csv, dedupe_by_email
 
 router = APIRouter(prefix="/api/students", tags=["students"])
 
 MAX_CSV_BYTES = 5 * 1024 * 1024  # 5 MB
+
+
+def _filter_by_branch(rows: list[dict], branch: Optional[str]) -> list[dict]:
+    """Shared by list_students and export_students_csv — branch isn't a plain
+    equality match (normalize_branch tolerates casing/abbreviation variants),
+    so this can't be a `.eq()` on the query itself."""
+    if not branch:
+        return rows
+    needle = normalize_branch(branch)
+    return [r for r in rows if needle and needle in normalize_branch(r.get("branch"))]
 
 # Mirrors the column set parse_students_csv() accepts on upload, so a full
 # roster export can be re-uploaded unchanged (round-trip). Kept local to this
@@ -64,10 +74,7 @@ def list_students(
     except APIError as e:
         raise HTTPException(status_code=500, detail=e.message)
 
-    if branch:
-        needle = normalize_branch(branch)
-        rows = [r for r in rows if needle and needle in normalize_branch(r.get("branch"))]
-    return rows
+    return _filter_by_branch(rows, branch)
 
 
 @router.post("/", status_code=201)
@@ -96,22 +103,56 @@ def create_student(
     return {"message": "Student added successfully", "student": row}
 
 
-@router.get("/export")
-def export_students_csv(
+@router.put("/bulk-placement-status")
+def bulk_update_placement_status(
+    payload: StudentBulkPlacementIn,
     tpo: dict = Depends(get_current_tpo),
     sb: Client = Depends(get_user_supabase),
 ):
+    """Registered before PUT /{student_id} — otherwise that route's
+    {student_id} wildcard would swallow this literal path (same class of
+    bug as GET /export vs GET /{student_id})."""
     try:
-        rows = (
+        res = (
             sb.table("students")
-            .select("*")
+            .update({"placement_status": payload.placementStatus})
             .eq("college_id", tpo["college_id"])
+            .in_("id", payload.studentIds)
             .execute()
-            .data
-            or []
         )
     except APIError as e:
+        raise HTTPException(status_code=400, detail=e.message)
+
+    updated = res.data or []
+    return {
+        "message": f"Updated placement status for {len(updated)} student{'' if len(updated) == 1 else 's'}",
+        "updatedCount": len(updated),
+        "students": updated,
+    }
+
+
+@router.get("/export")
+def export_students_csv(
+    branch: Optional[str] = Query(None),
+    graduationYear: Optional[int] = Query(None),
+    minimumScore: Optional[float] = Query(None),
+    placementStatus: Optional[str] = Query(None),
+    tpo: dict = Depends(get_current_tpo),
+    sb: Client = Depends(get_user_supabase),
+):
+    q = sb.table("students").select("*").eq("college_id", tpo["college_id"])
+    if graduationYear is not None:
+        q = q.eq("graduation_year", graduationYear)
+    if minimumScore is not None:
+        q = q.gte("employability_score", minimumScore)
+    if placementStatus:
+        q = q.eq("placement_status", placementStatus)
+    try:
+        rows = q.execute().data or []
+    except APIError as e:
         raise HTTPException(status_code=500, detail=e.message)
+
+    rows = _filter_by_branch(rows, branch)
 
     buf = io.StringIO()
     writer = csv.writer(buf)
@@ -165,6 +206,8 @@ def update_student(
         patch["branch"] = payload.branch
     if payload.graduationYear is not None:
         patch["graduation_year"] = payload.graduationYear
+    if payload.placementStatus is not None:
+        patch["placement_status"] = payload.placementStatus
 
     if not patch:
         row = get_student(student_id, tpo=tpo, sb=sb)

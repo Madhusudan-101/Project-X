@@ -1,7 +1,17 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { useListAnimation } from "@/hooks/use-list-animation";
-import { CalendarCheck, Loader2, MoreHorizontal, Pencil, Plus, Trash2, Users } from "lucide-react";
+import {
+  ArrowUpDown,
+  CalendarCheck,
+  Loader2,
+  MoreHorizontal,
+  Pencil,
+  Plus,
+  Search,
+  Trash2,
+  Users,
+} from "lucide-react";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -51,12 +61,29 @@ import {
 import { drivesService } from "@/services/api/college/college";
 import type { Drive, DriveStatus, Student } from "@/types/college/college";
 
+type DriveSortField = "date" | "companyName" | "status";
+type SortDir = "asc" | "desc";
+
+function driveBranches(eligibility: Drive["eligibility"]): string[] {
+  return Array.isArray(eligibility.branch)
+    ? eligibility.branch
+    : eligibility.branch
+      ? [eligibility.branch]
+      : [];
+}
+
 export function DrivesTab() {
   const [tableRef] = useListAnimation<HTMLTableSectionElement>();
   const [drives, setDrives] = useState<Drive[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [eligibleFor, setEligibleFor] = useState<Drive | null>(null);
+
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState<DriveStatus | "">("");
+  const [branchFilter, setBranchFilter] = useState("");
+  const [sortField, setSortField] = useState<DriveSortField>("date");
+  const [sortDir, setSortDir] = useState<SortDir>("asc");
 
   const fetchDrives = () => {
     setLoading(true);
@@ -72,6 +99,38 @@ export function DrivesTab() {
 
   useEffect(fetchDrives, []);
 
+  const filteredDrives = useMemo(() => {
+    const needle = search.trim().toLowerCase();
+    const branchNeedle = branchFilter.trim().toLowerCase();
+    let rows = drives;
+    if (needle) {
+      rows = rows.filter(
+        (d) =>
+          d.companyName.toLowerCase().includes(needle) || d.role.toLowerCase().includes(needle),
+      );
+    }
+    if (statusFilter) {
+      rows = rows.filter((d) => d.status === statusFilter);
+    }
+    if (branchNeedle) {
+      rows = rows.filter((d) =>
+        driveBranches(d.eligibility).some((b) => b.toLowerCase().includes(branchNeedle)),
+      );
+    }
+
+    const dir = sortDir === "asc" ? 1 : -1;
+    return [...rows].sort((a, b) => {
+      switch (sortField) {
+        case "companyName":
+          return a.companyName.localeCompare(b.companyName) * dir;
+        case "status":
+          return a.status.localeCompare(b.status) * dir;
+        default:
+          return (new Date(a.date).getTime() - new Date(b.date).getTime()) * dir;
+      }
+    });
+  }, [drives, search, statusFilter, branchFilter, sortField, sortDir]);
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
@@ -80,11 +139,66 @@ export function DrivesTab() {
           <p className="mt-1 text-sm text-muted-foreground">
             {loading
               ? "Loading drives…"
-              : `${drives.length} drive${drives.length === 1 ? "" : "s"}`}
+              : `${filteredDrives.length} drive${filteredDrives.length === 1 ? "" : "s"}`}
           </p>
         </div>
         <CreateDriveDialog onCreated={fetchDrives} />
       </div>
+
+      <Card className="p-4">
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="relative sm:col-span-2 lg:col-span-1">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              placeholder="Search company or role…"
+              className="pl-9"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
+          </div>
+          <Select
+            value={statusFilter || "all"}
+            onValueChange={(v) => setStatusFilter(v === "all" ? "" : (v as DriveStatus))}
+          >
+            <SelectTrigger>
+              <SelectValue placeholder="Status" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All statuses</SelectItem>
+              <SelectItem value="Active">Active</SelectItem>
+              <SelectItem value="Draft">Draft</SelectItem>
+              <SelectItem value="Closed">Closed</SelectItem>
+            </SelectContent>
+          </Select>
+          <Input
+            placeholder="Eligible branch (e.g. CSE)"
+            value={branchFilter}
+            onChange={(e) => setBranchFilter(e.target.value)}
+          />
+          <div className="flex items-center gap-2">
+            <Select value={sortField} onValueChange={(v) => setSortField(v as DriveSortField)}>
+              <SelectTrigger>
+                <SelectValue placeholder="Sort by" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="date">Sort: Date</SelectItem>
+                <SelectItem value="companyName">Sort: Company name</SelectItem>
+                <SelectItem value="status">Sort: Status</SelectItem>
+              </SelectContent>
+            </Select>
+            <Button
+              variant="outline"
+              size="icon"
+              className="shrink-0"
+              onClick={() => setSortDir((d) => (d === "asc" ? "desc" : "asc"))}
+              aria-label={sortDir === "asc" ? "Sorting ascending" : "Sorting descending"}
+              title={sortDir === "asc" ? "Ascending" : "Descending"}
+            >
+              <ArrowUpDown className="h-4 w-4" />
+            </Button>
+          </div>
+        </div>
+      </Card>
 
       {error && (
         <Card className="border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive">
@@ -99,9 +213,11 @@ export function DrivesTab() {
               <Skeleton key={i} className="h-10 w-full" />
             ))}
           </div>
-        ) : drives.length === 0 ? (
+        ) : filteredDrives.length === 0 ? (
           <div className="grid h-48 place-items-center p-6 text-center text-sm text-muted-foreground">
-            No drives scheduled yet — create one to get started.
+            {drives.length === 0
+              ? "No drives scheduled yet — create one to get started."
+              : "No drives match your filters."}
           </div>
         ) : (
           <Table>
@@ -116,7 +232,7 @@ export function DrivesTab() {
               </TableRow>
             </TableHeader>
             <TableBody ref={tableRef}>
-              {drives.map((d) => (
+              {filteredDrives.map((d) => (
                 <TableRow key={d.id}>
                   <TableCell className="font-medium">{d.companyName}</TableCell>
                   <TableCell>{d.role}</TableCell>
@@ -130,7 +246,7 @@ export function DrivesTab() {
                   <TableCell className="text-right">
                     <div className="flex items-center justify-end gap-1">
                       <Button variant="ghost" size="sm" onClick={() => setEligibleFor(d)}>
-                        <Users className="mr-1.5 h-4 w-4" /> Eligible
+                        <Users className="mr-1.5 h-4 w-4" /> Details
                       </Button>
                       <RowActions drive={d} onChanged={fetchDrives} />
                     </div>
@@ -653,9 +769,23 @@ function EligibleStudentsDialog({ drive, onClose }: { drive: Drive | null; onClo
     <Dialog open={!!drive} onOpenChange={(v) => !v && onClose()}>
       <DialogContent className="max-w-2xl">
         <DialogHeader>
-          <DialogTitle>Eligible students — {drive?.companyName}</DialogTitle>
+          <DialogTitle>{drive?.companyName}</DialogTitle>
           <DialogDescription>{drive?.role}</DialogDescription>
         </DialogHeader>
+        {drive && (
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 rounded-md border border-border bg-surface/60 p-3 text-sm">
+            <span className="text-muted-foreground">
+              Date: <span className="font-medium text-foreground">{new Date(drive.date).toLocaleDateString()}</span>
+            </span>
+            <span className="text-muted-foreground">
+              Status: <StatusBadge status={drive.status} />
+            </span>
+            <span className="text-muted-foreground">
+              Eligibility: <EligibilitySummary eligibility={drive.eligibility} />
+            </span>
+          </div>
+        )}
+        <h3 className="text-sm font-medium">Eligible students</h3>
         {loading ? (
           <div className="space-y-2">
             {Array.from({ length: 4 }).map((_, i) => (

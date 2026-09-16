@@ -20,18 +20,17 @@ def dashboard_stats(
     try:
         students = (
             sb.table("students")
-            .select("employability_score, verification_status")
+            .select("employability_score, verification_status, placement_status")
             .eq("college_id", college_id)
             .execute()
         ).data or []
 
-        drives_count = (
+        drives = (
             sb.table("company_drives")
-            .select("id", count="exact")
+            .select("status")
             .eq("college_id", college_id)
-            .eq("status", "Active")
             .execute()
-        ).count or 0
+        ).data or []
     except APIError as e:
         raise HTTPException(status_code=500, detail=e.message)
 
@@ -42,12 +41,29 @@ def dashboard_stats(
         1 for s in students
         if (s.get("verification_status") or "").lower() == "verified"
     )
+    placed = sum(1 for s in students if (s.get("placement_status") or "") == "placed")
+    not_placed = sum(1 for s in students if (s.get("placement_status") or "") == "not_placed")
+    offer_declined = sum(
+        1 for s in students if (s.get("placement_status") or "") == "offer_declined"
+    )
+    placement_percentage = round((placed / total) * 100, 1) if total else 0.0
+
+    active_drives = sum(1 for d in drives if d.get("status") == "Active")
+    draft_drives = sum(1 for d in drives if d.get("status") == "Draft")
+    closed_drives = sum(1 for d in drives if d.get("status") == "Closed")
 
     return {
         "totalStudents": total,
         "averageEmployabilityScore": avg,
-        "activeCompanyDrives": drives_count,
+        "activeCompanyDrives": active_drives,
+        "totalDrives": len(drives),
+        "draftDrives": draft_drives,
+        "closedDrives": closed_drives,
         "verifiedStudents": verified,
+        "placedStudents": placed,
+        "notPlacedStudents": not_placed,
+        "offerDeclinedStudents": offer_declined,
+        "placementPercentage": placement_percentage,
     }
 
 

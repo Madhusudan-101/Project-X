@@ -16,6 +16,7 @@ import type {
   Drive,
   DriveCreateInput,
   DriveEligibleResponse,
+  PlacementStatus,
   ScoreDistribution,
   ShortlistFilters,
   ShortlistResult,
@@ -69,10 +70,19 @@ export const studentsService = {
 
   get: (studentId: string) => request<Student>(`/api/students/${studentId}`),
 
-  update: (studentId: string, payload: Partial<StudentCreateInput>) =>
+  update: (
+    studentId: string,
+    payload: Partial<StudentCreateInput> & { placementStatus?: PlacementStatus },
+  ) =>
     request<{ message: string; student: Student }>(`/api/students/${studentId}`, {
       method: "PUT",
       body: payload,
+    }),
+
+  bulkUpdatePlacementStatus: (studentIds: string[], placementStatus: PlacementStatus) =>
+    request<{ message: string; updatedCount: number }>("/api/students/bulk-placement-status", {
+      method: "PUT",
+      body: { studentIds, placementStatus },
     }),
 
   remove: (studentId: string) =>
@@ -101,9 +111,17 @@ export const studentsService = {
     return res.json() as Promise<CsvUploadResult>;
   },
 
-  /** GET /api/students/export — full roster CSV. Bypasses request() because the response isn't JSON. */
-  exportCsv: async (): Promise<Blob> => {
-    const res = await fetch(`${getApiBaseUrl()}/api/students/export`, {
+  /** GET /api/students/export — roster CSV, optionally scoped by the same filters as list(). Bypasses request() because the response isn't JSON. */
+  exportCsv: async (
+    filters: StudentListFilters & { placementStatus?: PlacementStatus } = {},
+  ): Promise<Blob> => {
+    const query = buildQuery({
+      branch: filters.branch,
+      graduationYear: filters.graduationYear,
+      minimumScore: filters.minimumScore,
+      placementStatus: filters.placementStatus,
+    });
+    const res = await fetch(`${getApiBaseUrl()}/api/students/export${query}`, {
       headers: { ...(await getAuthHeader()) },
     });
     if (!res.ok) {

@@ -169,6 +169,22 @@ class DriveUpdateIn(BaseModel):
     status: Optional[str] = None
 
 
+_VALID_PLACEMENT_STATUSES = {"not_placed", "placed", "offer_declined"}
+
+# Generous bounds so we reject obvious data-entry mistakes (typos, negative
+# years) without rejecting real cohorts — not a strict academic-calendar rule.
+_MIN_GRADUATION_YEAR = 1950
+
+
+def _validate_graduation_year(v: Optional[int]) -> Optional[int]:
+    if v is None:
+        return v
+    max_year = date.today().year + 10
+    if v < _MIN_GRADUATION_YEAR or v > max_year:
+        raise ValueError(f"graduationYear must be between {_MIN_GRADUATION_YEAR} and {max_year}")
+    return v
+
+
 class StudentIn(BaseModel):
     name: str
     email: str
@@ -182,18 +198,55 @@ class StudentIn(BaseModel):
             raise ValueError("Enter a valid email address.")
         return v
 
+    @field_validator("graduationYear")
+    @classmethod
+    def _validate_graduation_year_required(cls, v: int) -> int:
+        return _validate_graduation_year(v)
+
 
 class StudentUpdateIn(BaseModel):
     name: Optional[str] = None
     email: Optional[str] = None
     branch: Optional[str] = None
     graduationYear: Optional[int] = None
+    placementStatus: Optional[str] = None
 
     @field_validator("email")
     @classmethod
     def _validate_email_format(cls, v: Optional[str]) -> Optional[str]:
         if v is not None and not is_valid_email_format(v):
             raise ValueError("Enter a valid email address.")
+        return v
+
+    @field_validator("graduationYear")
+    @classmethod
+    def _validate_graduation_year_optional(cls, v: Optional[int]) -> Optional[int]:
+        return _validate_graduation_year(v)
+
+    @field_validator("placementStatus")
+    @classmethod
+    def _validate_placement_status(cls, v: Optional[str]) -> Optional[str]:
+        if v is not None and v not in _VALID_PLACEMENT_STATUSES:
+            raise ValueError(f"placementStatus must be one of {sorted(_VALID_PLACEMENT_STATUSES)}")
+        return v
+
+
+class StudentBulkPlacementIn(BaseModel):
+    studentIds: List[str]
+    placementStatus: str
+
+    @field_validator("studentIds")
+    @classmethod
+    def _validate_student_ids(cls, v: List[str]) -> List[str]:
+        if not v:
+            raise ValueError("studentIds must contain at least one id")
+        return v
+
+    @field_validator("placementStatus")
+    @classmethod
+    def _validate_bulk_placement_status(cls, v: str) -> str:
+        if v not in _VALID_PLACEMENT_STATUSES:
+            raise ValueError(f"placementStatus must be one of {sorted(_VALID_PLACEMENT_STATUSES)}")
         return v
 
 

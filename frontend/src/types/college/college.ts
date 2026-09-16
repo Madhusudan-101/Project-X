@@ -3,6 +3,7 @@
 
 export type VerificationStatus = "pending" | "verified" | "rejected";
 export type DriveStatus = "Active" | "Closed" | "Draft";
+export type PlacementStatus = "not_placed" | "placed" | "offer_declined";
 
 /** Raw row shape returned by GET /api/students/ and /api/students/{id} (snake_case, unmodified DB columns). */
 export interface Student {
@@ -19,6 +20,7 @@ export interface Student {
   interview_score: number;
   assessment_score: number;
   verification_status: VerificationStatus;
+  placement_status: PlacementStatus;
   created_at?: string;
   updated_at?: string;
 }
@@ -82,7 +84,14 @@ export interface DashboardStats {
   totalStudents: number;
   averageEmployabilityScore: number;
   activeCompanyDrives: number;
+  totalDrives: number;
+  draftDrives: number;
+  closedDrives: number;
   verifiedStudents: number;
+  placedStudents: number;
+  notPlacedStudents: number;
+  offerDeclinedStudents: number;
+  placementPercentage: number;
 }
 
 export interface ScoreDistribution {
