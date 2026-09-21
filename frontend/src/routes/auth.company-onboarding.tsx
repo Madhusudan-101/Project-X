@@ -98,11 +98,14 @@ function CompanyOnboardingPage() {
 
   // ── Auth guard ─────────────────────────────────────────────────────
   useEffect(() => {
-    if (!session) {
+    // Read the hydrated store, not the closure: on a hard load React hydrates with the initial
+    // (null) snapshot, so `session` above would bounce a signed-in user to login.
+    const current = useAuthStore.getState().session;
+    if (!current) {
       navigate({ to: "/auth/login", search: { role: "company" } as never });
       return;
     }
-    if (session.user.role !== "company") {
+    if (current.user.role !== "company") {
       navigate({ to: "/portals" });
     }
   }, [session, navigate]);

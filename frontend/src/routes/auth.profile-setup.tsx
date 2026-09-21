@@ -65,7 +65,10 @@ function ProfileSetupPage() {
   // renders the whole form, lets you fill everything in, and only fails
   // once you submit. Same guard pattern as company/college onboarding.
   useEffect(() => {
-    if (!session) {
+    // Read the hydrated store, not the closure: on a hard load React hydrates with the initial
+    // (null) snapshot, so `session` above would bounce a signed-in user to login.
+    const current = useAuthStore.getState().session;
+    if (!current) {
       navigate({ to: "/auth/login" });
     }
   }, [session, navigate]);

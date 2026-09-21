@@ -22,13 +22,16 @@ interface Portal {
   desc: string;
   icon: LucideIcon;
   accent: string;
+  /** Candidate and Company accounts are self-service. College and Admin accounts are
+   * provisioned by the Mirracle team, so those portals only offer sign-in. */
+  publicSignup: boolean;
 }
 
 const PORTALS: Portal[] = [
-  { role: "candidate", title: "Candidate", desc: "Practice AI interviews, analyze your resume, and track applications.", icon: GraduationCap, accent: "from-primary to-secondary" },
-  { role: "company", title: "Company", desc: "Create interviews, run OAs, and rank candidates end-to-end.", icon: Building2, accent: "from-secondary to-accent" },
-  { role: "college", title: "College", desc: "Manage students, campus drives and placement analytics.", icon: School, accent: "from-accent to-primary" },
-  { role: "admin", title: "Admin", desc: "Operate the platform — users, billing, question banks and support.", icon: ShieldCheck, accent: "from-primary to-accent" },
+  { role: "candidate", title: "Candidate", desc: "Practice AI interviews, analyze your resume, and track applications.", icon: GraduationCap, accent: "from-primary to-secondary", publicSignup: true },
+  { role: "company", title: "Company", desc: "Create interviews, run OAs, and rank candidates end-to-end.", icon: Building2, accent: "from-secondary to-accent", publicSignup: true },
+  { role: "college", title: "College", desc: "Manage students, campus drives and placement analytics.", icon: School, accent: "from-accent to-primary", publicSignup: false },
+  { role: "admin", title: "Admin", desc: "Platform-wide analytics — colleges, companies, candidates and placement performance.", icon: ShieldCheck, accent: "from-primary to-accent", publicSignup: false },
 ];
 
 function PortalsPage() {
@@ -80,10 +83,15 @@ function PortalsPage() {
                       >
                         <Link to="/auth/login" search={{ role: p.role }}>Login</Link>
                       </Button>
-                      <Button asChild size="sm" variant="outline">
-                        <Link to="/auth/signup" search={{ role: p.role }}>Sign up</Link>
-                      </Button>
+                      {p.publicSignup && (
+                        <Button asChild size="sm" variant="outline">
+                          <Link to="/auth/signup" search={{ role: p.role }}>Sign up</Link>
+                        </Button>
+                      )}
                     </div>
+                    {!p.publicSignup && (
+                      <p className="mt-3 text-xs text-muted-foreground">Accounts are created by the Mirracle team.</p>
+                    )}
                   </div>
                 </div>
               </Card>

@@ -100,12 +100,18 @@ function LoginPage() {
         </Button>
       </form>
 
-      <p className="mt-6 text-center text-sm text-muted-foreground">
-        Don't have an account?{" "}
-        <Link to="/auth/signup" search={{ role }} className="font-medium text-primary hover:underline">
-          Create one
-        </Link>
-      </p>
+      {role === "admin" || role === "college" ? (
+        <p className="mt-6 text-center text-sm text-muted-foreground">
+          {role === "admin" ? "Admin" : "College"} accounts are created by the Mirracle team.
+        </p>
+      ) : (
+        <p className="mt-6 text-center text-sm text-muted-foreground">
+          Don't have an account?{" "}
+          <Link to="/auth/signup" search={{ role }} className="font-medium text-primary hover:underline">
+            Create one
+          </Link>
+        </p>
+      )}
     </div>
   );
 }

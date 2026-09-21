@@ -20,6 +20,12 @@ from .routers.company import company, roles as company_roles
 from .routers.company import jobs as company_jobs
 from .routers.company import applicants as company_applicants
 from .routers.company import drives as company_drives
+from .routers.admin import overview as admin_overview
+from .routers.admin import colleges as admin_colleges
+from .routers.admin import companies as admin_companies
+from .routers.admin import candidates as admin_candidates
+from .routers.admin import placements as admin_placements
+from .routers.admin import finance as admin_finance
 
 app = FastAPI(title="Mirracle API")
 
@@ -81,6 +87,13 @@ app.include_router(company_applicants.router)
 app.include_router(company_drives.router)
 app.include_router(candidate_jobs.router)
 app.include_router(candidate_resume_tailor.router)
+# Admin Portal — every router carries the require_admin_role dependency.
+app.include_router(admin_overview.router)
+app.include_router(admin_colleges.router)
+app.include_router(admin_companies.router)
+app.include_router(admin_candidates.router)
+app.include_router(admin_placements.router)
+app.include_router(admin_finance.router)
 
 @app.get("/")
 def root():

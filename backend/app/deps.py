@@ -138,6 +138,28 @@ def require_company_role(current_user: dict = Depends(get_current_user)) -> dict
     return {**current_user, "profile_role": role}
 
 
+def require_admin_role(current_user: dict = Depends(get_current_user)) -> dict:
+    """Assert the caller is an Admin portal user.
+
+    The role comes from the `profiles` row via the service client — never from
+    the JWT's user_metadata, which the account holder can edit. A missing
+    profile is a 403 (not self-healed): admin accounts are provisioned, never
+    created on first sign-in. Every /admin route depends on this.
+    """
+    try:
+        res = db_client.table("profiles").select(
+            "id, role"
+        ).eq("id", current_user["id"]).single().execute()
+    except APIError as e:
+        raise HTTPException(status_code=403, detail=f"Profile lookup failed: {e.message}")
+
+    role = (res.data or {}).get("role")
+    if role != "admin":
+        raise HTTPException(status_code=403, detail="Admin role required")
+
+    return {**current_user, "profile_role": role}
+
+
 def require_candidate_role(current_user: dict = Depends(get_current_user)) -> dict:
     """Load the caller's profile, assert Candidate portal user, and attach the
     `domain` + `college_id` the student job board query needs.

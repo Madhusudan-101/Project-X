@@ -17,6 +17,11 @@ import { Route as CollegeRouteImport } from './routes/college'
 import { Route as CompanyRouteImport } from './routes/company'
 import { Route as PortalsRouteImport } from './routes/portals'
 import { Route as SitemapDotxmlRouteImport } from './routes/sitemap[.]xml'
+import { Route as AdminIndexRouteImport } from './routes/admin/index'
+import { Route as AdminCandidatesRouteImport } from './routes/admin/candidates'
+import { Route as AdminFinanceRouteImport } from './routes/admin/finance'
+import { Route as AdminPartnershipsRouteImport } from './routes/admin/partnerships'
+import { Route as AdminPlacementsRouteImport } from './routes/admin/placements'
 import { Route as AuthCollegeOnboardingRouteImport } from './routes/auth.college-onboarding'
 import { Route as AuthCompanyOnboardingRouteImport } from './routes/auth.company-onboarding'
 import { Route as AuthCompanySignupRouteImport } from './routes/auth.company-signup'
@@ -43,6 +48,10 @@ import { Route as CompanyJobsJobIdRouteImport } from './routes/company-jobs/$job
 import { Route as CompanyRolesIndexRouteImport } from './routes/company-roles/index'
 import { Route as CompanyRolesRoleIdRouteImport } from './routes/company-roles/$roleId'
 import { Route as ResumeTailorApplicationIdRouteImport } from './routes/resume-tailor/$applicationId'
+import { Route as AdminCollegesIndexRouteImport } from './routes/admin/colleges/index'
+import { Route as AdminCollegesCollegeIdRouteImport } from './routes/admin/colleges/$collegeId'
+import { Route as AdminCompaniesIndexRouteImport } from './routes/admin/companies/index'
+import { Route as AdminCompaniesCompanyIdRouteImport } from './routes/admin/companies/$companyId'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -83,6 +92,31 @@ const SitemapDotxmlRoute = SitemapDotxmlRouteImport.update({
   id: '/sitemap.xml',
   path: '/sitemap.xml',
   getParentRoute: () => rootRouteImport,
+} as any)
+const AdminIndexRoute = AdminIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminCandidatesRoute = AdminCandidatesRouteImport.update({
+  id: '/candidates',
+  path: '/candidates',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminFinanceRoute = AdminFinanceRouteImport.update({
+  id: '/finance',
+  path: '/finance',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminPartnershipsRoute = AdminPartnershipsRouteImport.update({
+  id: '/partnerships',
+  path: '/partnerships',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminPlacementsRoute = AdminPlacementsRouteImport.update({
+  id: '/placements',
+  path: '/placements',
+  getParentRoute: () => AdminRoute,
 } as any)
 const AuthCollegeOnboardingRoute = AuthCollegeOnboardingRouteImport.update({
   id: '/college-onboarding',
@@ -215,16 +249,40 @@ const ResumeTailorApplicationIdRoute =
     path: '/resume-tailor/$applicationId',
     getParentRoute: () => rootRouteImport,
   } as any)
+const AdminCollegesIndexRoute = AdminCollegesIndexRouteImport.update({
+  id: '/colleges/',
+  path: '/colleges/',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminCollegesCollegeIdRoute = AdminCollegesCollegeIdRouteImport.update({
+  id: '/colleges/$collegeId',
+  path: '/colleges/$collegeId',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminCompaniesIndexRoute = AdminCompaniesIndexRouteImport.update({
+  id: '/companies/',
+  path: '/companies/',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminCompaniesCompanyIdRoute = AdminCompaniesCompanyIdRouteImport.update({
+  id: '/companies/$companyId',
+  path: '/companies/$companyId',
+  getParentRoute: () => AdminRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
-  '/admin': typeof AdminRoute
+  '/admin': typeof AdminRouteWithChildren
   '/auth': typeof AuthRouteWithChildren
   '/candidate': typeof CandidateRoute
   '/college': typeof CollegeRouteWithChildren
   '/company': typeof CompanyRoute
   '/portals': typeof PortalsRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
+  '/admin/candidates': typeof AdminCandidatesRoute
+  '/admin/finance': typeof AdminFinanceRoute
+  '/admin/partnerships': typeof AdminPartnershipsRoute
+  '/admin/placements': typeof AdminPlacementsRoute
   '/auth/college-onboarding': typeof AuthCollegeOnboardingRoute
   '/auth/company-onboarding': typeof AuthCompanyOnboardingRoute
   '/auth/company-signup': typeof AuthCompanySignupRoute
@@ -248,18 +306,26 @@ export interface FileRoutesByFullPath {
   '/company-jobs/$jobId': typeof CompanyJobsJobIdRoute
   '/company-roles/$roleId': typeof CompanyRolesRoleIdRoute
   '/resume-tailor/$applicationId': typeof ResumeTailorApplicationIdRoute
+  '/admin/': typeof AdminIndexRoute
   '/college/': typeof CollegeIndexRoute
   '/company-jobs/': typeof CompanyJobsIndexRoute
   '/company-roles/': typeof CompanyRolesIndexRoute
+  '/admin/colleges/$collegeId': typeof AdminCollegesCollegeIdRoute
+  '/admin/companies/$companyId': typeof AdminCompaniesCompanyIdRoute
+  '/admin/colleges/': typeof AdminCollegesIndexRoute
+  '/admin/companies/': typeof AdminCompaniesIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
-  '/admin': typeof AdminRoute
   '/auth': typeof AuthRouteWithChildren
   '/candidate': typeof CandidateRoute
   '/company': typeof CompanyRoute
   '/portals': typeof PortalsRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
+  '/admin/candidates': typeof AdminCandidatesRoute
+  '/admin/finance': typeof AdminFinanceRoute
+  '/admin/partnerships': typeof AdminPartnershipsRoute
+  '/admin/placements': typeof AdminPlacementsRoute
   '/auth/college-onboarding': typeof AuthCollegeOnboardingRoute
   '/auth/company-onboarding': typeof AuthCompanyOnboardingRoute
   '/auth/company-signup': typeof AuthCompanySignupRoute
@@ -283,20 +349,29 @@ export interface FileRoutesByTo {
   '/company-jobs/$jobId': typeof CompanyJobsJobIdRoute
   '/company-roles/$roleId': typeof CompanyRolesRoleIdRoute
   '/resume-tailor/$applicationId': typeof ResumeTailorApplicationIdRoute
+  '/admin': typeof AdminIndexRoute
   '/college': typeof CollegeIndexRoute
   '/company-jobs': typeof CompanyJobsIndexRoute
   '/company-roles': typeof CompanyRolesIndexRoute
+  '/admin/colleges/$collegeId': typeof AdminCollegesCollegeIdRoute
+  '/admin/companies/$companyId': typeof AdminCompaniesCompanyIdRoute
+  '/admin/colleges': typeof AdminCollegesIndexRoute
+  '/admin/companies': typeof AdminCompaniesIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
-  '/admin': typeof AdminRoute
+  '/admin': typeof AdminRouteWithChildren
   '/auth': typeof AuthRouteWithChildren
   '/candidate': typeof CandidateRoute
   '/college': typeof CollegeRouteWithChildren
   '/company': typeof CompanyRoute
   '/portals': typeof PortalsRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
+  '/admin/candidates': typeof AdminCandidatesRoute
+  '/admin/finance': typeof AdminFinanceRoute
+  '/admin/partnerships': typeof AdminPartnershipsRoute
+  '/admin/placements': typeof AdminPlacementsRoute
   '/auth/college-onboarding': typeof AuthCollegeOnboardingRoute
   '/auth/company-onboarding': typeof AuthCompanyOnboardingRoute
   '/auth/company-signup': typeof AuthCompanySignupRoute
@@ -320,9 +395,14 @@ export interface FileRoutesById {
   '/company-jobs/$jobId': typeof CompanyJobsJobIdRoute
   '/company-roles/$roleId': typeof CompanyRolesRoleIdRoute
   '/resume-tailor/$applicationId': typeof ResumeTailorApplicationIdRoute
+  '/admin/': typeof AdminIndexRoute
   '/college/': typeof CollegeIndexRoute
   '/company-jobs/': typeof CompanyJobsIndexRoute
   '/company-roles/': typeof CompanyRolesIndexRoute
+  '/admin/colleges/$collegeId': typeof AdminCollegesCollegeIdRoute
+  '/admin/companies/$companyId': typeof AdminCompaniesCompanyIdRoute
+  '/admin/colleges/': typeof AdminCollegesIndexRoute
+  '/admin/companies/': typeof AdminCompaniesIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -335,6 +415,10 @@ export interface FileRouteTypes {
     | '/company'
     | '/portals'
     | '/sitemap.xml'
+    | '/admin/candidates'
+    | '/admin/finance'
+    | '/admin/partnerships'
+    | '/admin/placements'
     | '/auth/college-onboarding'
     | '/auth/company-onboarding'
     | '/auth/company-signup'
@@ -358,18 +442,26 @@ export interface FileRouteTypes {
     | '/company-jobs/$jobId'
     | '/company-roles/$roleId'
     | '/resume-tailor/$applicationId'
+    | '/admin/'
     | '/college/'
     | '/company-jobs/'
     | '/company-roles/'
+    | '/admin/colleges/$collegeId'
+    | '/admin/companies/$companyId'
+    | '/admin/colleges/'
+    | '/admin/companies/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
-    | '/admin'
     | '/auth'
     | '/candidate'
     | '/company'
     | '/portals'
     | '/sitemap.xml'
+    | '/admin/candidates'
+    | '/admin/finance'
+    | '/admin/partnerships'
+    | '/admin/placements'
     | '/auth/college-onboarding'
     | '/auth/company-onboarding'
     | '/auth/company-signup'
@@ -393,9 +485,14 @@ export interface FileRouteTypes {
     | '/company-jobs/$jobId'
     | '/company-roles/$roleId'
     | '/resume-tailor/$applicationId'
+    | '/admin'
     | '/college'
     | '/company-jobs'
     | '/company-roles'
+    | '/admin/colleges/$collegeId'
+    | '/admin/companies/$companyId'
+    | '/admin/colleges'
+    | '/admin/companies'
   id:
     | '__root__'
     | '/'
@@ -406,6 +503,10 @@ export interface FileRouteTypes {
     | '/company'
     | '/portals'
     | '/sitemap.xml'
+    | '/admin/candidates'
+    | '/admin/finance'
+    | '/admin/partnerships'
+    | '/admin/placements'
     | '/auth/college-onboarding'
     | '/auth/company-onboarding'
     | '/auth/company-signup'
@@ -429,14 +530,19 @@ export interface FileRouteTypes {
     | '/company-jobs/$jobId'
     | '/company-roles/$roleId'
     | '/resume-tailor/$applicationId'
+    | '/admin/'
     | '/college/'
     | '/company-jobs/'
     | '/company-roles/'
+    | '/admin/colleges/$collegeId'
+    | '/admin/companies/$companyId'
+    | '/admin/colleges/'
+    | '/admin/companies/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
-  AdminRoute: typeof AdminRoute
+  AdminRoute: typeof AdminRouteWithChildren
   AuthRoute: typeof AuthRouteWithChildren
   CandidateRoute: typeof CandidateRoute
   CollegeRoute: typeof CollegeRouteWithChildren
@@ -508,6 +614,41 @@ declare module '@tanstack/react-router' {
       fullPath: '/sitemap.xml'
       preLoaderRoute: typeof SitemapDotxmlRouteImport
       parentRoute: typeof rootRouteImport
+    }
+    '/admin/': {
+      id: '/admin/'
+      path: '/'
+      fullPath: '/admin/'
+      preLoaderRoute: typeof AdminIndexRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/candidates': {
+      id: '/admin/candidates'
+      path: '/candidates'
+      fullPath: '/admin/candidates'
+      preLoaderRoute: typeof AdminCandidatesRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/finance': {
+      id: '/admin/finance'
+      path: '/finance'
+      fullPath: '/admin/finance'
+      preLoaderRoute: typeof AdminFinanceRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/partnerships': {
+      id: '/admin/partnerships'
+      path: '/partnerships'
+      fullPath: '/admin/partnerships'
+      preLoaderRoute: typeof AdminPartnershipsRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/placements': {
+      id: '/admin/placements'
+      path: '/placements'
+      fullPath: '/admin/placements'
+      preLoaderRoute: typeof AdminPlacementsRouteImport
+      parentRoute: typeof AdminRoute
     }
     '/auth/college-onboarding': {
       id: '/auth/college-onboarding'
@@ -691,8 +832,62 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ResumeTailorApplicationIdRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/admin/colleges/': {
+      id: '/admin/colleges/'
+      path: '/colleges'
+      fullPath: '/admin/colleges/'
+      preLoaderRoute: typeof AdminCollegesIndexRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/colleges/$collegeId': {
+      id: '/admin/colleges/$collegeId'
+      path: '/colleges/$collegeId'
+      fullPath: '/admin/colleges/$collegeId'
+      preLoaderRoute: typeof AdminCollegesCollegeIdRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/companies/': {
+      id: '/admin/companies/'
+      path: '/companies'
+      fullPath: '/admin/companies/'
+      preLoaderRoute: typeof AdminCompaniesIndexRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/companies/$companyId': {
+      id: '/admin/companies/$companyId'
+      path: '/companies/$companyId'
+      fullPath: '/admin/companies/$companyId'
+      preLoaderRoute: typeof AdminCompaniesCompanyIdRouteImport
+      parentRoute: typeof AdminRoute
+    }
   }
 }
+
+interface AdminRouteChildren {
+  AdminCandidatesRoute: typeof AdminCandidatesRoute
+  AdminFinanceRoute: typeof AdminFinanceRoute
+  AdminPartnershipsRoute: typeof AdminPartnershipsRoute
+  AdminPlacementsRoute: typeof AdminPlacementsRoute
+  AdminIndexRoute: typeof AdminIndexRoute
+  AdminCollegesCollegeIdRoute: typeof AdminCollegesCollegeIdRoute
+  AdminCompaniesCompanyIdRoute: typeof AdminCompaniesCompanyIdRoute
+  AdminCollegesIndexRoute: typeof AdminCollegesIndexRoute
+  AdminCompaniesIndexRoute: typeof AdminCompaniesIndexRoute
+}
+
+const AdminRouteChildren: AdminRouteChildren = {
+  AdminCandidatesRoute: AdminCandidatesRoute,
+  AdminFinanceRoute: AdminFinanceRoute,
+  AdminPartnershipsRoute: AdminPartnershipsRoute,
+  AdminPlacementsRoute: AdminPlacementsRoute,
+  AdminIndexRoute: AdminIndexRoute,
+  AdminCollegesCollegeIdRoute: AdminCollegesCollegeIdRoute,
+  AdminCompaniesCompanyIdRoute: AdminCompaniesCompanyIdRoute,
+  AdminCollegesIndexRoute: AdminCollegesIndexRoute,
+  AdminCompaniesIndexRoute: AdminCompaniesIndexRoute,
+}
+
+const AdminRouteWithChildren = AdminRoute._addFileChildren(AdminRouteChildren)
 
 interface AuthRouteChildren {
   AuthCollegeOnboardingRoute: typeof AuthCollegeOnboardingRoute
@@ -753,7 +948,7 @@ const CollegeRouteWithChildren =
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
-  AdminRoute: AdminRoute,
+  AdminRoute: AdminRouteWithChildren,
   AuthRoute: AuthRouteWithChildren,
   CandidateRoute: CandidateRoute,
   CollegeRoute: CollegeRouteWithChildren,

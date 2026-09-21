@@ -46,6 +46,40 @@ def get_profile_by_email(email: str) -> Optional[Dict[str, Any]]:
     return res.data[0] if res.data else None
 
 
+def _escape_like(value: str) -> str:
+    r"""Make `value` match literally in an ILIKE pattern (backslash is Postgres's
+    default escape character)."""
+    return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+
+
+def find_college_id_by_name(name: str) -> Optional[str]:
+    """Id of the public.colleges row whose name equals `name` (case-insensitive).
+
+    The name is user input, so it is escaped for ILIKE and the match is then
+    confirmed for exact equality — "%" or "_" in a name must never act as a
+    wildcard and link an account to some other college.
+    """
+    clean = (name or "").strip()
+    if not clean:
+        return None
+    res = (
+        db_client.table("colleges")
+        .select("id, name")
+        .ilike("name", _escape_like(clean))
+        .limit(10)
+        .execute()
+    )
+    for row in res.data or []:
+        if (row.get("name") or "").strip().lower() == clean.lower():
+            return row["id"]
+    return None
+
+
+def create_college(name: str) -> Optional[str]:
+    created = db_client.table("colleges").insert({"name": name.strip()}).execute()
+    return created.data[0]["id"] if created.data else None
+
+
 def find_or_create_college_by_name(name: str) -> Optional[str]:
     """Resolve a free-text college name to a public.colleges row id, creating
     the row if it doesn't exist yet. Used to actually populate
@@ -53,13 +87,7 @@ def find_or_create_college_by_name(name: str) -> Optional[str]:
     clean = (name or "").strip()
     if not clean:
         return None
-    existing = (
-        db_client.table("colleges").select("id").ilike("name", clean).limit(1).execute()
-    )
-    if existing.data:
-        return existing.data[0]["id"]
-    created = db_client.table("colleges").insert({"name": clean}).execute()
-    return created.data[0]["id"] if created.data else None
+    return find_college_id_by_name(clean) or create_college(clean)
 
 
 # ── Companies ────────────────────────────────────────────────────────────

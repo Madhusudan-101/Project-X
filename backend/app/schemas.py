@@ -2,6 +2,7 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 from typing import Optional, List, Union, Dict, Any
 from datetime import date
 from datetime import date as _date  # alias for use in `Optional[...] = None` fields literally named `date`
+from uuid import UUID
 
 from .utils.email_rules import is_valid_email_format
 
@@ -267,6 +268,36 @@ class DepartmentUpdateIn(BaseModel):
     name: Optional[str] = None
     code: Optional[str] = None
     hodName: Optional[str] = None
+
+
+# ── Admin Portal payloads ─────────────────────────────────────────────
+
+class CollegeProvisionIn(BaseModel):
+    """Admin provisions a College account and links it to a college — either an
+    existing one (`college_id`, e.g. picked from the directory) or one found /
+    created by name. City / state / type fill in the directory row."""
+    email: str
+    first_name: str = Field(min_length=1, max_length=60)
+    last_name: str = Field(min_length=1, max_length=60)
+    college_id: Optional[UUID] = None
+    college_name: Optional[str] = Field(default=None, max_length=120)
+    city: Optional[str] = Field(default=None, max_length=80)
+    state: Optional[str] = Field(default=None, max_length=80)
+    type: Optional[str] = Field(default=None, max_length=40)
+
+    @field_validator("email")
+    @classmethod
+    def _validate_email_format(cls, v: str) -> str:
+        v = v.strip()  # admins paste addresses with stray whitespace
+        if not is_valid_email_format(v):
+            raise ValueError("Enter a valid email address.")
+        return v
+
+    @model_validator(mode="after")
+    def _college_required(self) -> "CollegeProvisionIn":
+        if not self.college_id and not (self.college_name or "").strip():
+            raise ValueError("Provide a college_id or a college_name.")
+        return self
 
 
 # ── Company Portal payloads ───────────────────────────────────────────

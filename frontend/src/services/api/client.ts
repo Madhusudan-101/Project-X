@@ -65,6 +65,32 @@ export class ApiClientError extends Error {
   }
 }
 
+/** Serialise params into a "?a=1&b=2" query string, skipping empty values. */
+export function buildQuery(
+  params: Record<string, string | number | boolean | null | undefined>,
+): string {
+  const usp = new URLSearchParams();
+  for (const [key, value] of Object.entries(params)) {
+    if (value !== undefined && value !== null && value !== "") {
+      usp.set(key, String(value));
+    }
+  }
+  const s = usp.toString();
+  return s ? `?${s}` : "";
+}
+
+/** Triggers a browser download for a CSV blob without navigating away from the SPA. */
+export function downloadCsvBlob(blob: Blob, filename: string) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
 /** Base URL for services that need to build a `fetch()` call manually (file uploads, blobs). */
 export function getApiBaseUrl(): string {
   return BASE_URL;

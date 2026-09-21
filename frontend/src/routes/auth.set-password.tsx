@@ -32,7 +32,10 @@ function SetPasswordPage() {
   // Only reachable right after Google sign-in with a real session — anyone
   // landing here without one (e.g. a stale bookmark) gets sent back to login.
   useEffect(() => {
-    if (!session) {
+    // Read the hydrated store, not the closure: on a hard load React hydrates with the initial
+    // (null) snapshot, so `session` above would bounce a signed-in user to login.
+    const current = useAuthStore.getState().session;
+    if (!current) {
       navigate({ to: "/auth/login" });
     }
   }, [session, navigate]);

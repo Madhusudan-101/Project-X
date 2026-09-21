@@ -1,0 +1,6 @@
+# Development / test-only dependencies (not needed to run the API).
+#
+# tests/test_admin_portal_sql.py applies the repo's migrations to a scratch
+# PostgreSQL and needs a driver for it:
+#     pip install -r requirements.txt -r requirements-dev.txt
+psycopg2-binary

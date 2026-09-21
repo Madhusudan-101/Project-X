@@ -5,7 +5,7 @@
  * Only wrap real backend routes here.
  */
 
-import { ApiClientError, getApiBaseUrl, getAuthHeader, request } from "../client";
+import { ApiClientError, buildQuery, getApiBaseUrl, getAuthHeader, request } from "../client";
 import type {
   CsvUploadInvalidRow,
   CsvUploadResult,
@@ -32,17 +32,6 @@ export class CsvUploadError extends ApiClientError {
     super(message, status);
     this.invalidRows = invalidRows;
   }
-}
-
-function buildQuery(params: Record<string, string | number | undefined>): string {
-  const usp = new URLSearchParams();
-  for (const [key, value] of Object.entries(params)) {
-    if (value !== undefined && value !== null && value !== "") {
-      usp.set(key, String(value));
-    }
-  }
-  const s = usp.toString();
-  return s ? `?${s}` : "";
 }
 
 // ── Dashboard — GET /api/dashboard/stats, GET /api/dashboard/score-distribution ──
@@ -184,17 +173,8 @@ export const shortlistService = {
   },
 };
 
-/** Triggers a browser download for a CSV blob without navigating away from the SPA. */
-export function downloadCsvBlob(blob: Blob, filename: string) {
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = filename;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  URL.revokeObjectURL(url);
-}
+// Shared with the Admin service — implemented in ../client; re-exported so existing imports keep working.
+export { downloadCsvBlob } from "../client";
 
 // ── Departments — GET/POST /api/departments/, GET/PUT/DELETE /api/departments/{id} ──
 export const departmentsService = {

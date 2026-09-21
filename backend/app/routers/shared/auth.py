@@ -28,6 +28,22 @@ from ...crud import (
 log = logging.getLogger(__name__)
 router = APIRouter(prefix="/auth", tags=["auth"])
 
+# Roles a person may obtain by signing up themselves. `admin` and `college`
+# accounts are provisioned (admin API / provision_admin.py), never self-created:
+# a College account is a tenant of one college's data and an Admin sees the whole
+# platform, so neither can hinge on a role string the client (or the editable
+# user_metadata on its Supabase user) supplies.
+PUBLIC_SIGNUP_ROLES = ("candidate", "company")
+
+
+def _reject_non_public_role(role: str) -> None:
+    if role not in PUBLIC_SIGNUP_ROLES:
+        raise HTTPException(
+            status_code=403,
+            detail="Admin and College accounts are created by the Mirracle team, "
+                   "not through public signup. Sign in if you already have an account.",
+        )
+
 
 # ── Helpers ────────────────────────────────────────────────────────────
 
@@ -76,14 +92,20 @@ def _check_signup_conflict(email: str, role: str) -> None:
 def _ensure_profile(user_id: str, email: str, role: str,
                      name: str = "", first_name: str = "",
                      last_name: str = "") -> dict:
-    """Get existing profile or create one. Returns the DB row dict."""
+    """Get existing profile or create one. Returns the DB row dict.
+
+    Self-heal only ever creates a public-signup role. `role` here can come from
+    the request body or from the token's editable user_metadata, so a missing
+    profile plus a privileged role is refused (403) rather than created."""
     profile = get_profile_by_id(user_id)
     if profile:
         return profile
+    role = role or "candidate"
+    _reject_non_public_role(role)
     # Auto-create (self-heal) a missing profile row
     return upsert_profile(user_id, {
         "email": email,
-        "role": role or "candidate",
+        "role": role,
         "name": name,
         "first_name": first_name,
         "last_name": last_name,
@@ -118,6 +140,7 @@ def _set_password_with_retry(user_id: str, password: str) -> None:
 
 @router.post("/signup", response_model=SessionOut)
 def signup(payload: SignupIn):
+    _reject_non_public_role(payload.role)
     first = payload.resolved_first_name or ""
     last = payload.resolved_last_name or ""
 
@@ -609,7 +632,9 @@ def update_profile_route(
             # Normal partial update
             profile = update_profile(user_id, update_data)
         else:
-            # Self-heal: create the row first, then apply updates
+            # Self-heal: create the row first, then apply updates. `role` comes
+            # from the token's editable user_metadata, so it must be a public one.
+            _reject_non_public_role(role)
             profile = upsert_profile(user_id, {
                 "email": email,
                 "role": role,

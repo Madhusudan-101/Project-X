@@ -1,4 +1,4 @@
-import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Link, redirect, useNavigate } from "@tanstack/react-router";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -27,6 +27,14 @@ const schema = z
 type FormValues = z.infer<typeof schema>;
 
 export const Route = createFileRoute("/auth/signup")({
+  // Admin and College accounts are provisioned, not self-created — there is no
+  // signup form for them (the API refuses it too). Send them to sign-in.
+  beforeLoad: ({ search }) => {
+    const role = (search as { role?: UserRole }).role;
+    if (role === "admin" || role === "college") {
+      throw redirect({ to: "/auth/login", search: { role } as never });
+    }
+  },
   component: SignupPage,
 });
 

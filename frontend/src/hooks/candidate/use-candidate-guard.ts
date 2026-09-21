@@ -1,7 +1,4 @@
-import { useEffect } from "react";
-import { useNavigate } from "@tanstack/react-router";
-import { toast } from "sonner";
-import { useAuthStore } from "@/store/auth";
+import { useRoleGuard } from "@/hooks/use-role-guard";
 import type { Session } from "@/types";
 
 /**
@@ -10,19 +7,5 @@ import type { Session } from "@/types";
  * so the Candidate portal enforces the same rule as the other two.
  */
 export function useCandidateGuard(): Session | null {
-  const navigate = useNavigate();
-  const session = useAuthStore((s) => s.session);
-
-  useEffect(() => {
-    if (!session) {
-      navigate({ to: "/auth/login", search: { role: "candidate" } as never });
-      return;
-    }
-    if (session.user.role !== "candidate") {
-      toast.error("This dashboard is for Candidate accounts only.");
-      navigate({ to: "/portals" });
-    }
-  }, [session, navigate]);
-
-  return session && session.user.role === "candidate" ? session : null;
+  return useRoleGuard("candidate", "This dashboard is for Candidate accounts only.");
 }

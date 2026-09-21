@@ -1,7 +1,4 @@
-import { useEffect } from "react";
-import { useNavigate } from "@tanstack/react-router";
-import { toast } from "sonner";
-import { useAuthStore } from "@/store/auth";
+import { useRoleGuard } from "@/hooks/use-role-guard";
 import type { Session } from "@/types";
 
 /**
@@ -10,19 +7,5 @@ import type { Session } from "@/types";
  * (TPO) portal enforces the same rule as the Company portal.
  */
 export function useCollegeGuard(): Session | null {
-  const navigate = useNavigate();
-  const session = useAuthStore((s) => s.session);
-
-  useEffect(() => {
-    if (!session) {
-      navigate({ to: "/auth/login", search: { role: "college" } as never });
-      return;
-    }
-    if (session.user.role !== "college") {
-      toast.error("This dashboard is for College accounts only.");
-      navigate({ to: "/portals" });
-    }
-  }, [session, navigate]);
-
-  return session && session.user.role === "college" ? session : null;
+  return useRoleGuard("college", "This dashboard is for College accounts only.");
 }
