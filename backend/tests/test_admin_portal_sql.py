@@ -186,6 +186,15 @@ def scalar_json(cur, name: str, *args):
     return next(iter(cur.fetchone().values()))
 
 
+def attempt(cur, sql: str) -> str:
+    """Run `sql`; 'ok' on success, else the Postgres error code (or 'error')."""
+    try:
+        cur.execute(sql)
+        return "ok"
+    except psycopg2.Error as e:
+        return e.pgcode or "error"
+
+
 ALL = (None, None)
 FEB = ("2026-02-01T00:00:00Z", "2026-03-01T00:00:00Z")
 
@@ -533,7 +542,117 @@ def main() -> int:
     check("the TPO's manual Campus Drive is not a platform drive (5 platform drives, none created in May)",
           (after["totals"]["drives"], scalar_json(cur, "admin_overview", *MAY)["period"]["drives_created"]) == (5, 0))
 
+    print("\n== Platform Control Center: blocking is computed, never a stored yes/no ==")
+    cur.execute(f"update public.profiles set blocked_permanent=false, blocked_until=null, blocked_reason=null, blocked_at=null, blocked_by=null where id='{U['s1']}'")
+    row = fn(cur, "admin_list_users", *ALL, None, None, None, U['s1'], "created_at", "desc", 5, 0)[0]
+    check("unblocked candidate: is_blocked=false", row["is_blocked"] is False, row)
+    cur.execute(f"update public.profiles set blocked_permanent=true, blocked_reason='policy', blocked_by='{U['admin']}', blocked_at=now() where id='{U['s1']}'")
+    row = fn(cur, "admin_list_users", *ALL, None, None, None, U['s1'], "created_at", "desc", 5, 0)[0]
+    check("permanently blocked: is_blocked=true, blocked_by_email resolved", row["is_blocked"] is True and row["blocked_by_email"] == "admin@x.test", row)
+    cur.execute(f"update public.profiles set blocked_permanent=false, blocked_until = now() + interval '1 hour' where id='{U['s1']}'")
+    row = fn(cur, "admin_list_users", *ALL, None, None, None, U['s1'], "created_at", "desc", 5, 0)[0]
+    check("temporarily blocked with a future blocked_until: is_blocked=true", row["is_blocked"] is True, row)
+    cur.execute(f"update public.profiles set blocked_until = now() - interval '1 hour' where id='{U['s1']}'")
+    row = fn(cur, "admin_list_users", *ALL, None, None, None, U['s1'], "created_at", "desc", 5, 0)[0]
+    check("blocked_until now in the PAST, with no job having run: is_blocked=false automatically", row["is_blocked"] is False, row)
+    check("admin_list_users can filter to only blocked / only active accounts",
+          all(r["is_blocked"] for r in fn(cur, "admin_list_users", *ALL, None, None, "blocked", None, "created_at", "desc", 50, 0)) and
+          not any(r["is_blocked"] for r in fn(cur, "admin_list_users", *ALL, None, None, "active", None, "created_at", "desc", 50, 0)))
+    cur.execute(f"update public.profiles set blocked_permanent=false, blocked_until=null, blocked_reason=null, blocked_at=null, blocked_by=null where id='{U['s1']}'")
+
+    print("\n== Platform Control Center: the block-column guard trigger ==")
+    cur.execute("set role authenticated")
+    check("authenticated cannot set blocked_permanent on itself",
+          attempt(cur, f"update public.profiles set blocked_permanent = true where id = '{U['s1']}'") == "42501")
+    check("authenticated cannot set blocked_until on itself",
+          attempt(cur, f"update public.profiles set blocked_until = now() + interval '1 day' where id = '{U['s1']}'") == "42501")
+    cur.execute("reset role")
+    check("...and nothing actually changed", q(cur, f"select blocked_permanent from public.profiles where id='{U['s1']}'")[0]["blocked_permanent"] is False)
+    cur.execute("set role service_role")
+    check("service_role (the backend) CAN block a user",
+          attempt(cur, f"update public.profiles set blocked_permanent = true, blocked_reason='t' where id = '{U['s1']}'") == "ok")
+    cur.execute("reset role")
+    cur.execute(f"update public.profiles set blocked_permanent=false, blocked_reason=null where id='{U['s1']}'")
+
+    print("\n== Platform Control Center: central event log + Audit Log vs Live Activity ==")
+    cur.execute(f"""
+      insert into public.admin_events (event_type, actor_user_id, actor_role, actor_label, target_type, target_id, target_label, result, metadata)
+        values ('user_blocked', '{U['admin']}', 'admin', 'Ada Admin', 'user', '{U['s1']}', 's1@x.test', 'success', '{{"permanent": true}}'::jsonb);
+      insert into public.admin_events (event_type, actor_role, actor_label, result)
+        values ('user_login', 'candidate', 's1@x.test', 'failure');
+    """)
+    events = fn(cur, "admin_list_events", *ALL, None, "user_blocked", None, None, None, None, "created_at", "desc", 10, 0)
+    check("admin_list_events finds the block event by type, resolves target_label", len(events) == 1 and events[0]["target_label"] == "s1@x.test", events)
+    failures = fn(cur, "admin_list_events", *ALL, None, None, None, None, "failure", None, "created_at", "desc", 10, 0)
+    check("admin_list_events filters by result=failure (the audit trail of blocked attempts)",
+          len(failures) == 1 and failures[0]["event_type"] == "user_login", failures)
+    feed = fn(cur, "admin_activity_feed", None, None, None, None, 500)
+    kinds = {r["kind"] for r in feed}
+    check("Live Activity merges a derived kind (application_submitted)...", "application_submitted" in kinds, kinds)
+    check("...with a SUCCESSFUL admin_events kind (user_blocked)...", "user_blocked" in kinds, kinds)
+    check("...but EXCLUDES failed events (the blocked login attempt) -- that's the Audit Log's job, not the friendly feed's",
+          "user_login" not in kinds, kinds)
+    ids = [r["id"] for r in feed]
+    check("every feed row has a stable synthetic id and no two collide", len(ids) == len(set(ids)), len(ids) - len(set(ids)))
+    page1 = fn(cur, "admin_activity_feed", None, None, None, None, 3)
+    cursor_ts = page1[-1]["occurred_at"]
+    page2 = fn(cur, "admin_activity_feed", None, None, cursor_ts, None, 3)
+    check("keyset pagination (p_before) returns strictly older rows, no overlap with the previous page",
+          all(r["occurred_at"] < cursor_ts for r in page2) and not ({r["id"] for r in page1} & {r["id"] for r in page2}),
+          [r["occurred_at"] for r in page2])
+
+    print("\n== Platform Control Center: department breakdown uses RAW branch text ==")
+    dept = {r["branch"]: r for r in fn(cur, "admin_department_breakdown", *ALL, None)}
+    check("Alpha's candidates split CSE/IT exactly as entered (not alias-merged)", set(dept) >= {"CSE", "IT", "ECE", "ME"}, dept)
+    check("CSE candidates = 3 (s1, s2, s9)", dept["CSE"]["candidates"] == 3, dept["CSE"])
+    scoped = {r["branch"]: r for r in fn(cur, "admin_department_breakdown", *ALL, C['c1'])}
+    check("scoping to Alpha College excludes other colleges' branches (no ECE at Alpha)", "ECE" not in scoped, scoped)
+
+    print("\n== Platform Control Center: CTC by company (posted vs filled) ==")
+    ctc = {r["company_name"]: r for r in fn(cur, "admin_ctc_by_company", *ALL)}
+    check("Kappa Corp posted 1 INR role (the intern and Lambda's USD role are excluded, as in admin_ctc_stats)",
+          ctc["Kappa Corp"]["posted_roles"] == 1, ctc.get("Kappa Corp"))
+    check("Kappa Corp filled 2 roles (s1 and s9 were both hired for its Backend Engineer job)", ctc["Kappa Corp"]["filled_roles"] == 2, ctc["Kappa Corp"])
+    check("Lambda Ltd (Analyst, INR) filled 2 roles too (s3 and s9)", ctc.get("Lambda Ltd", {}).get("filled_roles") == 2, ctc.get("Lambda Ltd"))
+
+    print("\n== Platform Control Center: alerts fire only on real conditions ==")
+    cur.execute(f"update public.job_drives set status='live', created_at = now() - interval '10 days' where id = '{D['d3']}'")
+    cur.execute(f"delete from public.applications where job_id = '{J['j3']}' and company_id = '{K['k2']}'")
+    alerts = {a["alert_type"] for a in fn(cur, "admin_alerts")}
+    check("a live drive with zero applications, open for a week, triggers an alert", "drive_no_applications" in alerts, alerts)
+    check("the earlier failed login attempt triggers the blocked-login alert", "blocked_login_attempts" in alerts, alerts)
+    cur.execute(f"delete from public.applications where id = '{A['a7']}'")  # restore for later checks not to be affected
+    cur.execute(f"insert into public.applications (id, student_id, job_id, company_id, status, applied_at, updated_at) values ('{A['a7']}', '{U['s3']}', '{J['j3']}', '{K['k2']}', 'hired', '2026-02-25', '2026-02-25')")
+    cur.execute(f"update public.job_drives set status='closed' where id = '{D['d3']}'")
+
+    print("\n== Platform Control Center: global search ==")
+    res = fn(cur, "admin_global_search", "alpha", 5)
+    check("finds 'Alpha College' by partial, case-insensitive name", any(r["entity_type"] == "college" and r["title"] == "Alpha College" for r in res), res)
+    res = fn(cur, "admin_global_search", "kappa", 5)
+    check("finds 'Kappa Corp' by name", any(r["entity_type"] == "company" for r in res), res)
+    res = fn(cur, "admin_global_search", "", 5)
+    check("a blank query returns nothing (no accidental full-table dump)", res == [], res)
+
+    print("\n== Platform Control Center: platform usage counts only what is actually tracked ==")
+    usage = scalar_json(cur, "admin_platform_usage", *ALL)
+    check("counts the events just inserted (1 success + 1 failure user_login, 1 user_blocked)",
+          usage["logins"] >= 0 and usage["blocked_login_attempts"] >= 1 and usage["users_blocked"] >= 1, usage)
+    check("events_tracking_since reflects the earliest admin_events row (honest about no history before it)",
+          usage["events_tracking_since"] is not None, usage)
+
     print("\n== Security: EXECUTE is service_role only ==")
+    print("-- (admin_* functions, generically: every function this migration ships is covered)")
+    cur.execute("select proname from pg_proc where pronamespace = 'public'::regnamespace and proname like 'admin\\_%' order by 1")
+    all_admin_fns = [r["proname"] for r in cur.fetchall()]
+    leaky = []
+    for name in all_admin_fns:
+        cur.execute(f"select has_function_privilege('anon', p.oid, 'execute') or has_function_privilege('authenticated', p.oid, 'execute') "
+                    f"from pg_proc p where p.oid = 'public.{name}'::regproc")
+        leaked = cur.fetchone()
+        if leaked and any(leaked.values()):
+            leaky.append(name)
+    check(f"none of the {len(all_admin_fns)} admin_* functions are executable by anon/authenticated (incl. every function added in this session)",
+          not leaky, leaky)
     for role, expect_ok in (("anon", False), ("authenticated", False), ("service_role", True)):
         cur.execute(f"set role {role}")
         try:
@@ -558,34 +677,27 @@ def main() -> int:
     print("\n== Security: profiles role guard ==")
     cur.execute("set role authenticated")
 
-    def attempt(sql: str) -> str:
-        try:
-            cur.execute(sql)
-            return "ok"
-        except psycopg2.Error as e:
-            return e.pgcode or "error"
-
     check("authenticated cannot promote own role to admin",
-          attempt(f"update public.profiles set role = 'admin' where id = '{U['s1']}'") == "42501")
+          attempt(cur, f"update public.profiles set role = 'admin' where id = '{U['s1']}'") == "42501")
     check("authenticated cannot flip candidate -> college",
-          attempt(f"update public.profiles set role = 'college' where id = '{U['s2']}'") == "42501")
+          attempt(cur, f"update public.profiles set role = 'college' where id = '{U['s2']}'") == "42501")
     check("authenticated cannot insert an admin profile",
-          attempt(f"insert into public.profiles (id, email, role) values (gen_random_uuid(), 'evil@x.test', 'admin')") == "42501")
+          attempt(cur, f"insert into public.profiles (id, email, role) values (gen_random_uuid(), 'evil@x.test', 'admin')") == "42501")
     check("authenticated cannot insert a college profile",
-          attempt(f"insert into public.profiles (id, email, role) values (gen_random_uuid(), 'evil2@x.test', 'college')") == "42501")
+          attempt(cur, f"insert into public.profiles (id, email, role) values (gen_random_uuid(), 'evil2@x.test', 'college')") == "42501")
     check("a College user cannot re-point their college_id at another college",
-          attempt(f"update public.profiles set college_id = '{C['c2']}' where id = '{U['t1']}'") == "42501")
+          attempt(cur, f"update public.profiles set college_id = '{C['c2']}' where id = '{U['t1']}'") == "42501")
     check("authenticated CAN still update ordinary profile fields",
-          attempt(f"update public.profiles set name = 'Renamed' where id = '{U['s1']}'") == "ok")
+          attempt(cur, f"update public.profiles set name = 'Renamed' where id = '{U['s1']}'") == "ok")
     check("a candidate can still pick/change their own college_id",
-          attempt(f"update public.profiles set college_id = '{C['c2']}' where id = '{U['s1']}'") == "ok")
+          attempt(cur, f"update public.profiles set college_id = '{C['c2']}' where id = '{U['s1']}'") == "ok")
     cur.execute("reset role")
     cur.execute("set role service_role")
     check("service_role (backend) can set roles",
-          attempt(f"update public.profiles set role = 'candidate' where id = '{U['s7']}'") == "ok")
+          attempt(cur, f"update public.profiles set role = 'candidate' where id = '{U['s7']}'") == "ok")
     cur.execute("reset role")
     check("direct DB session (migrations / SQL editor) is unrestricted",
-          attempt(f"update public.profiles set role = 'candidate' where id = '{U['s7']}'") == "ok")
+          attempt(cur, f"update public.profiles set role = 'candidate' where id = '{U['s7']}'") == "ok")
 
     conn.close()
     with admin.cursor() as cur2:

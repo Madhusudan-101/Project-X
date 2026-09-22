@@ -1,10 +1,15 @@
 import { Link, Outlet, useNavigate, useRouterState } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import {
+  Activity,
+  AlertTriangle,
   BarChart3,
   Building2,
+  ClipboardList,
+  FileBarChart,
   GraduationCap,
   Handshake,
+  HeartPulse,
   LayoutDashboard,
   Landmark,
   LogOut,
@@ -32,6 +37,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { useAuthStore } from "@/store/auth";
 import type { Session } from "@/types";
 import { DateRangeFilter } from "./DateRangeFilter";
+import { GlobalSearch } from "./GlobalSearch";
 
 interface NavItem {
   to: string;
@@ -40,9 +46,6 @@ interface NavItem {
   exact?: boolean;
 }
 
-// Only sections backed by real data. Users / Activity / Reports / Settings are
-// deliberately absent: activity is on the Overview, exports live on each table,
-// and there is no settings or roles data to manage yet.
 const NAV: { label?: string; items: NavItem[] }[] = [
   { items: [{ to: "/admin", label: "Overview", icon: LayoutDashboard, exact: true }] },
   {
@@ -53,9 +56,31 @@ const NAV: { label?: string; items: NavItem[] }[] = [
       { to: "/admin/partnerships", label: "Partnerships", icon: Handshake },
     ],
   },
-  { label: "People", items: [{ to: "/admin/candidates", label: "Candidates", icon: Users }] },
+  {
+    label: "People",
+    items: [
+      { to: "/admin/candidates", label: "Candidates", icon: Users },
+      { to: "/admin/departments", label: "Departments", icon: GraduationCap },
+    ],
+  },
   { label: "Placements", items: [{ to: "/admin/placements", label: "Placement analytics", icon: BarChart3 }] },
-  { label: "Finance", items: [{ to: "/admin/finance", label: "Financial overview", icon: Landmark }] },
+  {
+    label: "Platform control",
+    items: [
+      { to: "/admin/users", label: "Users & Access", icon: ShieldCheck },
+      { to: "/admin/activity", label: "Live Activity", icon: Activity },
+      { to: "/admin/audit-log", label: "Audit Log", icon: ClipboardList },
+      { to: "/admin/alerts", label: "Alerts", icon: AlertTriangle },
+      { to: "/admin/system-health", label: "System Health", icon: HeartPulse },
+    ],
+  },
+  {
+    label: "Finance & Reports",
+    items: [
+      { to: "/admin/finance", label: "Financial overview", icon: Landmark },
+      { to: "/admin/reports", label: "Reports", icon: FileBarChart },
+    ],
+  },
 ];
 
 export function AdminShell({ session }: { session: Session }) {
@@ -127,6 +152,9 @@ export function AdminShell({ session }: { session: Session }) {
         <SidebarInset className="min-w-0 bg-surface-2">
           <header className="sticky top-0 z-20 flex items-center gap-3 border-b border-border bg-background/85 px-4 py-2.5 backdrop-blur md:px-6">
             <SidebarTrigger aria-label="Toggle navigation" />
+            <div className="min-w-0 flex-1 sm:max-w-xs">
+              <GlobalSearch />
+            </div>
             <div className="ml-auto flex items-center gap-2">
               <DateRangeFilter />
             </div>

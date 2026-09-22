@@ -22,6 +22,7 @@ import { adminQueryOptions } from "@/hooks/admin/query";
 import { useAdminRange } from "@/hooks/admin/use-admin-range";
 import { adminService } from "@/services/api/admin/admin";
 import type { ActivityKind, TrendPoint, TrendResponse } from "@/types/admin/admin";
+import { AlertsPanel } from "./AlertsPanel";
 import { SERIES, TrendChart } from "./charts";
 import { PageHeader } from "./controls";
 import { fmtDecimal, fmtInt, fmtPct } from "./format";
@@ -200,6 +201,8 @@ export function OverviewPage() {
           </KpiGroup>
       </>
 
+      <AlertsPanel limit={4} />
+
       <div className="grid gap-4 lg:grid-cols-2">
         <Card className="p-5">
           <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
@@ -246,9 +249,14 @@ export function OverviewPage() {
       </div>
 
       <Card className="p-5">
-        <div className="mb-3">
-          <h2 className="font-display text-lg font-semibold">Recent platform activity</h2>
-          <p className="text-xs text-muted-foreground">Latest events across the platform, newest first. Independent of the date filter.</p>
+        <div className="mb-3 flex items-center justify-between gap-2">
+          <div>
+            <h2 className="font-display text-lg font-semibold">Recent platform activity</h2>
+            <p className="text-xs text-muted-foreground">Latest events across the platform, newest first. Independent of the date filter.</p>
+          </div>
+          <Link to="/admin/activity" className="shrink-0 text-xs font-medium text-primary hover:underline">
+            View live activity
+          </Link>
         </div>
         {activity.isLoading ? (
           <ChartSkeleton className="h-40" />

@@ -20,6 +20,7 @@ from ...services.admin.common import (
     DateRange, Page, clean_search, clean_sort, csv_response, date_range, one_of,
     page_params, rpc_all, rpc_one, rpc_page,
 )
+from ...services.admin.events import log_event
 from ...services.admin.provisioning import provision_account
 
 log = logging.getLogger(__name__)
@@ -83,8 +84,11 @@ def export_colleges(
     activity: Optional[str] = Query(None),
     sort: Optional[str] = Query(None),
     dir: str = Query("desc"),
+    admin: dict = Depends(require_admin_role),
 ):
     result = rpc_all("admin_list_colleges", _list_params(rng, search, registration, activity, sort, dir))
+    log_event("csv_exported", actor_user_id=admin["id"], actor_role=admin["profile_role"], actor_label=admin["email"],
+              target_type="colleges", metadata={"rows": len(result.rows), "total": result.total, "truncated": result.truncated})
     return csv_response(result, _EXPORT_COLUMNS, "colleges.csv")
 
 
@@ -160,7 +164,7 @@ def _fill_college_details(college_id: str, payload: CollegeProvisionIn) -> None:
 
 
 @router.post("", status_code=201)
-def provision_college(payload: CollegeProvisionIn):
+def provision_college(payload: CollegeProvisionIn, admin: dict = Depends(require_admin_role)):
     """Create a College account and link it to its college.
 
     Order matters: the account is created BEFORE any college details are
@@ -172,7 +176,7 @@ def provision_college(payload: CollegeProvisionIn):
         result = provision_account(
             email=payload.email, role="college",
             first_name=payload.first_name.strip(), last_name=payload.last_name.strip(),
-            college_id=college_id,
+            college_id=college_id, actor=admin,
         )
     except Exception:
         if created_college:

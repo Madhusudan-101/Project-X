@@ -34,6 +34,7 @@ from supabase_auth.errors import AuthApiError
 
 from ...crud import get_profile_by_email, upsert_profile
 from ...deps import admin_client, supabase
+from .events import log_event
 
 log = logging.getLogger(__name__)
 
@@ -73,8 +74,13 @@ def provision_account(
     first_name: str,
     last_name: str,
     college_id: Optional[str] = None,
+    actor: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
     """Create an account for a provisioned-only role.
+
+    `actor` is the admin's `require_admin_role` dict, when there is one — the
+    only caller without one is provision_admin.py, the CLI bootstrap script
+    that creates the very first Admin account before any admin exists.
 
     Returns {"user_id", "created", "invite_sent", "replaced_legacy_account"}.
     Raises HTTPException: 422 bad input, 409 the email already belongs to
@@ -136,6 +142,13 @@ def provision_account(
             log.error("Rollback of auth user %s failed: %s", user.id, rollback_err)
         raise HTTPException(status_code=502, detail="Account creation failed; nothing was created.")
 
+    log_event(
+        "account_provisioned",
+        actor_user_id=(actor or {}).get("id"), actor_role=(actor or {}).get("profile_role", "admin"),
+        actor_label=(actor or {}).get("email") or "provision_admin.py (bootstrap)",
+        target_type="user", target_id=user.id, target_label=email,
+        metadata={"role": role, "replaced_legacy_account": replaced_legacy},
+    )
     return {
         "user_id": user.id,
         "created": True,

@@ -9,6 +9,8 @@ import type {
   ActivityItem,
   AdminOverview,
   AdminRange,
+  AlertItem,
+  BlockUserInput,
   CandidateRow,
   CollegeDetail,
   CollegeProvisionInput,
@@ -16,14 +18,24 @@ import type {
   CollegeRow,
   CompanyRow,
   CsvExport,
+  CtcByCompanyRow,
+  DepartmentRow,
   DriveRow,
+  EventItem,
   FilterOptions,
   FinanceSummary,
+  LiveActivityResponse,
   ListParams,
   Paged,
   PartnershipRow,
   PlacementSummary,
+  PlatformUsage,
+  SearchResponse,
+  SystemHealth,
   TrendResponse,
+  UserDetail,
+  UserRole,
+  UserRow,
 } from "@/types/admin/admin";
 
 type Query = Record<string, string | number | boolean | null | undefined>;
@@ -77,6 +89,17 @@ export type PartnershipFilters = {
   company_id?: string;
   college_id?: string;
 };
+export type UserFilters = {
+  role?: UserRole;
+  status?: "active" | "blocked";
+};
+export type AuditLogFilters = {
+  event_type?: string;
+  actor_role?: UserRole;
+  target_type?: string;
+  result?: "success" | "failure";
+  target_id?: string;
+};
 
 export const adminService = {
   overview: (range: AdminRange) => request<AdminOverview>(`/admin/overview${buildQuery({ ...range })}`),
@@ -125,5 +148,59 @@ export const adminService = {
       list<PartnershipRow>("partnerships", range, p),
     export: (range: AdminRange, p: Partial<ListParams> & PartnershipFilters) =>
       exportCsv("partnerships", range, p),
+  },
+
+  ctcByCompany: (range: AdminRange) => request<{ items: CtcByCompanyRow[] }>(`/admin/ctc-by-company${buildQuery({ ...range })}`),
+
+  departments: (range: AdminRange, collegeId?: string) =>
+    request<{ items: DepartmentRow[] }>(`/admin/departments${buildQuery({ ...range, college_id: collegeId })}`),
+
+  users: {
+    list: (range: AdminRange, p: ListParams & UserFilters) => list<UserRow>("users", range, p),
+    detail: (id: string, range: AdminRange) => request<UserDetail>(`/admin/users/${id}${buildQuery({ ...range })}`),
+    export: (range: AdminRange, p: Partial<ListParams> & UserFilters) => exportCsv("users", range, p),
+    block: (id: string, body: BlockUserInput) =>
+      request<{ user_id: string; is_blocked: boolean; permanent: boolean; blocked_until: string | null }>(
+        `/admin/users/${id}/block`,
+        { method: "POST", body },
+      ),
+    unblock: (id: string, reason?: string) =>
+      request<{ user_id: string; is_blocked: boolean }>(`/admin/users/${id}/unblock`, { method: "POST", body: { reason } }),
+  },
+
+  liveActivity: (range: AdminRange, p: { before?: string; kind?: string; limit?: number }) =>
+    request<LiveActivityResponse>(`/admin/live-activity${buildQuery({ ...range, ...p })}`),
+
+  auditLog: {
+    list: (range: AdminRange, p: ListParams & AuditLogFilters) => list<EventItem>("audit-log", range, p),
+    export: (range: AdminRange, p: Partial<ListParams> & AuditLogFilters) => exportCsv("audit-log", range, p),
+  },
+
+  alerts: () => request<{ items: AlertItem[] }>("/admin/alerts"),
+
+  search: (q: string) => request<SearchResponse>(`/admin/search${buildQuery({ q })}`),
+
+  systemHealth: () => request<SystemHealth>("/admin/system-health"),
+
+  reports: {
+    applicationFunnelExportUrl: (range: AdminRange) => `${getApiBaseUrl()}/admin/reports/application-funnel/export${buildQuery({ ...range })}`,
+    compensationExportUrl: (range: AdminRange) => `${getApiBaseUrl()}/admin/reports/compensation/export${buildQuery({ ...range })}`,
+    platformUsage: (range: AdminRange) => request<PlatformUsage>(`/admin/reports/platform-usage${buildQuery({ ...range })}`),
+    // Downloads the funnel/compensation reports the same authenticated way ExportButton does.
+    download: async (url: string): Promise<CsvExport> => {
+      const res = await fetch(url, { headers: { ...(await getAuthHeader()) } });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new ApiClientError(typeof body?.detail === "string" ? body.detail : "Report failed.", res.status);
+      }
+      const rows = Number(res.headers.get("X-Export-Rows"));
+      const total = Number(res.headers.get("X-Export-Total"));
+      return {
+        blob: await res.blob(),
+        truncated: res.headers.get("X-Export-Truncated") !== "false",
+        rows: Number.isFinite(rows) ? rows : 0,
+        total: Number.isFinite(total) ? total : 0,
+      };
+    },
   },
 };

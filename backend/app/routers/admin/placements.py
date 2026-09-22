@@ -11,8 +11,9 @@ from fastapi import APIRouter, Depends, Query
 from ...deps import require_admin_role
 from ...services.admin.common import (
     DateRange, Page, clean_search, clean_sort, csv_response, date_range, one_of,
-    page_params, rpc_all, rpc_page,
+    page_params, rpc, rpc_all, rpc_page,
 )
+from ...services.admin.events import log_event
 
 router = APIRouter(prefix="/admin", tags=["admin-placements"], dependencies=[Depends(require_admin_role)])
 
@@ -89,8 +90,11 @@ def export_drives(
     college_id: Optional[UUID] = Query(None),
     sort: Optional[str] = Query(None),
     dir: str = Query("desc"),
+    admin: dict = Depends(require_admin_role),
 ):
     result = rpc_all("admin_list_drives", _drive_params(rng, search, status, company_id, college_id, sort, dir))
+    log_event("csv_exported", actor_user_id=admin["id"], actor_role=admin["profile_role"], actor_label=admin["email"],
+              target_type="drives", metadata={"rows": len(result.rows), "total": result.total, "truncated": result.truncated})
     return csv_response(result, _DRIVE_COLUMNS, "drives.csv")
 
 
@@ -115,6 +119,16 @@ def export_partnerships(
     college_id: Optional[UUID] = Query(None),
     sort: Optional[str] = Query(None),
     dir: str = Query("desc"),
+    admin: dict = Depends(require_admin_role),
 ):
     result = rpc_all("admin_list_partnerships", _partner_params(rng, search, company_id, college_id, sort, dir))
+    log_event("csv_exported", actor_user_id=admin["id"], actor_role=admin["profile_role"], actor_label=admin["email"],
+              target_type="partnerships", metadata={"rows": len(result.rows), "total": result.total, "truncated": result.truncated})
     return csv_response(result, _PARTNER_COLUMNS, "company_college_partnerships.csv")
+
+
+@router.get("/ctc-by-company")
+def ctc_by_company(rng: DateRange = Depends(date_range)):
+    """Advertised (posted) vs actual-offer (filled) CTC per company — see
+    admin_ctc_stats for the same advertised-vs-actual distinction platform-wide."""
+    return {"items": rpc("admin_ctc_by_company", rng.params()) or []}

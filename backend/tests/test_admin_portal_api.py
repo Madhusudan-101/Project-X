@@ -255,6 +255,8 @@ def _fake_delete_user(uid):
 
 
 deps.admin_client.auth.admin.delete_user = _fake_delete_user
+deps.admin_client.auth.admin.list_users = lambda **_kw: []
+deps.db_client.storage.get_bucket = lambda name: {"name": name}
 
 
 def seed_profiles():
@@ -284,6 +286,15 @@ COLLEGE_ROW = {"college_id": "11111111-1111-1111-1111-111111111111", "name": "=c
                "candidates": 3, "roster_students": 0, "roster_placed": 0, "companies": 1, "drives": 2,
                "applications": 5, "applicants": 3, "shortlisted": 3, "selected": 2, "selected_applicants": 2,
                "last_activity": None, "is_active": True, "total_count": 42}
+USER_ROW = {"user_id": "u-candidate", "email": "u-candidate@t.test", "name": "Cara Candidate", "role": "candidate",
+            "college_id": None, "college_name": None, "company_id": None, "company_name": None,
+            "created_at": "2026-01-02T00:00:00+00:00", "onboarded": True,
+            "is_blocked": False, "blocked_permanent": False, "blocked_until": None, "blocked_at": None,
+            "blocked_reason": None, "blocked_by_email": None, "last_activity": None, "total_count": 1}
+EVENT_ROW = {"id": "ev-1", "event_type": "user_login", "occurred_at": "2026-01-02T00:00:00+00:00",
+             "actor_user_id": "u-admin", "actor_role": "admin", "actor_label": "u-admin@t.test",
+             "target_type": "user", "target_id": "u-candidate", "target_label": "u-candidate@t.test",
+             "metadata": {}, "result": "success", "total_count": 1}
 
 
 def install_rpc_defaults():
@@ -298,6 +309,19 @@ def install_rpc_defaults():
         "admin_list_candidates": [{"candidate_id": "s", "name": "S", "total_count": 1}],
         "admin_list_drives": [{"drive_id": "d", "job_title": "J", "company_name": "C", "college_name": "Col", "total_count": 1}],
         "admin_list_partnerships": [{"company_name": "C", "college_name": "Col", "total_count": 1}],
+        "admin_list_users": [USER_ROW],
+        "admin_list_events": [EVENT_ROW],
+        "admin_activity_feed": [{"id": "act-1", "kind": "candidate_registered", "occurred_at": "2026-01-01T00:00:00+00:00",
+                                  "subject": "A", "detail": None, "actor_role": "candidate"}],
+        "admin_alerts": [{"alert_id": "a1", "alert_type": "drive_no_applications", "severity": "warning",
+                           "title": "T", "description": "D", "occurred_at": "2026-01-01T00:00:00+00:00", "link": "/admin/placements"}],
+        "admin_global_search": [{"entity_type": "college", "id": "col-1", "title": "Alpha College", "subtitle": "Pune"}],
+        "admin_platform_usage": {"logins": 3, "events_tracking_since": "2026-01-01T00:00:00+00:00"},
+        "admin_department_breakdown": [{"branch": "CSE", "candidates": 5, "applications": 3, "applicants": 2,
+                                         "shortlisted": 1, "selected": 0, "selected_applicants": 0}],
+        "admin_ctc_by_company": [{"company_id": "c", "company_name": "K", "posted_roles": 1, "posted_average": 500000,
+                                   "posted_highest": 500000, "posted_lowest": 500000, "filled_roles": 0,
+                                   "filled_average": None, "filled_highest": None, "filled_lowest": None}],
     })
 
 
@@ -308,7 +332,9 @@ def admin_get_routes():
     for path, ops in paths.items():
         if not path.startswith("/admin"):
             continue
-        concrete = path.replace("{college_id}", str(uuid.uuid4())).replace("{company_id}", str(uuid.uuid4()))
+        concrete = (path.replace("{college_id}", str(uuid.uuid4()))
+                        .replace("{company_id}", str(uuid.uuid4()))
+                        .replace("{user_id}", str(uuid.uuid4())))
         for method in ops:
             out.append((method.upper(), concrete))
     return out
@@ -722,6 +748,151 @@ def main() -> int:
     r = client.get("/admin/overview", headers=H)
     check("PGRST202 -> 503 naming the migration", r.status_code == 503 and "admin_portal_migration.sql" in r.text, (r.status_code, r.text))
     install_rpc_defaults()
+
+    print("\n== Users & Access: list, detail, export ==")
+    seed_profiles(); install_rpc_defaults()
+    r = client.get("/admin/users", headers=H)
+    check("list users -> 200 paged", r.status_code == 200 and r.json()["items"][0]["email"] == "u-candidate@t.test", r.text)
+    for bad in ("/admin/users?role=hacker", "/admin/users?status=sideways"):
+        r = client.get(bad, headers=H)
+        check(f"{bad} -> 422", r.status_code == 422, (r.status_code, r.text[:80]))
+    r = client.get(f"/admin/users/{uuid.uuid4()}", headers=H)
+    body = r.json()
+    check("user detail -> 200 with user/applications/drives/audit",
+          r.status_code == 200 and {"user", "applications", "drives", "audit"} <= set(body), body)
+    db.rpc_results["admin_list_users"] = []
+    check("unknown user -> 404", client.get(f"/admin/users/{uuid.uuid4()}", headers=H).status_code == 404)
+    install_rpc_defaults()
+    r = client.get("/admin/users/export", headers=H)
+    check("users export -> csv attachment", r.headers["content-type"].startswith("text/csv"), r.headers)
+
+    print("\n== User blocking: temporary, permanent, unblock, and it actually revokes access ==")
+    seed_profiles(); install_rpc_defaults()
+    for bad_body, label in (
+        ({"reason": "spam"}, "no duration and not permanent"),
+        ({"permanent": False, "duration": "custom", "reason": "x"}, "custom duration with no 'until'"),
+        ({"permanent": False, "duration": "9d", "reason": "x"}, "unknown duration"),
+        ({"permanent": True, "reason": ""}, "empty reason"),
+    ):
+        r = client.post("/admin/users/u-candidate/block", json=bad_body, headers=H)
+        check(f"block validation: {label} -> 422", r.status_code == 422, (r.status_code, r.text[:120]))
+
+    r = client.post("/admin/users/u-candidate/block", json={"permanent": False, "duration": "24h", "reason": "abuse report"}, headers=H)
+    check("temporary block -> 200", r.status_code == 200 and r.json()["is_blocked"] is True and r.json()["permanent"] is False, r.text)
+    prof = next(p for p in db.tables["profiles"] if p["id"] == "u-candidate")
+    check("profile now carries blocked_until in the future, blocked_by the admin, the reason",
+          prof["blocked_permanent"] is False and prof["blocked_until"] and prof["blocked_by"] == "u-admin" and prof["blocked_reason"] == "abuse report", prof)
+    events = [e for e in db.tables.get("admin_events", []) if e["event_type"] == "user_blocked"]
+    check("a user_blocked audit event was recorded, naming the actor and target",
+          events and events[-1]["actor_user_id"] == "u-admin" and events[-1]["target_id"] == "u-candidate", events)
+
+    check("the block is enforced on the very NEXT request, not just future logins",
+          client.get("/auth/profile", headers=bearer("tok-candidate")).status_code == 403)
+    r = client.get("/auth/profile", headers=bearer("tok-candidate"))
+    check("...with a message naming the reason", "abuse report" in r.text, r.text)
+    check("other accounts are unaffected", client.get("/auth/profile", headers=bearer("tok-company")).status_code == 200)
+    r = client.post("/auth/login", json={"email": "u-candidate@t.test", "password": "x", "role": "candidate"})
+    check("a blocked account also can't sign back in", r.status_code == 403, (r.status_code, r.text))
+    login_fail_events = [e for e in db.tables.get("admin_events", []) if e["event_type"] == "user_login" and e["result"] == "failure"]
+    check("...and the attempt is recorded as a failed login event", bool(login_fail_events), login_fail_events)
+
+    r = client.post("/admin/users/u-candidate/unblock", json={"reason": "appeal accepted"}, headers=H)
+    check("unblock -> 200, is_blocked false", r.status_code == 200 and r.json()["is_blocked"] is False, r.text)
+    prof = next(p for p in db.tables["profiles"] if p["id"] == "u-candidate")
+    check("every block field is cleared", not any(prof.get(k) for k in ("blocked_permanent", "blocked_until", "blocked_by", "blocked_reason")), prof)
+    check("access is restored immediately", client.get("/auth/profile", headers=bearer("tok-candidate")).status_code == 200)
+    check("an unblock audit event was recorded",
+          any(e["event_type"] == "user_unblocked" and e["target_id"] == "u-candidate" for e in db.tables["admin_events"]))
+
+    print("\n== User blocking: guards ==")
+    r = client.post("/admin/users/u-admin/block", json={"permanent": True, "reason": "oops"}, headers=H)
+    check("an admin cannot block their own account -> 409", r.status_code == 409, (r.status_code, r.text))
+    check("no event was recorded for the refused self-block",
+          not any(e["event_type"] == "user_blocked" and e["target_id"] == "u-admin" for e in db.tables.get("admin_events", [])))
+
+    from app.schemas import BlockUserIn
+    from app.services.admin.blocking import block_user
+    db.tables["profiles"].append({"id": "u-admin2", "email": "admin2@t.test", "role": "admin"})
+    ok = block_user("u-admin2", BlockUserIn(permanent=True, reason="test"), {"id": "u-admin", "profile_role": "admin", "email": "u-admin@t.test"})
+    check("blocking one of TWO active admins is fine (one remains active)", ok["is_blocked"] is True)
+    try:
+        block_user("u-admin", BlockUserIn(permanent=True, reason="test"), {"id": "u-admin3", "profile_role": "admin", "email": "x@t.test"})
+        check("blocking the only remaining active admin is refused", False)
+    except Exception as e:
+        check("blocking the only remaining active admin is refused",
+              getattr(e, "status_code", None) == 409 and "only active Admin" in str(getattr(e, "detail", "")), e)
+    check("candidate/company/college cannot block anyone",
+          all(client.post(f"/admin/users/u-candidate/block", json={"permanent": True, "reason": "x"}, headers=bearer(t)).status_code == 403
+              for t in ("tok-candidate", "tok-company", "tok-college")))
+    seed_profiles(); install_rpc_defaults()
+
+    print("\n== Audit Log & Live Activity ==")
+    r = client.get("/admin/audit-log", headers=H)
+    check("audit log -> 200, raw admin_events rows", r.status_code == 200 and r.json()["items"][0]["event_type"] == "user_login", r.text)
+    for bad in ("/admin/audit-log?event_type=made_up", "/admin/audit-log?actor_role=superuser", "/admin/audit-log?result=maybe"):
+        check(f"{bad} -> 422", client.get(bad, headers=H).status_code == 422)
+    r = client.get("/admin/live-activity", headers=H)
+    check("live activity -> 200", r.status_code == 200 and "items" in r.json(), r.text)
+    check("unknown ?kind= -> 422", client.get("/admin/live-activity?kind=not_a_thing", headers=H).status_code == 422)
+    check("audit log requires admin", client.get("/admin/audit-log", headers=bearer("tok-college")).status_code == 403)
+    r = client.get("/admin/audit-log/export", headers=H)
+    check("audit log export -> csv", r.headers["content-type"].startswith("text/csv"), r.headers)
+
+    print("\n== Alerts ==")
+    r = client.get("/admin/alerts", headers=H)
+    check("alerts -> 200, computed list", r.status_code == 200 and r.json()["items"][0]["alert_type"] == "drive_no_applications", r.text)
+    check("alerts requires admin", client.get("/admin/alerts", headers=bearer("tok-candidate")).status_code == 403)
+
+    print("\n== Global search ==")
+    r = client.get("/admin/search?q=alpha", headers=H)
+    check("search -> grouped by entity type", r.status_code == 200 and r.json()["groups"]["college"][0]["title"] == "Alpha College", r.text)
+    r = client.get("/admin/search", headers=H)
+    check("empty query -> no database call, empty groups", r.status_code == 200 and r.json() == {"query": "", "groups": {}}, r.text)
+
+    print("\n== System health: only checks that can actually be verified ==")
+    r = client.get("/admin/system-health", headers=H)
+    body = r.json()
+    check("every required check is reported, api is always operational (it just answered)",
+          r.status_code == 200 and body["checks"]["api"]["status"] == "operational"
+          and {"database", "authentication", "storage", "realtime", "background_jobs"} <= set(body["checks"]), body)
+    check("realtime / background jobs are 'unknown', never faked as operational",
+          body["checks"]["realtime"]["status"] == "unknown" and body["checks"]["background_jobs"]["status"] == "unknown", body["checks"])
+    real_bucket = deps.db_client.storage.get_bucket
+    def _boom_bucket(_name):
+        raise RuntimeError("storage unreachable")
+    deps.db_client.storage.get_bucket = _boom_bucket
+    body = client.get("/admin/system-health", headers=H).json()
+    check("a real failure is reported as unavailable, not swallowed into 'operational'",
+          body["checks"]["storage"]["status"] == "unavailable" and body["overall"] != "operational", body)
+    deps.db_client.storage.get_bucket = real_bucket
+
+    print("\n== Reports ==")
+    r = client.get("/admin/reports/application-funnel/export", headers=H)
+    check("application funnel report -> csv", r.status_code == 200 and r.headers["content-type"].startswith("text/csv"), r.headers)
+    r = client.get("/admin/reports/compensation/export", headers=H)
+    check("compensation report -> csv", r.status_code == 200 and r.headers["content-type"].startswith("text/csv"), r.headers)
+    r = client.get("/admin/reports/platform-usage", headers=H)
+    check("platform usage report -> json summary", r.status_code == 200 and "logins" in r.json(), r.text)
+    reports_events = [e for e in db.tables.get("admin_events", []) if e["event_type"] == "report_generated"]
+    check("report downloads are logged as report_generated (distinct from a table's csv_exported)",
+          len(reports_events) == 2, reports_events)
+
+    print("\n== CSV exports are audited ==")
+    db.tables["admin_events"] = []
+    client.get("/admin/colleges/export", headers=H)
+    exported = [e for e in db.tables["admin_events"] if e["event_type"] == "csv_exported"]
+    check("exporting a table logs a csv_exported event naming the admin and the table",
+          exported and exported[0]["actor_label"] == "u-admin@t.test" and exported[0]["target_type"] == "colleges", exported)
+
+    print("\n== Department analytics ==")
+    r = client.get("/admin/departments", headers=H)
+    check("departments -> 200, grouped by raw branch", r.status_code == 200 and r.json()["items"][0]["branch"] == "CSE", r.text)
+    r = client.get(f"/admin/departments?college_id={uuid.uuid4()}", headers=H)
+    check("departments scoped to a college -> 200", r.status_code == 200, r.text)
+
+    print("\n== CTC by company ==")
+    r = client.get("/admin/ctc-by-company", headers=H)
+    check("ctc by company -> 200", r.status_code == 200 and r.json()["items"][0]["company_name"] == "K", r.text)
 
     print(f"\n=== {passed}/{passed + failed} passed, {failed} failed ===")
     return 0 if failed == 0 else 1

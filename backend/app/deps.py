@@ -1,5 +1,6 @@
-from typing import Optional
+from typing import Any, Dict, Optional
 import os
+from datetime import datetime, timezone
 from fastapi import Header, HTTPException, Depends
 from dotenv import load_dotenv
 from supabase import create_client, Client, ClientOptions
@@ -49,9 +50,48 @@ admin_client = create_client(SUPABASE_URL, SUPABASE_KEY, options=_AUTH_CLIENT_OP
 supabase = auth_client
 
 
+def _parse_ts(value: Optional[str]):
+    """Parse a PostgREST timestamptz string. Never raises — an unparsable
+    value is treated as "not a real deadline" rather than crashing the
+    request (this only ever gates whether a block is CURRENTLY active)."""
+    if not value:
+        return None
+    try:
+        return datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+    except ValueError:
+        return None
+
+
+def is_currently_blocked(profile: Dict[str, Any]) -> bool:
+    """A block is never a stored yes/no: permanent, or blocked_until still in
+    the future. A temporary block therefore expires on its own the moment
+    `blocked_until` passes — nothing needs to run to "unblock" it."""
+    if profile.get("blocked_permanent"):
+        return True
+    until = _parse_ts(profile.get("blocked_until"))
+    return until is not None and until > datetime.now(timezone.utc)
+
+
+def block_message(profile: Dict[str, Any]) -> str:
+    reason = (profile.get("blocked_reason") or "").strip()
+    suffix = f" Reason: {reason}" if reason else ""
+    if profile.get("blocked_permanent"):
+        return f"This account has been suspended.{suffix}"
+    until = profile.get("blocked_until")
+    return f"This account is temporarily suspended until {until}.{suffix}"
+
+
+def _reject_if_blocked(profile: Optional[Dict[str, Any]]) -> None:
+    if profile and is_currently_blocked(profile):
+        raise HTTPException(status_code=403, detail=block_message(profile))
+
+
 def get_current_user(authorization: Optional[str] = Header(None)) -> dict:
     """Validate the Bearer token and return the authenticated user dict.
-    Raises 401 if missing, invalid, or expired."""
+    Raises 401 if missing, invalid, or expired; 403 if the account is
+    currently blocked (checked on EVERY authenticated request — an admin
+    blocking someone takes effect on their very next call, not just their
+    next login; see db/admin_portal_migration.sql, 6.0)."""
     if not authorization or not authorization.startswith("Bearer "):
         raise HTTPException(status_code=401, detail="Missing or invalid Authorization header")
 
@@ -65,6 +105,18 @@ def get_current_user(authorization: Optional[str] = Header(None)) -> dict:
 
     if not res or not res.user:
         raise HTTPException(status_code=401, detail="Invalid token")
+
+    try:
+        block_row = (
+            db_client.table("profiles")
+            .select("blocked_permanent, blocked_until, blocked_reason")
+            .eq("id", res.user.id)
+            .limit(1)
+            .execute()
+        ).data
+    except APIError:
+        block_row = None  # a lookup hiccup never itself locks anyone out
+    _reject_if_blocked(block_row[0] if block_row else None)
 
     meta = res.user.user_metadata or {}
     return {

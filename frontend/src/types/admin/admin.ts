@@ -304,3 +304,177 @@ export type ListParams = {
   sort?: string;
   dir?: SortDir;
 };
+
+// ── Users & Access ───────────────────────────────────────────────────
+
+export type UserRole = "admin" | "college" | "company" | "candidate";
+
+export interface UserRow {
+  user_id: string;
+  email: string;
+  name: string;
+  role: UserRole;
+  college_id: string | null;
+  college_name: string | null;
+  company_id: string | null;
+  company_name: string | null;
+  created_at: string;
+  onboarded: boolean;
+  is_blocked: boolean;
+  blocked_permanent: boolean;
+  blocked_until: string | null;
+  blocked_at: string | null;
+  blocked_reason: string | null;
+  blocked_by_email: string | null;
+  last_activity: string | null;
+}
+
+export interface UserDetail {
+  user: UserRow;
+  /** Only populated for role='candidate'. */
+  applications: Array<{ id: string; job_id: string; company_id: string; status: string; applied_at: string; updated_at: string }>;
+  /** Only populated for role='company' | 'college'. */
+  drives: Paged<DriveRow>;
+  audit: EventItem[];
+}
+
+export type BlockDuration = "1h" | "24h" | "7d" | "30d" | "custom";
+
+export interface BlockUserInput {
+  permanent: boolean;
+  duration?: BlockDuration;
+  until?: string;
+  reason: string;
+}
+
+// ── Central event log — Audit Log & Live Activity ───────────────────────
+
+export type EventType =
+  | "user_login"
+  | "account_provisioned"
+  | "user_blocked"
+  | "user_unblocked"
+  | "csv_exported"
+  | "report_generated";
+
+export interface EventItem {
+  id: string;
+  event_type: EventType;
+  occurred_at: string;
+  actor_user_id: string | null;
+  actor_role: UserRole | null;
+  actor_label: string | null;
+  target_type: string | null;
+  target_id: string | null;
+  target_label: string | null;
+  metadata: Record<string, unknown>;
+  result: "success" | "failure";
+}
+
+/** A Live Activity row: the original derived kinds (from existing timestamps)
+ * plus successful admin_events, merged into one feed. See ActivityItem for
+ * the Overview's separate, non-paginated compact panel (unchanged). */
+export interface FeedItem {
+  id: string;
+  kind: ActivityKind | EventType;
+  occurred_at: string;
+  subject: string;
+  detail: string | null;
+  actor_role: UserRole | null;
+}
+
+export interface LiveActivityResponse {
+  items: FeedItem[];
+  has_more: boolean;
+}
+
+// ── Alerts ────────────────────────────────────────────────────────────
+
+export type AlertSeverity = "critical" | "warning" | "info";
+
+export interface AlertItem {
+  alert_id: string;
+  alert_type: string;
+  severity: AlertSeverity;
+  title: string;
+  description: string;
+  occurred_at: string | null;
+  link: string;
+}
+
+// ── Global search ─────────────────────────────────────────────────────
+
+export type SearchEntityType = "college" | "company" | "candidate" | "drive";
+
+export interface SearchResult {
+  id: string;
+  title: string;
+  subtitle: string;
+}
+
+export interface SearchResponse {
+  query: string;
+  groups: Partial<Record<SearchEntityType, SearchResult[]>>;
+}
+
+// ── System health ─────────────────────────────────────────────────────
+
+export type HealthStatus = "operational" | "degraded" | "unavailable" | "unknown";
+
+export interface HealthCheck {
+  status: HealthStatus;
+  latency_ms?: number;
+  detail?: string;
+}
+
+export interface SystemHealth {
+  overall: HealthStatus;
+  checked_at: string;
+  checks: Record<"api" | "database" | "authentication" | "storage" | "realtime" | "background_jobs", HealthCheck>;
+}
+
+// ── Department analytics ─────────────────────────────────────────────
+
+export interface DepartmentRow {
+  branch: string;
+  candidates: number;
+  applications: number;
+  applicants: number;
+  shortlisted: number;
+  selected: number;
+  selected_applicants: number;
+}
+
+// ── CTC by company ────────────────────────────────────────────────────
+
+export interface CtcByCompanyRow {
+  company_id: string;
+  company_name: string;
+  posted_roles: number;
+  posted_average: number | null;
+  posted_highest: number | null;
+  posted_lowest: number | null;
+  filled_roles: number;
+  filled_average: number | null;
+  filled_highest: number | null;
+  filled_lowest: number | null;
+}
+
+// ── Platform usage (Reports) ─────────────────────────────────────────
+
+export interface PlatformUsage {
+  logins: number;
+  blocked_login_attempts: number;
+  accounts_provisioned: number;
+  users_blocked: number;
+  users_unblocked: number;
+  csv_exports: number;
+  reports_generated: number;
+  applications_submitted: number;
+  drives_created: number;
+  resume_analyses: number;
+  /** Earliest admin_events row — a period that starts before this has no
+   * login/export/report data because tracking did not exist yet, not
+   * because nothing happened. */
+  events_tracking_since: string | null;
+}

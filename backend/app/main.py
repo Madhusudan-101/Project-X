@@ -26,6 +26,13 @@ from .routers.admin import companies as admin_companies
 from .routers.admin import candidates as admin_candidates
 from .routers.admin import placements as admin_placements
 from .routers.admin import finance as admin_finance
+from .routers.admin import users as admin_users
+from .routers.admin import activity as admin_activity
+from .routers.admin import alerts as admin_alerts
+from .routers.admin import search as admin_search
+from .routers.admin import system as admin_system
+from .routers.admin import reports as admin_reports
+from .routers.admin import departments as admin_departments
 
 app = FastAPI(title="Mirracle API")
 
@@ -94,6 +101,13 @@ app.include_router(admin_companies.router)
 app.include_router(admin_candidates.router)
 app.include_router(admin_placements.router)
 app.include_router(admin_finance.router)
+app.include_router(admin_users.router)
+app.include_router(admin_activity.router)
+app.include_router(admin_alerts.router)
+app.include_router(admin_search.router)
+app.include_router(admin_system.router)
+app.include_router(admin_reports.router)
+app.include_router(admin_departments.router)
 
 @app.get("/")
 def root():

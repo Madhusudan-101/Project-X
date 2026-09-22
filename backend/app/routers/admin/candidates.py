@@ -19,6 +19,7 @@ from ...services.admin.common import (
     DateRange, Page, clean_search, clean_sort, csv_response, date_range, one_of,
     page_params, rpc, rpc_all, rpc_page,
 )
+from ...services.admin.events import log_event
 
 log = logging.getLogger(__name__)
 router = APIRouter(prefix="/admin", tags=["admin-candidates"], dependencies=[Depends(require_admin_role)])
@@ -83,9 +84,13 @@ def export_candidates(
     registered_in_range: bool = Query(False),
     sort: Optional[str] = Query(None),
     dir: str = Query("desc"),
+    admin: dict = Depends(require_admin_role),
 ):
     params = _list_params(rng, search, college_id, company_id, drive_id, status, registered_in_range, sort, dir)
-    return csv_response(rpc_all("admin_list_candidates", params), _EXPORT_COLUMNS, "candidates.csv")
+    result = rpc_all("admin_list_candidates", params)
+    log_event("csv_exported", actor_user_id=admin["id"], actor_role=admin["profile_role"], actor_label=admin["email"],
+              target_type="candidates", metadata={"rows": len(result.rows), "total": result.total, "truncated": result.truncated})
+    return csv_response(result, _EXPORT_COLUMNS, "candidates.csv")
 
 
 @router.get("/options")

@@ -17,6 +17,7 @@ export function PlacementsPage() {
   const { range, label } = useAdminRange();
 
   const summary = useQuery({ queryKey: ["admin", "placements", range], queryFn: () => adminService.placements(range), ...adminQueryOptions });
+  const ctcByCompany = useQuery({ queryKey: ["admin", "ctc-by-company", range], queryFn: () => adminService.ctcByCompany(range), ...adminQueryOptions });
   const colleges = useQuery({
     queryKey: ["admin", "colleges", "top-applicants", range],
     queryFn: () => adminService.colleges.list(range, { page: 1, page_size: 8, sort: "applications", dir: "desc", registration: "registered" }),
@@ -109,6 +110,29 @@ export function PlacementsPage() {
                 <CtcPanel title="Roles where a candidate was selected" block={s.ctc.filled} color={SERIES.cyan} />
               </div>
             ) : null}
+          </Card>
+
+          <Card className="p-5">
+            <h2 className="font-display text-lg font-semibold">CTC by company</h2>
+            <p className="mb-3 text-xs text-muted-foreground">Posted (advertised) vs. filled (roles where a candidate was selected), per company. Same INR-only, no-actual-offer-stored caveat as above.</p>
+            {ctcByCompany.isLoading ? (
+              <ChartSkeleton className="h-32" />
+            ) : ctcByCompany.isError ? (
+              <ErrorBlock error={ctcByCompany.error} onRetry={() => ctcByCompany.refetch()} />
+            ) : !ctcByCompany.data?.items.length ? (
+              <EmptyBlock title="No CTC data by company in this period" />
+            ) : (
+              <BarList
+                color={SERIES.amber}
+                items={ctcByCompany.data.items.filter((c) => c.filled_roles > 0 || c.posted_roles > 0).map((c) => ({
+                  key: c.company_id,
+                  label: c.company_name,
+                  value: c.filled_roles,
+                  sub: `${fmtInt(c.posted_roles)} posted`,
+                  display: `${fmtInt(c.filled_roles)} filled${c.filled_average ? ` · avg ${fmtInr(c.filled_average)}` : ""}`,
+                }))}
+              />
+            )}
           </Card>
 
           <div className="grid gap-4 lg:grid-cols-2">

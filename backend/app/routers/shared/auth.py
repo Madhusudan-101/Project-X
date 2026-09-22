@@ -9,12 +9,13 @@ Conventions
 
 import logging
 import time
+from typing import Optional
 
 from fastapi import APIRouter, HTTPException, Depends
 from supabase_auth.errors import AuthApiError, AuthWeakPasswordError
 from postgrest.exceptions import APIError
 
-from ...deps import supabase, admin_client, get_current_user
+from ...deps import supabase, admin_client, get_current_user, is_currently_blocked, block_message
 from ...schemas import (
     AuthIn, SignupIn, UserOut, SessionOut,
     ForgotIn, VerifyOtpIn, ResetIn, ProfileUpdateIn, RefreshIn,
@@ -24,6 +25,7 @@ from ...crud import (
     upsert_profile, get_profile_by_id, update_profile, get_profile_by_email,
     create_company, get_company_by_owner_id, find_or_create_college_by_name,
 )
+from ...services.admin.events import log_event
 
 log = logging.getLogger(__name__)
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -110,6 +112,21 @@ def _ensure_profile(user_id: str, email: str, role: str,
         "first_name": first_name,
         "last_name": last_name,
     }) or {}
+
+
+def _reject_if_blocked_and_log(profile: Optional[dict], role: str) -> None:
+    """Same block check `get_current_user` enforces on every later request,
+    run here too so a blocked account gets a clear answer AT sign-in instead
+    of a confusing failure on its first subsequent call — and so the attempt
+    itself is recorded (feeds the "blocked-login attempts" alert)."""
+    if not profile or not is_currently_blocked(profile):
+        return
+    log_event(
+        "user_login", actor_user_id=profile.get("id"), actor_role=role,
+        actor_label=profile.get("email"), result="failure",
+        metadata={"reason": "blocked"},
+    )
+    raise HTTPException(status_code=403, detail=block_message(profile))
 
 
 def _set_password_with_retry(user_id: str, password: str) -> None:
@@ -317,6 +334,8 @@ def login(payload: AuthIn):
             status_code=403,
             detail=f"This account is registered as a {profile['role']} account, not {payload.role}.",
         )
+    _reject_if_blocked_and_log(profile, payload.role)
+    log_event("user_login", actor_user_id=user.id, actor_role=payload.role, actor_label=user.email)
 
     return {
         "user": map_profile(profile) if profile else {
@@ -354,6 +373,12 @@ def refresh_session_route(payload: RefreshIn):
     except APIError as e:
         log.warning("Profile lookup/create failed for %s: %s", user.id, e)
         profile = None
+    # A block must actually revoke access, not just stop new sign-ins: a
+    # blocked user's stale access token would otherwise keep refreshing
+    # forever (their very next real API call still 403s via get_current_user,
+    # but there's no reason to hand out a fresh token here either).
+    if profile and is_currently_blocked(profile):
+        raise HTTPException(status_code=403, detail=block_message(profile))
 
     return {
         "user": map_profile(profile) if profile else {
@@ -410,6 +435,8 @@ def oauth_session_route(payload: OAuthSessionIn):
             status_code=403,
             detail=f"This account is registered as a {profile['role']} account, not {payload.role}.",
         )
+    _reject_if_blocked_and_log(profile, payload.role)
+    log_event("user_login", actor_user_id=user.id, actor_role=payload.role, actor_label=user.email)
 
     return {
         "user": map_profile(profile) if profile else {

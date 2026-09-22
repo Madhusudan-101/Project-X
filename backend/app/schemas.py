@@ -300,6 +300,37 @@ class CollegeProvisionIn(BaseModel):
         return self
 
 
+_BLOCK_DURATIONS = ("1h", "24h", "7d", "30d", "custom")
+
+
+class BlockUserIn(BaseModel):
+    """Admin blocks a user account, temporarily or permanently."""
+    permanent: bool = False
+    duration: Optional[str] = Field(default=None, description=f"One of {_BLOCK_DURATIONS}; required unless permanent.")
+    until: Optional[str] = Field(default=None, description="ISO instant; required when duration='custom'.")
+    reason: str = Field(min_length=1, max_length=500)
+
+    @field_validator("duration")
+    @classmethod
+    def _validate_duration(cls, v: Optional[str]) -> Optional[str]:
+        if v is not None and v not in _BLOCK_DURATIONS:
+            raise ValueError(f"duration must be one of {_BLOCK_DURATIONS}.")
+        return v
+
+    @model_validator(mode="after")
+    def _duration_required_unless_permanent(self) -> "BlockUserIn":
+        if not self.permanent:
+            if not self.duration:
+                raise ValueError("Provide a duration, or set permanent=true.")
+            if self.duration == "custom" and not self.until:
+                raise ValueError("Provide 'until' for a custom duration.")
+        return self
+
+
+class UnblockUserIn(BaseModel):
+    reason: Optional[str] = Field(default=None, max_length=500)
+
+
 # ── Company Portal payloads ───────────────────────────────────────────
 
 class CompanySignupIn(BaseModel):

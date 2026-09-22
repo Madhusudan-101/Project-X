@@ -1030,7 +1030,578 @@ $$;
 
 
 -- ═════════════════════════════════════════════════════════════════════
--- 5. Lock the admin_* functions to the backend.
+-- 6. Platform Control Center upgrade — user access control, a central
+--    event/audit log, and the analytics/alerts/search it powers.
+--    Additive to everything above; idempotent; safe to re-run.
+-- ═════════════════════════════════════════════════════════════════════
+
+-- 6.0 Block / suspend a user account.
+--     "Currently blocked" is ALWAYS computed — blocked_permanent, or
+--     blocked_until in the future — never a stored status flag, so a
+--     temporary block expires by itself with no scheduled job. blocked_at /
+--     blocked_by / blocked_reason describe the block that is (or, once a
+--     temporary one has passed, most recently was) in effect; unblocking
+--     clears all five. Who did what and why over time lives in
+--     admin_events (6.1), not here.
+alter table public.profiles add column if not exists blocked_permanent boolean not null default false;
+alter table public.profiles add column if not exists blocked_until     timestamptz;
+alter table public.profiles add column if not exists blocked_at        timestamptz;
+alter table public.profiles add column if not exists blocked_by        uuid references public.profiles(id) on delete set null;
+alter table public.profiles add column if not exists blocked_reason    text;
+
+create index if not exists idx_profiles_blocked
+  on public.profiles(blocked_permanent, blocked_until)
+  where blocked_permanent or blocked_until is not null;
+
+-- Extend the existing role/college guard so the block columns get the same
+-- protection: only the backend (service_role) or a direct DB session can
+-- write them, never a browser holding an anon/authenticated JWT (admin
+-- included) via PostgREST. Same function, same trigger — no new object.
+create or replace function public.guard_profile_privileged_columns()
+returns trigger
+language plpgsql
+set search_path = public
+as $$
+begin
+  if current_user not in ('anon', 'authenticated') then
+    return new;
+  end if;
+
+  if tg_op = 'INSERT' then
+    if new.role is null or new.role not in ('candidate', 'company') then
+      raise exception 'Role "%" cannot be self-assigned.', new.role
+        using errcode = '42501';
+    end if;
+    if new.blocked_permanent or new.blocked_until is not null or new.blocked_by is not null then
+      raise exception 'An account cannot set its own block state.'
+        using errcode = '42501';
+    end if;
+  else
+    if new.role is distinct from old.role then
+      raise exception 'Profile role cannot be changed by the account holder.'
+        using errcode = '42501';
+    end if;
+    -- A College account's tenant link decides which college's data it can
+    -- read through RLS (current_college_id()); it is admin-provisioned only.
+    if new.role = 'college' and new.college_id is distinct from old.college_id then
+      raise exception 'A College account cannot be re-linked to another college.'
+        using errcode = '42501';
+    end if;
+    if new.blocked_permanent is distinct from old.blocked_permanent
+       or new.blocked_until  is distinct from old.blocked_until
+       or new.blocked_by     is distinct from old.blocked_by
+       or new.blocked_reason is distinct from old.blocked_reason
+       or new.blocked_at     is distinct from old.blocked_at then
+      raise exception 'Block state can only be changed by an Admin.'
+        using errcode = '42501';
+    end if;
+  end if;
+
+  return new;
+end;
+$$;
+-- (trigger already exists from 1.; CREATE OR REPLACE above is enough)
+
+
+-- ─────────────────────────────────────────────────────────────────────
+-- 6.1 Central event/audit log.
+--     Populated by the backend for actions that have no existing timestamp
+--     trail to derive from: sign-ins (incl. attempts blocked by 6.0),
+--     account provisioning, blocking/unblocking, CSV exports and generated
+--     reports. Registrations, applications, drives etc. already have a
+--     timestamp column each (see admin_actor_events, 3.) and are NOT
+--     duplicated into this table — admin_activity_feed (6.3) merges both
+--     into one read model instead of keeping two competing event systems.
+--     result='failure' rows (e.g. a blocked account's login attempt) are the
+--     Audit Log's evidence trail; they are excluded from the friendly Live
+--     Activity feed (6.3) to keep that one about what actually happened.
+-- ─────────────────────────────────────────────────────────────────────
+create table if not exists public.admin_events (
+  id uuid primary key default gen_random_uuid(),
+  event_type text not null,
+  actor_user_id uuid references public.profiles(id) on delete set null,
+  actor_role text,
+  actor_label text,
+  target_type text,
+  target_id uuid,
+  target_label text,
+  metadata jsonb not null default '{}'::jsonb,
+  result text not null default 'success' check (result in ('success', 'failure')),
+  created_at timestamptz not null default now()
+);
+
+create index if not exists idx_admin_events_created_at   on public.admin_events(created_at desc);
+create index if not exists idx_admin_events_type_created  on public.admin_events(event_type, created_at desc);
+create index if not exists idx_admin_events_actor         on public.admin_events(actor_user_id, created_at desc);
+create index if not exists idx_admin_events_target        on public.admin_events(target_type, target_id, created_at desc);
+
+alter table public.admin_events enable row level security;
+-- No policies for anon/authenticated: default-deny, so a browser can never
+-- read or write the audit trail directly. service_role bypasses RLS (Supabase
+-- grants it BYPASSRLS), so the backend's db_client is unaffected.
+
+
+-- 6.2 Users & Access — every profiles row plus its computed block status and
+--     best-known last-activity (candidate: their own events; company/college:
+--     their organisation's events, the account itself has no separate
+--     identity in admin_actor_events; every role: admin_events, which is
+--     also the only activity signal an Admin account has, since admins
+--     don't apply/post/run drives).
+create or replace function public.admin_list_users(
+  p_from timestamptz, p_to timestamptz,
+  p_search text default null, p_role text default null, p_status text default null,
+  p_user_id uuid default null,
+  p_sort text default 'created_at', p_dir text default 'desc',
+  p_limit int default 25, p_offset int default 0
+)
+returns table (
+  user_id uuid, email text, name text, role text,
+  college_id uuid, college_name text, company_id uuid, company_name text,
+  created_at timestamptz, onboarded boolean,
+  is_blocked boolean, blocked_permanent boolean, blocked_until timestamptz,
+  blocked_at timestamptz, blocked_reason text, blocked_by_email text,
+  last_activity timestamptz, total_count bigint
+)
+language plpgsql stable security definer
+set search_path = public
+set plan_cache_mode = force_custom_plan
+as $$
+#variable_conflict use_column
+begin
+  return query
+  with
+  cand_act as (
+    select actor_id, max(occurred_at) as ts from public.admin_actor_events()
+     where actor_type = 'candidate' group by actor_id
+  ),
+  comp_act as (
+    select actor_id, max(occurred_at) as ts from public.admin_actor_events()
+     where actor_type = 'company' group by actor_id
+  ),
+  coll_act as (
+    select actor_id, max(occurred_at) as ts from public.admin_actor_events()
+     where actor_type = 'college' group by actor_id
+  ),
+  ev_act as (
+    select actor_user_id, max(created_at) as ts from public.admin_events
+     where actor_user_id is not null group by actor_user_id
+  ),
+  base as (
+    select p.id as user_id, p.email,
+           coalesce(nullif(p.name, ''), nullif(trim(coalesce(p.first_name, '') || ' ' || coalesce(p.last_name, '')), ''), p.email) as name,
+           p.role, p.college_id, col.name as college_name, cmp.id as company_id, cmp.name as company_name,
+           p.created_at, coalesce(p.onboarded, false) as onboarded,
+           (p.blocked_permanent or (p.blocked_until is not null and p.blocked_until > now())) as is_blocked,
+           p.blocked_permanent, p.blocked_until, p.blocked_at, p.blocked_reason, blocker.email as blocked_by_email,
+           greatest(ca.ts, cpa.ts, cla.ts, ea.ts) as last_activity
+      from public.profiles p
+      left join public.colleges col on col.id = p.college_id
+      left join public.companies cmp on cmp.owner_id = p.id
+      left join public.profiles blocker on blocker.id = p.blocked_by
+      left join cand_act ca on p.role = 'candidate' and ca.actor_id = p.id
+      left join comp_act cpa on p.role = 'company' and cpa.actor_id = cmp.id
+      left join coll_act cla on p.role = 'college' and cla.actor_id = p.college_id
+      left join ev_act ea on ea.actor_user_id = p.id
+     where (p_user_id is null or p.id = p_user_id)
+       and (p_role is null or p_role = '' or p.role = p_role)
+       and public.admin_in_range(p.created_at, p_from, p_to)
+       and (p_search is null or p_search = ''
+            or strpos(lower(p.email), lower(p_search)) > 0
+            or strpos(lower(coalesce(p.name, '')), lower(p_search)) > 0
+            or strpos(lower(trim(coalesce(p.first_name, '') || ' ' || coalesce(p.last_name, ''))), lower(p_search)) > 0)
+  ),
+  keyed as (
+    select b.*,
+           case p_sort
+             when 'created_at'    then extract(epoch from b.created_at)
+             when 'last_activity' then extract(epoch from b.last_activity)
+           end as sort_num,
+           case p_sort
+             when 'name'  then lower(b.name)
+             when 'email' then lower(b.email)
+             when 'role'  then b.role
+           end as sort_txt
+      from base b
+     where case p_status
+             when 'blocked' then b.is_blocked
+             when 'active'  then not b.is_blocked
+             else true end
+  )
+  select k.user_id, k.email, k.name, k.role, k.college_id, k.college_name, k.company_id, k.company_name,
+         k.created_at, k.onboarded, k.is_blocked, k.blocked_permanent, k.blocked_until,
+         k.blocked_at, k.blocked_reason, k.blocked_by_email, k.last_activity,
+         count(*) over () as total_count
+    from keyed k
+   order by
+     case when p_dir = 'asc' then k.sort_num end asc  nulls last,
+     case when p_dir <> 'asc' then k.sort_num end desc nulls last,
+     case when p_dir = 'asc' then k.sort_txt end asc,
+     case when p_dir <> 'asc' then k.sort_txt end desc,
+     k.created_at desc, k.user_id
+   limit greatest(p_limit, 0) offset greatest(p_offset, 0);
+end;
+$$;
+
+
+-- 6.3 Live Activity — the friendly feed. Same derived kinds as the original
+--     admin_activity (kept AS IS below, unchanged, for the Overview's compact
+--     panel) plus successful admin_events, in one keyset-paginated stream
+--     (p_before = the oldest occurred_at already shown; pass it back for the
+--     next page). id is synthesised (derived rows have no row of their own)
+--     but stable across calls, for React keys and as a paging tie-breaker.
+create or replace function public.admin_activity_feed(
+  p_from timestamptz default null, p_to timestamptz default null,
+  p_before timestamptz default null, p_kind text default null,
+  p_limit int default 30
+)
+returns table (id uuid, kind text, occurred_at timestamptz, subject text, detail text, actor_role text)
+language sql stable security definer
+set search_path = public
+as $$
+  with ev as (
+    (select 'candidate_registered'::text as kind, p.created_at as ts,
+            coalesce(nullif(p.name, ''), nullif(trim(coalesce(p.first_name, '') || ' ' || coalesce(p.last_name, '')), ''), 'A candidate') as subject,
+            null::text as detail, 'candidate'::text as actor_role
+       from public.profiles p where p.role = 'candidate' and p.created_at is not null)
+    union all
+    (select 'company_registered', c.created_at, c.name, c.industry, 'company'::text
+       from public.companies c)
+    union all
+    (select 'college_registered', a.registered_at, co.name, null, 'college'::text
+       from public.admin_college_accounts() a join public.colleges co on co.id = a.college_id)
+    union all
+    (select 'drive_created', d.created_at, cmp.name, j.title || ' @ ' || col.name, 'company'::text
+       from public.job_drives d
+       join public.jobs j on j.id = d.job_id
+       join public.companies cmp on cmp.id = j.company_id
+       join public.colleges col on col.id = d.college_id)
+    union all
+    (select 'application_submitted', a.applied_at, cmp.name, j.title, 'candidate'::text
+       from public.applications a
+       join public.jobs j on j.id = a.job_id
+       join public.companies cmp on cmp.id = a.company_id)
+    union all
+    -- No dedicated hire timestamp exists: updated_at of a 'hired' application.
+    (select 'candidate_selected', a.updated_at, cmp.name, j.title, 'company'::text
+       from public.applications a
+       join public.jobs j on j.id = a.job_id
+       join public.companies cmp on cmp.id = a.company_id
+      where a.status = 'hired')
+    union all
+    (select e.event_type, e.created_at, coalesce(e.actor_label, initcap(coalesce(e.actor_role, 'System'))),
+            coalesce(e.target_label, e.metadata->>'summary'), e.actor_role
+       from public.admin_events e where e.result = 'success')
+  )
+  select (md5(kind || ts::text || subject || coalesce(detail, '')))::uuid, kind, ts, subject, detail, actor_role
+    from ev
+   where ts is not null
+     and public.admin_in_range(ts, p_from, p_to)
+     and (p_before is null or ts < p_before)
+     and (p_kind is null or p_kind = '' or kind = p_kind)
+   order by ts desc
+   limit greatest(p_limit, 0)
+$$;
+
+
+-- 6.4 Audit Log — the raw, unfiltered admin_events trail (unlike 6.3, includes
+--     result='failure' rows, e.g. a blocked account's login attempt).
+create or replace function public.admin_list_events(
+  p_from timestamptz, p_to timestamptz,
+  p_search text default null, p_event_type text default null,
+  p_actor_role text default null, p_target_type text default null,
+  p_result text default null, p_target_id uuid default null,
+  p_sort text default 'created_at', p_dir text default 'desc',
+  p_limit int default 25, p_offset int default 0
+)
+returns table (
+  id uuid, event_type text, occurred_at timestamptz,
+  actor_user_id uuid, actor_role text, actor_label text,
+  target_type text, target_id uuid, target_label text,
+  metadata jsonb, result text, total_count bigint
+)
+language plpgsql stable security definer
+set search_path = public
+set plan_cache_mode = force_custom_plan
+as $$
+#variable_conflict use_column
+begin
+  return query
+  with base as (
+    select e.id, e.event_type, e.created_at as occurred_at,
+           e.actor_user_id, e.actor_role, e.actor_label,
+           e.target_type, e.target_id, e.target_label, e.metadata, e.result
+      from public.admin_events e
+     where public.admin_in_range(e.created_at, p_from, p_to)
+       and (p_event_type is null or p_event_type = '' or e.event_type = p_event_type)
+       and (p_actor_role is null or p_actor_role = '' or e.actor_role = p_actor_role)
+       and (p_target_type is null or p_target_type = '' or e.target_type = p_target_type)
+       and (p_result is null or p_result = '' or e.result = p_result)
+       and (p_target_id is null or e.target_id = p_target_id)
+       and (p_search is null or p_search = ''
+            or strpos(lower(coalesce(e.actor_label, '')), lower(p_search)) > 0
+            or strpos(lower(coalesce(e.target_label, '')), lower(p_search)) > 0
+            or strpos(lower(e.event_type), lower(p_search)) > 0)
+  )
+  select b.id, b.event_type, b.occurred_at, b.actor_user_id, b.actor_role, b.actor_label,
+         b.target_type, b.target_id, b.target_label, b.metadata, b.result,
+         count(*) over () as total_count
+    from base b
+   order by
+     case when p_dir = 'asc' then extract(epoch from b.occurred_at) end asc,
+     case when p_dir <> 'asc' then extract(epoch from b.occurred_at) end desc,
+     b.id
+   limit greatest(p_limit, 0) offset greatest(p_offset, 0);
+end;
+$$;
+
+
+-- 6.5 Department analytics — candidates grouped by the RAW branch text they
+--     entered (trimmed; blank -> "Not specified"). Deliberately NOT resolved
+--     through the College Portal's branch-alias table (normalize_branch(),
+--     app/utils/college/branch.py): that table lives in Python, this is SQL,
+--     and duplicating alias logic in two languages is exactly the kind of
+--     competing system rule 31/34 rule out. So "CSE" and "Computer Science
+--     and Engineering" appear as separate rows here — an honest reflection
+--     of the data, not a bug. There is also no FK from candidates to
+--     public.departments: that table is a College Portal roster concept,
+--     scoped to one college's own students, with no platform-wide analogue.
+create or replace function public.admin_department_breakdown(
+  p_from timestamptz, p_to timestamptz, p_college_id uuid default null
+)
+returns table (
+  branch text, candidates bigint, applications bigint, applicants bigint,
+  shortlisted bigint, selected bigint, selected_applicants bigint
+)
+language sql stable security definer
+set search_path = public
+as $$
+  with
+  cand as (
+    select coalesce(nullif(trim(p.branch), ''), 'Not specified') as branch, p.id
+      from public.profiles p
+     where p.role = 'candidate' and (p_college_id is null or p.college_id = p_college_id)
+  ),
+  facts as (
+    select f.* from public.admin_app_facts(p_from, p_to) f
+     where p_college_id is null or f.college_id = p_college_id
+  )
+  select c.branch,
+         count(distinct c.id) as candidates,
+         count(f.application_id) as applications,
+         count(distinct f.student_id) as applicants,
+         count(*) filter (where f.is_shortlisted) as shortlisted,
+         count(*) filter (where f.is_selected) as selected,
+         count(distinct f.student_id) filter (where f.is_selected) as selected_applicants
+    from cand c
+    left join facts f on f.student_id = c.id
+   group by c.branch
+   order by candidates desc, c.branch
+$$;
+
+
+-- 6.6 CTC by company (posted vs filled — see admin_ctc_stats for the
+--     advertised-vs-actual-offer caveat, unchanged here). There is no
+--     "CTC by department": a job's eligible_branches is a filter that can
+--     span many branches or none, not a single department assignment, so
+--     attributing one CTC figure to "one department" would misrepresent it.
+create or replace function public.admin_ctc_by_company(p_from timestamptz, p_to timestamptz)
+returns table (
+  company_id uuid, company_name text,
+  posted_roles bigint, posted_average numeric, posted_highest numeric, posted_lowest numeric,
+  filled_roles bigint, filled_average numeric, filled_highest numeric, filled_lowest numeric
+)
+language sql stable security definer
+set search_path = public
+as $$
+  with
+  j as (
+    select id, company_id,
+           (coalesce(ctc_min, ctc_max) + coalesce(ctc_max, ctc_min)) / 2 as mid,
+           coalesce(ctc_min, ctc_max) as lo, coalesce(ctc_max, ctc_min) as hi,
+           created_at
+      from public.jobs
+     where employment_type <> 'intern'
+       and (ctc_min is not null or ctc_max is not null)
+       and coalesce(ctc_currency, 'INR') = 'INR'
+  ),
+  posted as (select * from j where public.admin_in_range(created_at, p_from, p_to)),
+  filled as (
+    select j.* from public.admin_app_facts(p_from, p_to) f join j on j.id = f.job_id where f.is_selected
+  ),
+  agg as (
+    select company_id, 'posted'::text as tag, count(*) as n, round(avg(mid)) as avgv, max(hi) as hiv, min(lo) as lov from posted group by company_id
+    union all
+    select company_id, 'filled', count(*), round(avg(mid)), max(hi), min(lo) from filled group by company_id
+  ),
+  seen as (select company_id from posted union select company_id from filled)
+  select cmp.id, cmp.name,
+         coalesce(p.n, 0), p.avgv, p.hiv, p.lov,
+         coalesce(f.n, 0), f.avgv, f.hiv, f.lov
+    from seen s
+    join public.companies cmp on cmp.id = s.company_id
+    left join agg p on p.company_id = s.company_id and p.tag = 'posted'
+    left join agg f on f.company_id = s.company_id and f.tag = 'filled'
+   order by coalesce(f.n, 0) desc, coalesce(p.n, 0) desc, cmp.name
+$$;
+
+
+-- 6.7 Alerts — computed live from current data, never stored (so there is
+--     nothing to go stale and no scheduled job to keep it correct). Only
+--     conditions this data model can actually answer; see the header of
+--     each branch below for why the others in the spec were left out.
+create or replace function public.admin_alerts()
+returns table (
+  alert_id text, alert_type text, severity text, title text, description text,
+  occurred_at timestamptz, link text
+)
+language sql stable security definer
+set search_path = public
+as $$
+  with facts_all as (select * from public.admin_app_facts(null, null)),
+  u as (
+  (
+    select 'no_apps:' || d.id as alert_id, 'drive_no_applications' as alert_type, 'warning' as severity,
+           'Live drive with no applications' as title,
+           cmp.name || ' — ' || j.title || ' at ' || col.name || ' has been live for over a week with zero applications.' as description,
+           d.created_at as occurred_at, '/admin/placements?drive=' || d.id as link
+      from public.job_drives d
+      join public.jobs j on j.id = d.job_id
+      join public.companies cmp on cmp.id = j.company_id
+      join public.colleges col on col.id = d.college_id
+      left join facts_all f on f.drive_id = d.id
+     where d.status = 'live' and d.created_at < now() - interval '7 days' and f.application_id is null
+  )
+  union all
+  (
+    select 'closing:' || d.id, 'drive_closing_soon', 'info',
+           'Drive closing within 3 days',
+           cmp.name || ' — ' || j.title || ' at ' || col.name || ' closes ' || to_char(d.apply_deadline, 'DD Mon, HH24:MI') || '.',
+           d.apply_deadline, '/admin/placements?drive=' || d.id
+      from public.job_drives d
+      join public.jobs j on j.id = d.job_id
+      join public.companies cmp on cmp.id = j.company_id
+      join public.colleges col on col.id = d.college_id
+     where d.status = 'live' and d.apply_deadline between now() and now() + interval '3 days'
+  )
+  union all
+  (
+    -- colleges.onboarding_completed (college_onboarding_migration.sql) is the
+    -- only real onboarding-completeness signal that exists.
+    select 'onboarding:' || c.id, 'college_onboarding_incomplete', 'warning',
+           'College onboarding incomplete',
+           c.name || ' has a College account but has not completed onboarding.',
+           null::timestamptz, '/admin/colleges/' || c.id
+      from public.colleges c
+      join public.admin_college_accounts() a on a.college_id = c.id
+     where coalesce(c.onboarding_completed, false) = false
+  )
+  union all
+  (
+    -- One aggregate alert, not one per candidate — a per-row alert for
+    -- possibly thousands of candidates would be noise, not a to-do list.
+    select 'incomplete_candidates', 'candidate_profiles_incomplete', 'info',
+           n || ' candidate profile(s) missing college, branch or graduation year',
+           'Incomplete profiles may not match drive eligibility filters correctly.',
+           null::timestamptz, '/admin/candidates'
+      from (select count(*) as n from public.profiles
+             where role = 'candidate' and (college_id is null or branch is null or graduation_year is null)) x
+     where n > 0
+  )
+  union all
+  (
+    -- The one "unusual activity" signal this data model actually has: a
+    -- suspended account trying to sign in (logged as a failure event by
+    -- the backend). There is no generic application-error log to alert on.
+    select 'blocked_logins', 'blocked_login_attempts', 'critical',
+           n || ' blocked-account login attempt(s) in the last 24 hours',
+           'A suspended account attempted to sign in.',
+           now(), '/admin/audit-log?event_type=user_login&result=failure'
+      from (select count(*) as n from public.admin_events
+             where event_type = 'user_login' and result = 'failure' and created_at > now() - interval '24 hours') x
+     where n > 0
+  )
+  )
+  select * from u
+   order by case severity when 'critical' then 0 when 'warning' then 1 else 2 end, occurred_at desc nulls last
+$$;
+
+
+-- 6.8 Global search — colleges, companies, candidates, drives. Applications
+--     are not a fifth branch: they aren't identified by a human-typed string,
+--     so they are reached by filtering the Candidates page instead.
+create or replace function public.admin_global_search(p_query text, p_limit int default 8)
+returns table (entity_type text, id uuid, title text, subtitle text)
+language sql stable security definer
+set search_path = public
+as $$
+  with q as (select nullif(trim(p_query), '') as v)
+  (
+    select 'college', c.id, c.name, coalesce(c.city, '')
+      from public.colleges c, q
+     where q.v is not null and strpos(lower(c.name), lower(q.v)) > 0
+     order by c.name limit greatest(p_limit, 0)
+  )
+  union all
+  (
+    select 'company', c.id, c.name, coalesce(c.industry, '')
+      from public.companies c, q
+     where q.v is not null and strpos(lower(c.name), lower(q.v)) > 0
+     order by c.name limit greatest(p_limit, 0)
+  )
+  union all
+  (
+    select 'candidate', p.id,
+           coalesce(nullif(p.name, ''), nullif(trim(coalesce(p.first_name, '') || ' ' || coalesce(p.last_name, '')), ''), p.email),
+           p.email
+      from public.profiles p, q
+     where p.role = 'candidate' and q.v is not null
+       and (strpos(lower(coalesce(p.name, '')), lower(q.v)) > 0
+            or strpos(lower(coalesce(p.email, '')), lower(q.v)) > 0)
+     order by p.created_at desc limit greatest(p_limit, 0)
+  )
+  union all
+  (
+    select 'drive', d.id, j.title, cmp.name || ' @ ' || col.name
+      from public.job_drives d
+      join public.jobs j on j.id = d.job_id
+      join public.companies cmp on cmp.id = j.company_id
+      join public.colleges col on col.id = d.college_id, q
+     where q.v is not null and strpos(lower(j.title), lower(q.v)) > 0
+     order by d.created_at desc limit greatest(p_limit, 0)
+  )
+$$;
+
+
+-- 6.9 Platform usage — counts of tracked actions in the period. Only actions
+--     this backend actually logs (admin_events) or already timestamps
+--     (applications, drives, resume analyses) are counted; there is no login
+--     history before this feature shipped, so a "0" for a range that predates
+--     it means "not tracked yet", not "nobody signed in" —
+--     events_tracking_since lets the API/UI say so rather than let a reader
+--     assume the latter.
+create or replace function public.admin_platform_usage(p_from timestamptz, p_to timestamptz)
+returns jsonb
+language sql stable security definer
+set search_path = public
+as $$
+  select jsonb_build_object(
+    'logins',                (select count(*) from public.admin_events where event_type = 'user_login' and result = 'success' and public.admin_in_range(created_at, p_from, p_to)),
+    'blocked_login_attempts',(select count(*) from public.admin_events where event_type = 'user_login' and result = 'failure' and public.admin_in_range(created_at, p_from, p_to)),
+    'accounts_provisioned',  (select count(*) from public.admin_events where event_type = 'account_provisioned' and public.admin_in_range(created_at, p_from, p_to)),
+    'users_blocked',         (select count(*) from public.admin_events where event_type = 'user_blocked' and public.admin_in_range(created_at, p_from, p_to)),
+    'users_unblocked',       (select count(*) from public.admin_events where event_type = 'user_unblocked' and public.admin_in_range(created_at, p_from, p_to)),
+    'csv_exports',           (select count(*) from public.admin_events where event_type = 'csv_exported' and public.admin_in_range(created_at, p_from, p_to)),
+    'reports_generated',     (select count(*) from public.admin_events where event_type = 'report_generated' and public.admin_in_range(created_at, p_from, p_to)),
+    'applications_submitted',(select count(*) from public.admin_app_facts(p_from, p_to)),
+    'drives_created',        (select count(*) from public.job_drives where public.admin_in_range(created_at, p_from, p_to)),
+    'resume_analyses',       (select count(*) from public.resume_analyses where source = 'real_user' and public.admin_in_range(created_at, p_from, p_to)),
+    'events_tracking_since', (select min(created_at) from public.admin_events)
+  )
+$$;
+
+
+-- ═════════════════════════════════════════════════════════════════════
+-- 7. Lock the admin_* functions to the backend.
 --    Supabase's default privileges grant EXECUTE on new public functions to
 --    anon and authenticated; revoke that and allow service_role only.
 --    Looping over pg_proc covers every admin_* overload above, so a function
