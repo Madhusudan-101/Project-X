@@ -6,7 +6,9 @@ import {
   Building2,
   CalendarCheck,
   GraduationCap,
+  ShieldAlert,
   ShieldCheck,
+  ShieldOff,
   TrendingUp,
   UserCheck,
   Users,
@@ -161,7 +163,7 @@ export function DashboardTab() {
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {loading ? (
-          Array.from({ length: 7 }).map((_, i) => <Skeleton key={i} className="h-28 rounded-xl" />)
+          Array.from({ length: 9 }).map((_, i) => <Skeleton key={i} className="h-28 rounded-xl" />)
         ) : (
           <>
             <StatCard
@@ -198,6 +200,16 @@ export function DashboardTab() {
               icon={GraduationCap}
               label="Placement rate"
               value={stats ? `${stats.placementPercentage.toFixed(1)}%` : "—"}
+            />
+            <StatCard
+              icon={ShieldAlert}
+              label="Temporarily blocked"
+              value={stats ? String(stats.temporarilyBlockedStudents) : "—"}
+            />
+            <StatCard
+              icon={ShieldOff}
+              label="Restricted"
+              value={stats ? String(stats.restrictedStudents) : "—"}
             />
           </>
         )}

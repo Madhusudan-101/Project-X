@@ -124,6 +124,10 @@ def get_current_user(authorization: Optional[str] = Header(None)) -> dict:
         "email": res.user.email,
         "role": meta.get("role", "candidate"),
         "_token": token,
+        # Not part of any public contract — only used by auth.py to self-heal
+        # a brand-new candidate profile with the college a TPO's onboarding
+        # invite (services/college/student_access.py) set on the invite.
+        "_meta": meta,
     }
 
 

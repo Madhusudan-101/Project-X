@@ -17,7 +17,11 @@ from postgrest.exceptions import APIError
 from supabase import Client
 
 from ...deps import get_current_tpo, get_user_supabase
-from ...schemas import StudentBulkPlacementIn, StudentIn, StudentUpdateIn
+from ...schemas import (
+    StudentBlockIn, StudentBulkPlacementIn, StudentIn, StudentOnboardIn,
+    StudentRestrictIn, StudentUnblockIn, StudentUpdateIn,
+)
+from ...services.college.student_access import block_student, invite_students, restrict_student, unblock_student
 from ...utils.college.branch import normalize_branch
 from ...utils.college.csv_students import parse_students_csv, dedupe_by_email
 
@@ -168,6 +172,18 @@ def export_students_csv(
     )
 
 
+@router.post("/onboard")
+def onboard_students(
+    payload: StudentOnboardIn,
+    tpo: dict = Depends(get_current_tpo),
+    sb: Client = Depends(get_user_supabase),
+):
+    """Send onboarding invites — see services/college/student_access.py.
+    Registered before GET /{student_id} for the same reason /export is:
+    otherwise that route's {student_id} wildcard would swallow this path."""
+    return invite_students(sb, tpo, payload)
+
+
 @router.get("/{student_id}")
 def get_student(
     student_id: str,
@@ -188,6 +204,40 @@ def get_student(
             raise HTTPException(status_code=404, detail="Student not found")
         raise HTTPException(status_code=500, detail=e.message)
     return res.data
+
+
+@router.post("/{student_id}/block")
+def block_student_route(
+    student_id: str,
+    payload: StudentBlockIn,
+    tpo: dict = Depends(get_current_tpo),
+    sb: Client = Depends(get_user_supabase),
+):
+    """Temporary block. Enforced immediately for any linked candidate
+    account, not just hidden in the UI — see student_access.py."""
+    return block_student(sb, tpo, student_id, payload)
+
+
+@router.post("/{student_id}/restrict")
+def restrict_student_route(
+    student_id: str,
+    payload: StudentRestrictIn,
+    tpo: dict = Depends(get_current_tpo),
+    sb: Client = Depends(get_user_supabase),
+):
+    """Permanent restriction/deactivation."""
+    return restrict_student(sb, tpo, student_id, payload)
+
+
+@router.post("/{student_id}/unblock")
+def unblock_student_route(
+    student_id: str,
+    payload: StudentUnblockIn,
+    tpo: dict = Depends(get_current_tpo),
+    sb: Client = Depends(get_user_supabase),
+):
+    """Reverses either block or restrict — restores full access."""
+    return unblock_student(sb, tpo, student_id, payload)
 
 
 @router.put("/{student_id}")

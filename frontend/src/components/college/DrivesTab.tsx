@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { useListAnimation } from "@/hooks/use-list-animation";
 import {
   ArrowUpDown,
   CalendarCheck,
@@ -73,7 +72,6 @@ function driveBranches(eligibility: Drive["eligibility"]): string[] {
 }
 
 export function DrivesTab() {
-  const [tableRef] = useListAnimation<HTMLTableSectionElement>();
   const [drives, setDrives] = useState<Drive[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -231,7 +229,11 @@ export function DrivesTab() {
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
-            <TableBody ref={tableRef}>
+            {/* No useListAnimation() ref here: @formkit/auto-animate 0.10.0's per-child
+                ref wrapping loops with React 19 once a row has its own interactive
+                state, crashing the page with "Maximum update depth exceeded" -- see
+                the same note in StudentsTab.tsx, where this was first found. */}
+            <TableBody>
               {filteredDrives.map((d) => (
                 <TableRow key={d.id}>
                   <TableCell className="font-medium">{d.companyName}</TableCell>
@@ -744,7 +746,6 @@ function CreateDriveDialog({ onCreated }: { onCreated: () => void }) {
 }
 
 function EligibleStudentsDialog({ drive, onClose }: { drive: Drive | null; onClose: () => void }) {
-  const [studentsTableRef] = useListAnimation<HTMLTableSectionElement>();
   const [students, setStudents] = useState<Student[] | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -805,7 +806,11 @@ function EligibleStudentsDialog({ drive, onClose }: { drive: Drive | null; onClo
                   <TableHead>Score</TableHead>
                 </TableRow>
               </TableHeader>
-              <TableBody ref={studentsTableRef}>
+              {/* No useListAnimation() ref here: @formkit/auto-animate 0.10.0's per-child
+                ref wrapping loops with React 19 once a row has its own interactive
+                state, crashing the page with "Maximum update depth exceeded" -- see
+                the same note in StudentsTab.tsx, where this was first found. */}
+              <TableBody>
                 {students.map((s) => (
                   <TableRow key={s.id}>
                     <TableCell className="font-medium">{s.name}</TableCell>

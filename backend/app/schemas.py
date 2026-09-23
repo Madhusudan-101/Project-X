@@ -251,6 +251,47 @@ class StudentBulkPlacementIn(BaseModel):
         return v
 
 
+# ── Student access control (student_access_and_onboarding_migration.sql) ──
+
+_STUDENT_BLOCK_DURATIONS = ("1h", "24h", "7d", "30d", "custom")
+
+
+class StudentBlockIn(BaseModel):
+    """TPO temporarily blocks a student. Permanent restriction is a separate
+    action (StudentRestrictIn) — see /{student_id}/restrict."""
+    duration: str
+    until: Optional[str] = Field(default=None, description="ISO instant; required when duration='custom'.")
+    reason: str = Field(min_length=1, max_length=500)
+
+    @field_validator("duration")
+    @classmethod
+    def _validate_duration(cls, v: str) -> str:
+        if v not in _STUDENT_BLOCK_DURATIONS:
+            raise ValueError(f"duration must be one of {_STUDENT_BLOCK_DURATIONS}.")
+        return v
+
+    @model_validator(mode="after")
+    def _until_required_for_custom(self) -> "StudentBlockIn":
+        if self.duration == "custom" and not self.until:
+            raise ValueError("Provide 'until' for a custom duration.")
+        return self
+
+
+class StudentRestrictIn(BaseModel):
+    reason: str = Field(min_length=1, max_length=500)
+
+
+class StudentUnblockIn(BaseModel):
+    reason: Optional[str] = Field(default=None, max_length=500)
+
+
+class StudentOnboardIn(BaseModel):
+    """Trigger onboarding invites for this TPO's students. `studentIds` scopes
+    it to a specific set (e.g. the rows just exported); omitted = every
+    active, not-yet-invited, not-yet-registered student in the college."""
+    studentIds: Optional[List[str]] = None
+
+
 class ShortlistFilterIn(BaseModel):
     branch: Optional[str] = None
     graduationYear: Optional[int] = None

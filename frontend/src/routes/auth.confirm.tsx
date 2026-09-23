@@ -116,6 +116,16 @@ function AuthConfirmPage() {
           return;
         }
 
+        if (linkType === "invite") {
+          // A College TPO's student-onboarding invite (services/college/student_access.py
+          // on the backend). Supabase created this account with no password at
+          // all, same as a first-time Google sign-in — reuse that exact flow
+          // rather than dropping the student into the dashboard passwordless.
+          toast.success("Invitation verified! Choose a password to finish setting up your account.");
+          setTimeout(() => navigate({ to: "/auth/set-password" }), 1200);
+          return;
+        }
+
         toast.success("Email confirmed! Welcome to Mirracle.");
 
         // Redirect to the correct portal based on role

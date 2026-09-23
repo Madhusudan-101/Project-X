@@ -21,8 +21,42 @@ export interface Student {
   assessment_score: number;
   verification_status: VerificationStatus;
   placement_status: PlacementStatus;
+  status: StudentAccessStatus;
+  blocked_until: string | null;
+  blocked_reason: string | null;
+  blocked_at: string | null;
+  invited_at: string | null;
   created_at?: string;
   updated_at?: string;
+}
+
+export type StudentAccessStatus = "active" | "temporarily_blocked" | "restricted";
+
+export type BlockDuration = "1h" | "24h" | "7d" | "30d" | "custom";
+
+export interface StudentBlockInput {
+  duration: BlockDuration;
+  until?: string;
+  reason: string;
+}
+
+export interface StudentActionResult {
+  message: string;
+  student: Student;
+  accountRestricted: boolean;
+}
+
+export interface StudentOnboardResult {
+  message: string;
+  collegeName: string;
+  plan: string;
+  considered: number;
+  invited: number;
+  skippedBlocked: number;
+  skippedInvalidEmail: number;
+  skippedAlreadyRegistered: number;
+  skippedAlreadyInvited: number;
+  failed: number;
 }
 
 export interface StudentListFilters {
@@ -92,6 +126,9 @@ export interface DashboardStats {
   notPlacedStudents: number;
   offerDeclinedStudents: number;
   placementPercentage: number;
+  activeStudents: number;
+  temporarilyBlockedStudents: number;
+  restrictedStudents: number;
 }
 
 export interface ScoreDistribution {

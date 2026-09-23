@@ -21,8 +21,11 @@ import type {
   ShortlistFilters,
   ShortlistResult,
   Student,
+  StudentActionResult,
+  StudentBlockInput,
   StudentCreateInput,
   StudentListFilters,
+  StudentOnboardResult,
 } from "@/types/college/college";
 
 /** Thrown by uploadCsv when the backend rejects rows for missing required fields. */
@@ -120,6 +123,25 @@ export const studentsService = {
     }
     return res.blob();
   },
+
+  /** Temporarily blocks the student; if they already have a candidate account
+   * at this college, that account is restricted immediately too — not just
+   * hidden in this UI. See backend/app/services/college/student_access.py. */
+  block: (studentId: string, payload: StudentBlockInput) =>
+    request<StudentActionResult>(`/api/students/${studentId}/block`, { method: "POST", body: payload }),
+
+  restrict: (studentId: string, reason: string) =>
+    request<StudentActionResult>(`/api/students/${studentId}/restrict`, { method: "POST", body: { reason } }),
+
+  unblock: (studentId: string, reason?: string) =>
+    request<StudentActionResult>(`/api/students/${studentId}/unblock`, { method: "POST", body: { reason } }),
+
+  /** Sends onboarding invites to the given students (or every eligible
+   * student in the college when omitted) — see StudentOnboardResult for what
+   * "eligible" excludes (already invited, already registered, blocked,
+   * invalid email) and why. */
+  onboard: (studentIds?: string[]) =>
+    request<StudentOnboardResult>("/api/students/onboard", { method: "POST", body: { studentIds } }),
 };
 
 // ── Drives — GET /api/drives/, POST /api/drives/, PUT/DELETE /api/drives/{id}, GET /api/drives/{id}/eligible ──

@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import { toast } from "sonner";
-import { useListAnimation } from "@/hooks/use-list-animation";
 import {
   ArrowUpDown,
   Download,
@@ -10,6 +9,9 @@ import {
   Pencil,
   Plus,
   Search,
+  ShieldAlert,
+  ShieldCheck,
+  ShieldOff,
   Trash2,
   Upload,
   UserRoundPlus,
@@ -45,6 +47,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import {
   Select,
   SelectContent,
@@ -52,6 +55,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Pagination,
   PaginationContent,
@@ -70,7 +74,13 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { CsvUploadError, downloadCsvBlob, studentsService } from "@/services/api/college/college";
-import type { CsvUploadInvalidRow, PlacementStatus, Student } from "@/types/college/college";
+import type {
+  BlockDuration,
+  CsvUploadInvalidRow,
+  PlacementStatus,
+  Student,
+  StudentAccessStatus,
+} from "@/types/college/college";
 
 const PAGE_SIZE = 10;
 
@@ -81,6 +91,12 @@ const PLACEMENT_LABELS: Record<PlacementStatus, string> = {
   not_placed: "Not placed",
   placed: "Placed",
   offer_declined: "Offer declined",
+};
+
+const ACCESS_STATUS_LABELS: Record<StudentAccessStatus, string> = {
+  active: "Active",
+  temporarily_blocked: "Temporarily blocked",
+  restricted: "Restricted",
 };
 
 // Mirrors the backend's StudentIn/StudentUpdateIn graduationYear bounds
@@ -96,7 +112,6 @@ function isValidGraduationYear(value: string): boolean {
 }
 
 export function StudentsTab() {
-  const [tableRef] = useListAnimation<HTMLTableSectionElement>();
   const [students, setStudents] = useState<Student[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -176,6 +191,27 @@ export function StudentsTab() {
       downloadCsvBlob(blob, "students.csv");
       const filtersActive = Boolean(branch || graduationYear || minimumScore || placementFilter);
       toast.success(filtersActive ? "Filtered roster CSV downloaded" : "Roster CSV downloaded");
+
+      // Exporting the roster also kicks off onboarding for the students just
+      // exported (the currently filtered/visible set) — backend-authorized,
+      // scoped to this college, and safe to repeat: already-invited or
+      // already-registered students are silently skipped, never re-emailed.
+      if (filtered.length > 0) {
+        try {
+          const result = await studentsService.onboard(filtered.map((s) => s.id));
+          if (result.invited > 0) {
+            toast.success(`${result.invited} onboarding invite${result.invited === 1 ? "" : "s"} sent.`, {
+              description: `${result.skippedAlreadyRegistered} already have an account, ${result.skippedAlreadyInvited} already invited${result.skippedBlocked ? `, ${result.skippedBlocked} blocked/restricted` : ""}${result.failed ? `, ${result.failed} failed` : ""}.`,
+            });
+          } else if (result.failed > 0) {
+            toast.warning(`No new invites sent — ${result.failed} failed to send.`);
+          }
+        } catch (err: unknown) {
+          // Onboarding is a follow-on to the export, not a precondition of it
+          // — the CSV already downloaded successfully, so this is a warning.
+          toast.warning(err instanceof Error ? err.message : "Roster exported, but onboarding invites could not be sent.");
+        }
+      }
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : "Failed to export students";
       toast.error(message);
@@ -391,12 +427,19 @@ export function StudentsTab() {
                 <TableHead>Branch</TableHead>
                 <TableHead>Grad. year</TableHead>
                 <TableHead>Employability</TableHead>
-                <TableHead>Status</TableHead>
+                <TableHead>Verification</TableHead>
                 <TableHead>Placement</TableHead>
+                <TableHead>Access</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
-            <TableBody ref={tableRef}>
+            {/* No useListAnimation() ref here: @formkit/auto-animate 0.10.0's per-child
+                ref wrapping loops with React 19 once a row has its own interactive
+                state (the actions DropdownMenu below), crashing the whole page with
+                "Maximum update depth exceeded". Confirmed on this exact table before
+                any of the access-control changes below, so left off rather than
+                patched around — see RowActions. */}
+            <TableBody>
               {pageRows.map((s) => (
                 <TableRow
                   key={s.id}
@@ -420,6 +463,9 @@ export function StudentsTab() {
                   </TableCell>
                   <TableCell>
                     <PlacementBadge status={s.placement_status} />
+                  </TableCell>
+                  <TableCell>
+                    <AccessStatusBadge status={s.status} />
                   </TableCell>
                   <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
                     <RowActions student={s} onChanged={fetchStudents} />
@@ -544,6 +590,18 @@ function PlacementBadge({ status }: { status: PlacementStatus }) {
   );
 }
 
+function AccessStatusBadge({ status }: { status: StudentAccessStatus }) {
+  const cls =
+    status === "active"
+      ? "border-success/30 bg-success/10 text-success"
+      : "border-destructive/30 bg-destructive/10 text-destructive";
+  return (
+    <Badge variant="outline" className={cls}>
+      {ACCESS_STATUS_LABELS[status]}
+    </Badge>
+  );
+}
+
 function StudentDetailDialog({
   student,
   onClose,
@@ -570,6 +628,16 @@ function StudentDetailDialog({
               label="Placement status"
               value={<PlacementBadge status={student.placement_status} />}
             />
+            <DetailField label="Access" value={<AccessStatusBadge status={student.status} />} />
+            {student.status !== "active" && student.blocked_reason && (
+              <DetailField label="Reason" value={student.blocked_reason} />
+            )}
+            {student.status === "temporarily_blocked" && student.blocked_until && (
+              <DetailField
+                label="Blocked until"
+                value={new Date(student.blocked_until).toLocaleString()}
+              />
+            )}
             <DetailField
               label="Employability score"
               value={Number(student.employability_score).toFixed(1)}
@@ -616,6 +684,9 @@ function DetailField({ label, value }: { label: string; value: ReactNode }) {
 function RowActions({ student, onChanged }: { student: Student; onChanged: () => void }) {
   const [editOpen, setEditOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
+  const [blockOpen, setBlockOpen] = useState(false);
+  const [restrictOpen, setRestrictOpen] = useState(false);
+  const [unblockOpen, setUnblockOpen] = useState(false);
   return (
     <>
       <DropdownMenu>
@@ -633,6 +704,36 @@ function RowActions({ student, onChanged }: { student: Student; onChanged: () =>
           >
             <Pencil className="mr-2 h-4 w-4" /> Edit
           </DropdownMenuItem>
+          {student.status === "active" ? (
+            <>
+              <DropdownMenuItem
+                onSelect={(e) => {
+                  e.preventDefault();
+                  setBlockOpen(true);
+                }}
+              >
+                <ShieldAlert className="mr-2 h-4 w-4" /> Temporarily block
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onSelect={(e) => {
+                  e.preventDefault();
+                  setRestrictOpen(true);
+                }}
+                className="text-destructive"
+              >
+                <ShieldOff className="mr-2 h-4 w-4" /> Restrict / deactivate
+              </DropdownMenuItem>
+            </>
+          ) : (
+            <DropdownMenuItem
+              onSelect={(e) => {
+                e.preventDefault();
+                setUnblockOpen(true);
+              }}
+            >
+              <ShieldCheck className="mr-2 h-4 w-4" /> Unblock / reactivate
+            </DropdownMenuItem>
+          )}
           <DropdownMenuItem
             onSelect={(e) => {
               e.preventDefault();
@@ -656,7 +757,259 @@ function RowActions({ student, onChanged }: { student: Student; onChanged: () =>
         onOpenChange={setDeleteOpen}
         onDeleted={onChanged}
       />
+      <BlockStudentDialog
+        student={student}
+        open={blockOpen}
+        onOpenChange={setBlockOpen}
+        onChanged={onChanged}
+      />
+      <RestrictStudentDialog
+        student={student}
+        open={restrictOpen}
+        onOpenChange={setRestrictOpen}
+        onChanged={onChanged}
+      />
+      <UnblockStudentDialog
+        student={student}
+        open={unblockOpen}
+        onOpenChange={setUnblockOpen}
+        onChanged={onChanged}
+      />
     </>
+  );
+}
+
+const BLOCK_DURATIONS: { value: BlockDuration; label: string }[] = [
+  { value: "1h", label: "1 hour" },
+  { value: "24h", label: "24 hours" },
+  { value: "7d", label: "7 days" },
+  { value: "30d", label: "30 days" },
+];
+
+function BlockStudentDialog({
+  student,
+  open,
+  onOpenChange,
+  onChanged,
+}: {
+  student: Student;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  onChanged: () => void;
+}) {
+  const [duration, setDuration] = useState<BlockDuration>("24h");
+  const [reason, setReason] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+
+  const handleSubmit = async () => {
+    if (!reason.trim()) return;
+    setSubmitting(true);
+    try {
+      const result = await studentsService.block(student.id, { duration, reason: reason.trim() });
+      toast.success(result.message, {
+        description: result.accountRestricted
+          ? "Their platform account access was restricted too, effective immediately."
+          : undefined,
+      });
+      setReason("");
+      onOpenChange(false);
+      onChanged();
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : "Failed to block student");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={(next) => !submitting && onOpenChange(next)}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Temporarily block {student.name}?</DialogTitle>
+          <DialogDescription>
+            They won&apos;t be able to use their platform account while blocked (if they have one). This
+            expires on its own — no need to remember to undo it.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="grid gap-3">
+          <div className="grid gap-1.5">
+            <Label>Duration</Label>
+            <RadioGroup value={duration} onValueChange={(v) => setDuration(v as BlockDuration)} className="grid grid-cols-2 gap-2">
+              {BLOCK_DURATIONS.map((d) => (
+                <div key={d.value} className="flex items-center gap-2">
+                  <RadioGroupItem value={d.value} id={`stu-block-${d.value}`} disabled={submitting} />
+                  <Label htmlFor={`stu-block-${d.value}`} className="font-normal">{d.label}</Label>
+                </div>
+              ))}
+            </RadioGroup>
+          </div>
+          <div className="grid gap-1.5">
+            <Label htmlFor="block-reason">Reason (required)</Label>
+            <Textarea
+              id="block-reason"
+              value={reason}
+              onChange={(e) => setReason(e.target.value)}
+              maxLength={500}
+              rows={3}
+              disabled={submitting}
+              placeholder="Why is this student being blocked?"
+            />
+          </div>
+        </div>
+        <DialogFooter>
+          <Button
+            onClick={handleSubmit}
+            disabled={submitting || !reason.trim()}
+            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+          >
+            {submitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />} Block student
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function RestrictStudentDialog({
+  student,
+  open,
+  onOpenChange,
+  onChanged,
+}: {
+  student: Student;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  onChanged: () => void;
+}) {
+  const [reason, setReason] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+
+  const handleSubmit = async () => {
+    if (!reason.trim()) return;
+    setSubmitting(true);
+    try {
+      const result = await studentsService.restrict(student.id, reason.trim());
+      toast.success(result.message, {
+        description: result.accountRestricted
+          ? "Their platform account access was restricted too, effective immediately."
+          : undefined,
+      });
+      setReason("");
+      onOpenChange(false);
+      onChanged();
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : "Failed to restrict student");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <AlertDialog open={open} onOpenChange={(next) => !submitting && onOpenChange(next)}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Restrict / deactivate {student.name}?</AlertDialogTitle>
+          <AlertDialogDescription>
+            This is a permanent restriction, not a timed one — it stays in effect until you unblock them
+            yourself. If they have a platform account, its access is restricted immediately too.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <div className="grid gap-1.5">
+          <Label htmlFor="restrict-reason">Reason (required)</Label>
+          <Textarea
+            id="restrict-reason"
+            value={reason}
+            onChange={(e) => setReason(e.target.value)}
+            maxLength={500}
+            rows={3}
+            disabled={submitting}
+            placeholder="Why is this student being restricted?"
+          />
+        </div>
+        <AlertDialogFooter>
+          <AlertDialogCancel disabled={submitting}>Cancel</AlertDialogCancel>
+          <AlertDialogAction
+            onClick={(e) => {
+              e.preventDefault();
+              handleSubmit();
+            }}
+            disabled={submitting || !reason.trim()}
+            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+          >
+            {submitting ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Restricting…
+              </>
+            ) : (
+              "Restrict student"
+            )}
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+  );
+}
+
+function UnblockStudentDialog({
+  student,
+  open,
+  onOpenChange,
+  onChanged,
+}: {
+  student: Student;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  onChanged: () => void;
+}) {
+  const [submitting, setSubmitting] = useState(false);
+
+  const handleSubmit = async () => {
+    setSubmitting(true);
+    try {
+      const result = await studentsService.unblock(student.id);
+      toast.success(result.message);
+      onOpenChange(false);
+      onChanged();
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : "Failed to restore access");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <AlertDialog open={open} onOpenChange={(next) => !submitting && onOpenChange(next)}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Restore access for {student.name}?</AlertDialogTitle>
+          <AlertDialogDescription>
+            {student.blocked_reason
+              ? `Currently ${ACCESS_STATUS_LABELS[student.status].toLowerCase()}: "${student.blocked_reason}". `
+              : ""}
+            Their platform account access (if they have one) is restored immediately.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel disabled={submitting}>Cancel</AlertDialogCancel>
+          <AlertDialogAction
+            onClick={(e) => {
+              e.preventDefault();
+              handleSubmit();
+            }}
+            disabled={submitting}
+            className="bg-gradient-brand text-primary-foreground"
+          >
+            {submitting ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Restoring…
+              </>
+            ) : (
+              "Restore access"
+            )}
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
   );
 }
 

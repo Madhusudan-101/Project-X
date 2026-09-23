@@ -20,7 +20,7 @@ def dashboard_stats(
     try:
         students = (
             sb.table("students")
-            .select("employability_score, verification_status, placement_status")
+            .select("employability_score, verification_status, placement_status, status")
             .eq("college_id", college_id)
             .execute()
         ).data or []
@@ -48,6 +48,10 @@ def dashboard_stats(
     )
     placement_percentage = round((placed / total) * 100, 1) if total else 0.0
 
+    active_students = sum(1 for s in students if (s.get("status") or "active") == "active")
+    temporarily_blocked_students = sum(1 for s in students if s.get("status") == "temporarily_blocked")
+    restricted_students = sum(1 for s in students if s.get("status") == "restricted")
+
     active_drives = sum(1 for d in drives if d.get("status") == "Active")
     draft_drives = sum(1 for d in drives if d.get("status") == "Draft")
     closed_drives = sum(1 for d in drives if d.get("status") == "Closed")
@@ -64,6 +68,9 @@ def dashboard_stats(
         "notPlacedStudents": not_placed,
         "offerDeclinedStudents": offer_declined,
         "placementPercentage": placement_percentage,
+        "activeStudents": active_students,
+        "temporarilyBlockedStudents": temporarily_blocked_students,
+        "restrictedStudents": restricted_students,
     }
 
 

@@ -93,12 +93,20 @@ def _check_signup_conflict(email: str, role: str) -> None:
 
 def _ensure_profile(user_id: str, email: str, role: str,
                      name: str = "", first_name: str = "",
-                     last_name: str = "") -> dict:
+                     last_name: str = "", college_id: Optional[str] = None) -> dict:
     """Get existing profile or create one. Returns the DB row dict.
 
     Self-heal only ever creates a public-signup role. `role` here can come from
     the request body or from the token's editable user_metadata, so a missing
-    profile plus a privileged role is refused (403) rather than created."""
+    profile plus a privileged role is refused (403) rather than created.
+
+    `college_id` is trusted the SAME way `role` already is here: only ever
+    read from the token's own (self-editable) user_metadata, and only ever
+    used to fill in a BRAND-NEW profile — never to move an existing one. A
+    college's own TPO onboarding invite (services/college/student_access.py)
+    is what sets it; a candidate could set the same metadata key themselves
+    via a forged signup, but that is no more privileged than the `collegeName`
+    they can already self-report via PATCH /auth/profile."""
     profile = get_profile_by_id(user_id)
     if profile:
         return profile
@@ -111,6 +119,7 @@ def _ensure_profile(user_id: str, email: str, role: str,
         "name": name,
         "first_name": first_name,
         "last_name": last_name,
+        **({"college_id": college_id} if college_id else {}),
     }) or {}
 
 
@@ -587,8 +596,13 @@ def set_password_route(
 @router.get("/profile", response_model=UserOut)
 def get_profile_route(current_user: dict = Depends(get_current_user)):
     """Used by /auth/confirm (Supabase's legacy hash-based email-confirmation
-    redirect) to fetch the profile for a freshly-verified access token."""
-    profile = _ensure_profile(current_user["id"], email=current_user["email"], role=current_user.get("role", "candidate"))
+    redirect, which also handles a College TPO's onboarding-invite link) to
+    fetch the profile for a freshly-verified access token."""
+    meta = current_user.get("_meta") or {}
+    profile = _ensure_profile(
+        current_user["id"], email=current_user["email"], role=current_user.get("role", "candidate"),
+        name=meta.get("name") or "", college_id=meta.get("collegeId"),
+    )
     return map_profile(profile)
 
 
