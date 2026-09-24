@@ -7,7 +7,9 @@
 import { ApiClientError, buildQuery, getApiBaseUrl, getAuthHeader, request } from "../client";
 import type {
   ActivityItem,
+  AdminMe,
   AdminOverview,
+  AdminPermissionsDetail,
   AdminRange,
   AlertItem,
   BlockUserInput,
@@ -17,6 +19,7 @@ import type {
   CollegeProvisionResult,
   CollegeRow,
   CompanyRow,
+  CreateDelegatedAdminInput,
   CsvExport,
   CtcByCompanyRow,
   DepartmentRow,
@@ -24,10 +27,13 @@ import type {
   EventItem,
   FilterOptions,
   FinanceSummary,
+  GrantPermissionInput,
   LiveActivityResponse,
   ListParams,
   Paged,
   PartnershipRow,
+  PermissionCatalog,
+  PermissionGrant,
   PlacementSummary,
   PlatformUsage,
   SearchResponse,
@@ -202,5 +208,25 @@ export const adminService = {
         total: Number.isFinite(total) ? total : 0,
       };
     },
+  },
+
+  // ── Admin Management: granular permissions (backend enforces every one
+  // of these — see backend/app/services/admin/permissions.py) ──────────
+  me: () => request<AdminMe>("/admin/me"),
+
+  permissionsCatalog: () => request<PermissionCatalog>("/admin/permissions/catalog"),
+
+  adminUsers: {
+    /** Reuses the general Users & Access list, filtered to role='admin'. */
+    list: (range: AdminRange, p: ListParams) => list<UserRow>("users", range, { ...p, role: "admin" }),
+    create: (body: CreateDelegatedAdminInput) =>
+      request<{ user_id: string; created: boolean; invite_sent: boolean }>("/admin/admin-users", { method: "POST", body }),
+    permissions: (userId: string) => request<AdminPermissionsDetail>(`/admin/admin-users/${userId}/permissions`),
+    grant: (userId: string, body: GrantPermissionInput) =>
+      request<PermissionGrant>(`/admin/admin-users/${userId}/permissions`, { method: "POST", body }),
+    revoke: (userId: string, permissionId: string) =>
+      request<{ revoked: boolean }>(`/admin/admin-users/${userId}/permissions/${permissionId}/revoke`, { method: "POST" }),
+    revokeAll: (userId: string) =>
+      request<{ revoked_count: number }>(`/admin/admin-users/${userId}/permissions/revoke-all`, { method: "POST" }),
   },
 };

@@ -372,6 +372,51 @@ class UnblockUserIn(BaseModel):
     reason: Optional[str] = Field(default=None, max_length=500)
 
 
+class CreateDelegatedAdminIn(BaseModel):
+    """Super Admin creates a delegated Admin account — provisioned the same
+    way as a College account (see services/admin/provisioning.py), just
+    without a college link. Permissions are granted separately afterwards."""
+    email: str
+    first_name: str = Field(min_length=1, max_length=60)
+    last_name: str = Field(min_length=1, max_length=60)
+
+    @field_validator("email")
+    @classmethod
+    def _validate_email_format(cls, v: str) -> str:
+        v = v.strip()
+        if not is_valid_email_format(v):
+            raise ValueError("Enter a valid email address.")
+        return v
+
+
+_SCOPE_TYPES = ("global", "college", "company")
+
+
+class GrantPermissionIn(BaseModel):
+    """Super Admin grants one permission to a delegated admin, optionally
+    scoped to a single college/company and/or with an expiry. Whether the
+    permission itself supports that scope, and whether the resource exists,
+    is validated in services/admin/permissions.grant_permission — this
+    schema only checks shape."""
+    permission: str = Field(min_length=1, max_length=60)
+    scope_type: str = "global"
+    scope_id: Optional[UUID] = None
+    expires_at: Optional[str] = Field(default=None, description="ISO 8601 instant; omit for no expiry.")
+
+    @field_validator("scope_type")
+    @classmethod
+    def _validate_scope_type(cls, v: str) -> str:
+        if v not in _SCOPE_TYPES:
+            raise ValueError(f"scope_type must be one of {_SCOPE_TYPES}.")
+        return v
+
+    @model_validator(mode="after")
+    def _scope_id_required_when_scoped(self) -> "GrantPermissionIn":
+        if self.scope_type != "global" and not self.scope_id:
+            raise ValueError("scope_id is required when scope_type is not 'global'.")
+        return self
+
+
 # ── Company Portal payloads ───────────────────────────────────────────
 
 class CompanySignupIn(BaseModel):

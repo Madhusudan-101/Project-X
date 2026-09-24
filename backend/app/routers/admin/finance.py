@@ -23,6 +23,7 @@ from fastapi import APIRouter, Depends
 
 from ...deps import require_admin_role
 from ...services.admin.common import DateRange, date_range
+from ...services.admin.permissions import require_permission
 
 router = APIRouter(prefix="/admin/finance", tags=["admin-finance"], dependencies=[Depends(require_admin_role)])
 
@@ -44,5 +45,5 @@ def get_finance_summary(rng: DateRange) -> Dict[str, Any]:
 
 
 @router.get("/summary")
-def finance_summary(rng: DateRange = Depends(date_range)):
+def finance_summary(rng: DateRange = Depends(date_range), admin: dict = Depends(require_permission("billing.view"))):
     return get_finance_summary(rng)

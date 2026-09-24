@@ -261,8 +261,25 @@ deps.db_client.storage.get_bucket = lambda name: {"name": name}
 
 def seed_profiles():
     db.reset()
-    db.tables["profiles"] = [{"id": uid, "email": f"{uid}@t.test", "role": role} for uid, role in ROLES.items()]
-    db.tables["colleges"] = [{"id": "col-1", "name": "Alpha College"}]
+    db.tables["profiles"] = [
+        # u-admin is a pre-existing admin, grandfathered to Super Admin by
+        # db/admin_permissions_migration.sql (2.) — matches production: an
+        # admin that existed before the permission system already had full,
+        # unrestricted access, so the migration never narrows it.
+        {"id": uid, "email": f"{uid}@t.test", "role": role, "is_super_admin": uid == "u-admin"}
+        for uid, role in ROLES.items()
+    ]
+    db.tables["colleges"] = [
+        {"id": "col-1", "name": "Alpha College"},
+        {"id": "11111111-1111-1111-1111-111111111111", "name": "Beta College"},
+        {"id": "33333333-3333-3333-3333-333333333333", "name": "Gamma College"},
+        {"id": "44444444-4444-4444-4444-444444444444", "name": "Delta College"},
+    ]
+    db.tables["companies"] = [
+        {"id": "comp-1", "name": "Comp One"},
+        {"id": "22222222-2222-2222-2222-222222222222", "name": "Beta Co"},
+    ]
+    db.tables["admin_user_permissions"] = []
 
 
 client = TestClient(app, raise_server_exceptions=False)
@@ -816,7 +833,12 @@ def main() -> int:
     ok = block_user("u-admin2", BlockUserIn(permanent=True, reason="test"), {"id": "u-admin", "profile_role": "admin", "email": "u-admin@t.test"})
     check("blocking one of TWO active admins is fine (one remains active)", ok["is_blocked"] is True)
     try:
-        block_user("u-admin", BlockUserIn(permanent=True, reason="test"), {"id": "u-admin3", "profile_role": "admin", "email": "x@t.test"})
+        # is_super_admin=True on the actor so this exercises the "last active
+        # admin" guard specifically, not the separate "only a Super Admin can
+        # disable a Super Admin" guard below (u-admin, the target here, is
+        # itself the grandfathered Super Admin from seed_profiles()).
+        block_user("u-admin", BlockUserIn(permanent=True, reason="test"),
+                   {"id": "u-admin3", "profile_role": "admin", "email": "x@t.test", "is_super_admin": True})
         check("blocking the only remaining active admin is refused", False)
     except Exception as e:
         check("blocking the only remaining active admin is refused",
@@ -893,6 +915,312 @@ def main() -> int:
     print("\n== CTC by company ==")
     r = client.get("/admin/ctc-by-company", headers=H)
     check("ctc by company -> 200", r.status_code == 200 and r.json()["items"][0]["company_name"] == "K", r.text)
+
+    print("\n== Granular Admin permissions: Super Admin vs delegated admin ==")
+    # Every call below is a direct API request against the real routes and
+    # dependencies (require_permission / require_super_admin), never a
+    # simulated UI click — this is the "test direct API requests, not just
+    # frontend buttons" requirement.
+    seed_profiles(); install_rpc_defaults()
+    db.tables["profiles"].append({"id": "u-delegated", "email": "delegated@t.test", "role": "admin", "is_super_admin": False})
+    db.tables["profiles"].append({"id": "u-super2", "email": "super2@t.test", "role": "admin", "is_super_admin": True})
+    TOKENS["tok-delegated"] = ("u-delegated", {"role": "admin"})
+    TOKENS["tok-super2"] = ("u-super2", {"role": "admin"})
+    H_SUPER, H_DEL = bearer("tok-admin"), bearer("tok-delegated")
+    BETA_COLLEGE = "11111111-1111-1111-1111-111111111111"
+
+    r = client.get("/admin/me", headers=H_SUPER)
+    check("GET /admin/me: Super Admin -> is_super_admin true, no grant list needed",
+          r.status_code == 200 and r.json()["is_super_admin"] is True, r.text)
+    r = client.get("/admin/me", headers=H_DEL)
+    check("GET /admin/me: fresh delegated admin -> is_super_admin false, no permissions yet",
+          r.status_code == 200 and r.json()["is_super_admin"] is False and r.json()["permissions"] == [], r.text)
+    for t in ("tok-candidate", "tok-company", "tok-college"):
+        check(f"GET /admin/me ({t}): not an admin at all -> 403", client.get("/admin/me", headers=bearer(t)).status_code == 403)
+
+    r = client.get("/admin/permissions/catalog", headers=H_DEL)
+    check("GET /admin/permissions/catalog: any admin can read the catalog -> 200",
+          r.status_code == 200 and any(m["module"] == "colleges" for m in r.json()["modules"]), r.text)
+
+    print("\n-- A delegated admin with no grants is denied everywhere --")
+    for path in ("/admin/colleges", "/admin/candidates", "/admin/users", "/admin/reports/platform-usage"):
+        r = client.get(path, headers=H_DEL)
+        check(f"no grants: GET {path} -> 403", r.status_code == 403, r.text)
+
+    print("\n-- Only a Super Admin can manage admins/permissions, even with other grants --")
+    r = client.post("/admin/admin-users", json={"email": "x@y.zz", "first_name": "A", "last_name": "B"}, headers=H_DEL)
+    check("delegated admin cannot create another admin -> 403", r.status_code == 403, r.text)
+    r = client.post("/admin/admin-users/u-delegated/permissions", json={"permission": "colleges.view"}, headers=H_DEL)
+    check("delegated admin cannot grant THEMSELVES a permission -> 403", r.status_code == 403, r.text)
+    r = client.post("/admin/admin-users/u-admin/permissions", json={"permission": "colleges.view"}, headers=H_DEL)
+    check("delegated admin cannot grant ANOTHER user a permission either -> 403", r.status_code == 403, r.text)
+    r = client.post("/admin/admin-users/u-admin/permissions", json={"permission": "colleges.view"}, headers=H_SUPER)
+    check("granting a permission to a Super Admin is refused -> 409 (already has everything)", r.status_code == 409, r.text)
+
+    print("\n-- View-only permission: read works, write/other-module don't --")
+    r = client.post("/admin/admin-users/u-delegated/permissions", json={"permission": "candidates.view"}, headers=H_SUPER)
+    check("Super Admin grants candidates.view -> 201", r.status_code == 201, r.text)
+    candidates_grant_id = r.json()["id"]
+    check("GET /admin/candidates: now allowed -> 200", client.get("/admin/candidates", headers=H_DEL).status_code == 200)
+    check("GET /admin/candidates/export: view does not imply export -> 403",
+          client.get("/admin/candidates/export", headers=H_DEL).status_code == 403)
+    check("GET /admin/colleges: a different module entirely -> 403",
+          client.get("/admin/colleges", headers=H_DEL).status_code == 403)
+    check("POST /admin/colleges: candidates.view never implies a write on another module -> 403",
+          client.post("/admin/colleges", json={"email": "x@y.zz", "first_name": "A", "last_name": "B", "college_name": "Z"}, headers=H_DEL).status_code == 403)
+
+    print("\n-- Resource-scoped permission --")
+    r = client.post("/admin/admin-users/u-delegated/permissions",
+                     json={"permission": "colleges.view", "scope_type": "college", "scope_id": BETA_COLLEGE}, headers=H_SUPER)
+    check(f"Super Admin grants colleges.view scoped to college {BETA_COLLEGE[:8]}... -> 201", r.status_code == 201, r.text)
+    r = client.get(f"/admin/colleges/{BETA_COLLEGE}", headers=H_DEL)
+    check("scoped permission: detail for the granted college -> 200", r.status_code == 200, r.text)
+    other_college = str(uuid.uuid4())
+    r = client.get(f"/admin/colleges/{other_college}", headers=H_DEL)
+    check("scoped permission: detail for a DIFFERENT college -> 403 (never trusts the path id alone)", r.status_code == 403, r.text)
+    db.rpc_calls.clear()
+    r = client.get("/admin/colleges", headers=H_DEL)
+    check("scoped permission: LIST is still allowed -> 200", r.status_code == 200, r.text)
+    list_call = next(c for c in db.rpc_calls if c[0] == "admin_list_colleges")
+    check("...and the scope is FORCED into the query server-side, not left to the client",
+          list_call[1]["p_college_ids"] == [BETA_COLLEGE], list_call)
+
+    print("\n-- Multi-scope: several grants of the SAME permission combine (union), never override each other --")
+    GAMMA_COLLEGE = "33333333-3333-3333-3333-333333333333"
+    DELTA_COLLEGE = "44444444-4444-4444-4444-444444444444"
+    UNAUTHORIZED_COLLEGE = str(uuid.uuid4())  # never granted to u-delegated
+    check("[1 scope] a college never granted -> 403 (unauthorized college)",
+          client.get(f"/admin/colleges/{UNAUTHORIZED_COLLEGE}", headers=H_DEL).status_code == 403)
+
+    r = client.post("/admin/admin-users/u-delegated/permissions",
+                     json={"permission": "colleges.view", "scope_type": "college", "scope_id": GAMMA_COLLEGE}, headers=H_SUPER)
+    check("[2 scopes] grant a SECOND colleges.view scope (Gamma) -> 201", r.status_code == 201, r.text)
+    check("[2 scopes] detail: Beta (1st scope) still -> 200", client.get(f"/admin/colleges/{BETA_COLLEGE}", headers=H_DEL).status_code == 200)
+    check("[2 scopes] detail: Gamma (2nd scope) -> 200 now that it is granted", client.get(f"/admin/colleges/{GAMMA_COLLEGE}", headers=H_DEL).status_code == 200)
+    check("[2 scopes] detail: an unauthorized college -> still 403", client.get(f"/admin/colleges/{UNAUTHORIZED_COLLEGE}", headers=H_DEL).status_code == 403)
+    db.rpc_calls.clear()
+    r = client.get("/admin/colleges", headers=H_DEL)
+    check("[2 scopes] list endpoint -> 200", r.status_code == 200, r.text)
+    call2 = next(c for c in db.rpc_calls if c[0] == "admin_list_colleges")
+    check("[2 scopes] list forces the UNION of both permitted colleges (not just one)",
+          set(call2[1]["p_college_ids"]) == {BETA_COLLEGE, GAMMA_COLLEGE}, call2)
+    for cid in (BETA_COLLEGE, GAMMA_COLLEGE):
+        r = client.post("/admin/admin-users/u-delegated/permissions",
+                         json={"permission": "colleges.export", "scope_type": "college", "scope_id": cid}, headers=H_SUPER)
+        check(f"grant colleges.export scoped to {cid[:8]}... too (view does not imply export) -> 201", r.status_code == 201, r.text)
+    db.rpc_calls.clear()
+    r = client.get("/admin/colleges/export", headers=H_DEL)
+    check("[2 scopes] export endpoint -> 200", r.status_code == 200, r.text)
+    call2x = next(c for c in db.rpc_calls if c[0] == "admin_list_colleges")
+    check("[2 scopes] export forces the same union", set(call2x[1]["p_college_ids"]) == {BETA_COLLEGE, GAMMA_COLLEGE}, call2x)
+
+    r = client.post("/admin/admin-users/u-delegated/permissions",
+                     json={"permission": "colleges.view", "scope_type": "college", "scope_id": DELTA_COLLEGE}, headers=H_SUPER)
+    check("[3 scopes] grant a THIRD colleges.view scope (Delta) -> 201", r.status_code == 201, r.text)
+    delta_grant_id = r.json()["id"]
+    check("[3 scopes] detail: Delta (3rd scope) -> 200", client.get(f"/admin/colleges/{DELTA_COLLEGE}", headers=H_DEL).status_code == 200)
+    db.rpc_calls.clear()
+    client.get("/admin/colleges", headers=H_DEL)
+    call3 = next(c for c in db.rpc_calls if c[0] == "admin_list_colleges")
+    check("[3 scopes] list forces the union of all THREE permitted colleges",
+          set(call3[1]["p_college_ids"]) == {BETA_COLLEGE, GAMMA_COLLEGE, DELTA_COLLEGE}, call3)
+
+    print("\n-- Multi-scope: revoking ONE scoped grant only shrinks that one --")
+    r = client.post(f"/admin/admin-users/u-delegated/permissions/{delta_grant_id}/revoke", headers=H_SUPER)
+    check("revoke the Delta scope specifically -> 200", r.status_code == 200, r.text)
+    check("revoked scoped permission: Delta -> 403 immediately", client.get(f"/admin/colleges/{DELTA_COLLEGE}", headers=H_DEL).status_code == 403)
+    check("...the other two scopes are untouched -> still 200",
+          client.get(f"/admin/colleges/{BETA_COLLEGE}", headers=H_DEL).status_code == 200
+          and client.get(f"/admin/colleges/{GAMMA_COLLEGE}", headers=H_DEL).status_code == 200)
+    db.rpc_calls.clear()
+    client.get("/admin/colleges", headers=H_DEL)
+    call_after_revoke = next(c for c in db.rpc_calls if c[0] == "admin_list_colleges")
+    check("...and the list's union shrinks to the remaining 2, not left over from before",
+          set(call_after_revoke[1]["p_college_ids"]) == {BETA_COLLEGE, GAMMA_COLLEGE}, call_after_revoke)
+
+    print("\n-- Multi-scope: an expired scoped grant drops out of the union; others unaffected --")
+    near_future = (datetime.now(timezone.utc) + timedelta(days=1)).isoformat()
+    r = client.post("/admin/admin-users/u-delegated/permissions",
+                     json={"permission": "colleges.view", "scope_type": "college", "scope_id": DELTA_COLLEGE, "expires_at": near_future},
+                     headers=H_SUPER)
+    check("re-grant the Delta scope with a future expiry -> 201", r.status_code == 201, r.text)
+    check("not yet expired -> 200", client.get(f"/admin/colleges/{DELTA_COLLEGE}", headers=H_DEL).status_code == 200)
+    for row in db.tables["admin_user_permissions"]:
+        if row["user_id"] == "u-delegated" and row["permission"] == "colleges.view" and row["scope_id"] == DELTA_COLLEGE:
+            row["expires_at"] = "2020-01-01T00:00:00+00:00"  # simulate time passing
+    check("expired scoped permission: Delta -> 403", client.get(f"/admin/colleges/{DELTA_COLLEGE}", headers=H_DEL).status_code == 403)
+    check("...Beta / Gamma (not expired) -> still 200",
+          client.get(f"/admin/colleges/{BETA_COLLEGE}", headers=H_DEL).status_code == 200
+          and client.get(f"/admin/colleges/{GAMMA_COLLEGE}", headers=H_DEL).status_code == 200)
+    db.rpc_calls.clear()
+    client.get("/admin/colleges", headers=H_DEL)
+    call_after_expiry = next(c for c in db.rpc_calls if c[0] == "admin_list_colleges")
+    check("...the expired scope is excluded from the list's union too",
+          set(call_after_expiry[1]["p_college_ids"]) == {BETA_COLLEGE, GAMMA_COLLEGE}, call_after_expiry)
+
+    print("\n-- Multi-scope: a GLOBAL grant of the SAME permission always wins, never additively combined with scoped ones --")
+    # candidates.view was granted GLOBALLY earlier in this run and is still active on
+    # u-delegated at this point (it isn't revoked until the section below).
+    check("global candidates.view -> 200, unfiltered", client.get("/admin/candidates", headers=H_DEL).status_code == 200)
+    r = client.post("/admin/admin-users/u-delegated/permissions",
+                     json={"permission": "candidates.view", "scope_type": "college", "scope_id": DELTA_COLLEGE}, headers=H_SUPER)
+    check("ALSO grant candidates.view scoped to Delta, on top of the existing global grant -> 201", r.status_code == 201, r.text)
+    db.rpc_calls.clear()
+    r = client.get("/admin/candidates", headers=H_DEL)
+    check("mixed global+scoped: list endpoint still -> 200", r.status_code == 200, r.text)
+    mixed_call = next(c for c in db.rpc_calls if c[0] == "admin_list_candidates")
+    check("...global still means UNRESTRICTED: no p_college_ids override is applied despite the scoped grant existing too",
+          "p_college_ids" not in mixed_call[1], mixed_call)
+    # Clean up the extra scoped grant so the "revoke -> 403" assertion further below
+    # (which revokes only the GLOBAL candidates.view grant) is not masked by it.
+    scoped_cand = next(g for g in db.tables["admin_user_permissions"]
+                        if g["user_id"] == "u-delegated" and g["permission"] == "candidates.view" and g["scope_type"] == "college")
+    check("cleanup: revoke the extra scoped candidates.view grant -> 200",
+          client.post(f"/admin/admin-users/u-delegated/permissions/{scoped_cand['id']}/revoke", headers=H_SUPER).status_code == 200)
+
+    print("\n-- Expiring permissions (checked live, no cleanup job) --")
+    r = client.post("/admin/admin-users/u-delegated/permissions",
+                     json={"permission": "reports.view", "expires_at": "2020-01-01T00:00:00Z"}, headers=H_SUPER)
+    check("granting with a past expires_at is rejected -> 422", r.status_code == 422, r.text)
+    future = (datetime.now(timezone.utc) + timedelta(days=1)).isoformat()
+    r = client.post("/admin/admin-users/u-delegated/permissions", json={"permission": "reports.view", "expires_at": future}, headers=H_SUPER)
+    check("granting reports.view until tomorrow -> 201", r.status_code == 201, r.text)
+    check("not yet expired -> 200", client.get("/admin/reports/platform-usage", headers=H_DEL).status_code == 200)
+    for row in db.tables["admin_user_permissions"]:
+        if row["user_id"] == "u-delegated" and row["permission"] == "reports.view":
+            row["expires_at"] = "2020-01-01T00:00:00+00:00"  # simulate time passing
+    check("expired permission -> 403 immediately, nothing had to run to expire it",
+          client.get("/admin/reports/platform-usage", headers=H_DEL).status_code == 403)
+
+    print("\n-- Revoke: one, then all --")
+    check("candidates.view still active before revoke -> 200", client.get("/admin/candidates", headers=H_DEL).status_code == 200)
+    r = client.post(f"/admin/admin-users/u-delegated/permissions/{candidates_grant_id}/revoke", headers=H_SUPER)
+    check("Super Admin revokes candidates.view -> 200", r.status_code == 200, r.text)
+    check("revoked permission -> 403 on the very next request, no re-login required",
+          client.get("/admin/candidates", headers=H_DEL).status_code == 403)
+    check("the scoped colleges.view grant is untouched by revoking a DIFFERENT grant -> 200",
+          client.get(f"/admin/colleges/{BETA_COLLEGE}", headers=H_DEL).status_code == 200)
+    r = client.post("/admin/admin-users/u-delegated/permissions/revoke-all", headers=H_SUPER)
+    check("Super Admin revokes ALL of the delegated admin's permissions at once -> 200", r.status_code == 200, r.text)
+    check("...and every module is now denied again", client.get(f"/admin/colleges/{BETA_COLLEGE}", headers=H_DEL).status_code == 403)
+
+    print("\n-- Disabling reuses the EXISTING block/unblock mechanism --")
+    r = client.post("/admin/admin-users/u-delegated/permissions", json={"permission": "colleges.view"}, headers=H_SUPER)
+    check("re-grant colleges.view for the disable test -> 201", r.status_code == 201, r.text)
+    check("granted -> 200 before disabling", client.get("/admin/colleges", headers=H_DEL).status_code == 200)
+    r = client.post("/admin/admin-users/u-delegated/permissions", json={"permission": "users.view"}, headers=H_SUPER)
+    check("also grant users.view so a Super Admin can list admins", r.status_code == 201, r.text)
+    r = client.post("/admin/users/u-delegated/block", json={"permanent": True, "reason": "left the team"}, headers=H_SUPER)
+    check("Super Admin disables (blocks) the delegated admin -> 200", r.status_code == 200, r.text)
+    check("disabled delegated admin -> 403 on every route, even one they had a live grant for",
+          client.get("/admin/colleges", headers=H_DEL).status_code == 403)
+    r = client.post("/admin/users/u-delegated/unblock", json={}, headers=H_SUPER)
+    check("Super Admin re-enables the delegated admin -> 200", r.status_code == 200, r.text)
+    check("reactivated -> access restored without re-granting anything",
+          client.get("/admin/colleges", headers=H_DEL).status_code == 200)
+
+    print("\n-- A Super Admin cannot be disabled by a delegated admin --")
+    r = client.post("/admin/admin-users/u-delegated/permissions", json={"permission": "users.block"}, headers=H_SUPER)
+    check("grant users.block to the delegated admin -> 201", r.status_code == 201, r.text)
+    r = client.post("/admin/users/u-super2/block", json={"permanent": True, "reason": "test"}, headers=H_DEL)
+    check("delegated admin WITH users.block still cannot disable a Super Admin -> 403", r.status_code == 403, r.text)
+    r = client.post("/admin/users/u-candidate/block", json={"permanent": True, "reason": "test"}, headers=H_DEL)
+    check("...but CAN block an ordinary account with that same permission -> 200", r.status_code == 200, r.text)
+    client.post("/admin/users/u-candidate/unblock", json={}, headers=H_SUPER)
+
+    print("\n-- Permission history & viewing another admin's grants --")
+    r = client.get("/admin/admin-users/u-delegated/permissions", headers=H_SUPER)
+    check("Super Admin can view a delegated admin's permissions + history -> 200",
+          r.status_code == 200 and "history" in r.json() and "permissions" in r.json(), r.text)
+    r = client.get("/admin/admin-users/u-delegated/permissions", headers=H_DEL)
+    check("a delegated admin can view their OWN permissions -> 200", r.status_code == 200, r.text)
+    r = client.get("/admin/admin-users/u-admin/permissions", headers=H_DEL)
+    check("...but not another admin's -> 403", r.status_code == 403, r.text)
+    granted = [e for e in db.tables.get("admin_events", []) if e["event_type"] == "permission_granted"]
+    revoked = [e for e in db.tables.get("admin_events", []) if e["event_type"] == "permission_revoked"]
+    check("every grant above was recorded as permission_granted", len(granted) >= 5, len(granted))
+    check("every revoke (single + revoke-all) was recorded as permission_revoked", len(revoked) >= 3, len(revoked))
+    check("a permission_granted event names the granter, target and permission",
+          granted[0]["actor_label"] == "u-admin@t.test" and granted[0]["target_id"] == "u-delegated"
+          and "permission" in granted[0]["metadata"], granted[0])
+
+    print("\n-- Invalid grants are rejected --")
+    check("unknown permission -> 422",
+          client.post("/admin/admin-users/u-delegated/permissions", json={"permission": "not.a.real.permission"}, headers=H_SUPER).status_code == 422)
+    check("scoping a global-only permission (users.view) to a college -> 422",
+          client.post("/admin/admin-users/u-delegated/permissions",
+                       json={"permission": "users.view", "scope_type": "college", "scope_id": BETA_COLLEGE}, headers=H_SUPER).status_code == 422)
+    check("scoping to a college that does not exist -> 404",
+          client.post("/admin/admin-users/u-delegated/permissions",
+                       json={"permission": "colleges.view", "scope_type": "college", "scope_id": str(uuid.uuid4())}, headers=H_SUPER).status_code == 404)
+    check("granting to a non-admin account -> 422",
+          client.post("/admin/admin-users/u-candidate/permissions", json={"permission": "colleges.view"}, headers=H_SUPER).status_code == 422)
+
+    print("\n-- Creating a delegated admin --")
+    r = client.post("/admin/admin-users", json={"email": "newdelegate@t.test", "first_name": "New", "last_name": "Delegate"}, headers=H_SUPER)
+    check("Super Admin creates a delegated admin -> 201/200", r.status_code in (200, 201), r.text)
+    new_id = r.json()["user_id"]
+    new_profile = next(p for p in db.tables["profiles"] if p["id"] == new_id)
+    check("a freshly-created delegated admin is NOT a Super Admin by default",
+          not new_profile.get("is_super_admin"), new_profile)
+    r = client.get(f"/admin/admin-users/{new_id}/permissions", headers=H_SUPER)
+    check("a brand-new delegated admin starts with zero permissions", r.status_code == 200 and r.json()["permissions"] == [], r.text)
+
+    r = client.post("/admin/admin-users",
+                     json={"email": "sneaky@t.test", "first_name": "Sneaky", "last_name": "One", "is_super_admin": True},
+                     headers=H_SUPER)
+    check("smuggling is_super_admin=true in the create-admin body -> silently ignored, not honored -> 201", r.status_code == 201, r.text)
+    sneaky_id = r.json()["user_id"]
+    sneaky_profile = next(p for p in db.tables["profiles"] if p["id"] == sneaky_id)
+    check("...the created account is still an ordinary (non-super) delegated admin",
+          not sneaky_profile.get("is_super_admin"), sneaky_profile)
+
+    print("\n== Global search is gated per entity type by the SAME view permissions, not a free-for-all ==")
+    # Regression test for a real hole: admin_global_search's candidate branch
+    # returns a real email address, so a delegated admin with NO candidates.view
+    # must not be able to discover one by searching, even though search is a
+    # cross-entity convenience feature. See routers/admin/search.py.
+    seed_profiles(); install_rpc_defaults()
+    db.tables["profiles"].append({"id": "u-search-del", "email": "searchdel@t.test", "role": "admin", "is_super_admin": False})
+    TOKENS["tok-search-del"] = ("u-search-del", {"role": "admin"})
+    H_SEARCH_DEL = bearer("tok-search-del")
+    db.rpc_results["admin_global_search"] = [
+        {"entity_type": "college", "id": "col-1", "title": "Alpha College", "subtitle": "Pune"},
+        {"entity_type": "candidate", "id": "u-candidate", "title": "Cara Candidate", "subtitle": "cara@t.test"},
+    ]
+
+    r = client.get("/admin/search?q=a", headers=H_SEARCH_DEL)
+    check("delegated admin with ZERO permissions: search -> 200 but every group is empty (no leaked candidate email)",
+          r.status_code == 200 and r.json()["groups"] == {}, r.text)
+
+    r = client.post("/admin/admin-users/u-search-del/permissions", json={"permission": "colleges.view"}, headers=H_SUPER)
+    check("grant colleges.view only -> 201", r.status_code == 201, r.text)
+    r = client.get("/admin/search?q=a", headers=H_SEARCH_DEL)
+    body = r.json()
+    check("with only colleges.view: college results appear, candidate results are still withheld",
+          r.status_code == 200 and "college" in body["groups"] and "candidate" not in body["groups"], body)
+
+    r = client.post("/admin/admin-users/u-search-del/permissions", json={"permission": "candidates.view"}, headers=H_SUPER)
+    check("also grant candidates.view -> 201", r.status_code == 201, r.text)
+    r = client.get("/admin/search?q=a", headers=H_SEARCH_DEL)
+    body = r.json()
+    check("with candidates.view too: both groups now appear",
+          r.status_code == 200 and "college" in body["groups"] and "candidate" in body["groups"], body)
+
+    # A candidates.view scoped to one college must narrow search the same way
+    # it narrows /admin/candidates — verified via the RPC params sent, exactly
+    # like the list/export scoping tests above (FakeDB doesn't simulate the
+    # SQL WHERE clause itself; that is covered end-to-end in test_admin_portal_sql.py).
+    r = client.post("/admin/admin-users/u-search-del/permissions/revoke-all", headers=H_SUPER)
+    check("cleanup: revoke all of u-search-del's permissions -> 200", r.status_code == 200, r.text)
+    r = client.post("/admin/admin-users/u-search-del/permissions",
+                     json={"permission": "candidates.view", "scope_type": "college", "scope_id": BETA_COLLEGE}, headers=H_SUPER)
+    check("grant candidates.view scoped to one college -> 201", r.status_code == 201, r.text)
+    db.rpc_calls.clear()
+    client.get("/admin/search?q=a", headers=H_SEARCH_DEL)
+    search_call = next(c for c in db.rpc_calls if c[0] == "admin_global_search")
+    check("...and the search RPC call itself carries the scope's college_ids, not an unrestricted search",
+          search_call[1].get("p_college_ids") == [BETA_COLLEGE], search_call)
 
     print(f"\n=== {passed}/{passed + failed} passed, {failed} failed ===")
     return 0 if failed == 0 else 1

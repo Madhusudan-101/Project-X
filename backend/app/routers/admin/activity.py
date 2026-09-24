@@ -21,6 +21,7 @@ from ...services.admin.common import (
     page_params, rpc, rpc_all, rpc_page,
 )
 from ...services.admin.events import EVENT_TYPES, log_event
+from ...services.admin.permissions import require_permission
 
 router = APIRouter(prefix="/admin", tags=["admin-activity"], dependencies=[Depends(require_admin_role)])
 
@@ -38,7 +39,7 @@ _FEED_KINDS = (
 # call sites): the block/unblock target ("user"), each table's csv_exported target,
 # the audit log's own export, and the two aggregate reports.
 _TARGET_TYPES = ("user", "colleges", "companies", "candidates", "drives", "partnerships",
-                  "users", "audit_log", "application_funnel", "compensation")
+                  "users", "audit_log", "application_funnel", "compensation", "admin_permission")
 _ACTOR_ROLES = ("admin", "college", "company", "candidate")
 _RESULTS = ("success", "failure")
 
@@ -55,6 +56,7 @@ def live_activity(
     before: Optional[datetime] = Query(None, description="Keyset cursor: the oldest occurred_at already shown."),
     kind: Optional[str] = Query(None),
     limit: int = Query(30, ge=1, le=100),
+    admin: dict = Depends(require_permission("audit.view")),
 ):
     items = rpc("admin_activity_feed", {
         **rng.params(),
@@ -92,6 +94,7 @@ def audit_log(
     target_type: Optional[str] = Query(None),
     result: Optional[str] = Query(None),
     target_id: Optional[UUID] = Query(None),
+    admin: dict = Depends(require_permission("audit.view")),
 ):
     params = _audit_params(rng, search, event_type, actor_role, target_type, result, target_id)
     return rpc_page("admin_list_events", params, page)
@@ -106,7 +109,7 @@ def export_audit_log(
     target_type: Optional[str] = Query(None),
     result: Optional[str] = Query(None),
     target_id: Optional[UUID] = Query(None),
-    admin: dict = Depends(require_admin_role),
+    admin: dict = Depends(require_permission("audit.export")),
 ):
     params = _audit_params(rng, search, event_type, actor_role, target_type, result, target_id)
     export_result = rpc_all("admin_list_events", params)

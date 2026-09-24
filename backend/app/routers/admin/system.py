@@ -17,6 +17,7 @@ from typing import Any, Dict
 from fastapi import APIRouter, Depends
 
 from ...deps import admin_client, db_client, require_admin_role
+from ...services.admin.permissions import require_permission
 
 router = APIRouter(prefix="/admin/system-health", tags=["admin-system"], dependencies=[Depends(require_admin_role)])
 
@@ -36,7 +37,7 @@ def _timed_check(fn) -> Dict[str, Any]:
 
 
 @router.get("")
-def system_health():
+def system_health(admin: dict = Depends(require_permission("system.view"))):
     checks = {
         # True by construction: this handler is running, so the API answered.
         "api": {"status": "operational", "latency_ms": 0},

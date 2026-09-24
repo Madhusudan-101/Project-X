@@ -475,7 +475,12 @@ create or replace function public.admin_list_colleges(
   p_search text default null, p_registration text default 'registered',
   p_activity text default null, p_college_id uuid default null,
   p_sort text default 'applications', p_dir text default 'desc',
-  p_limit int default 25, p_offset int default 0
+  p_limit int default 25, p_offset int default 0,
+  -- Admin permission scoping (app/services/admin/permissions.py): the union
+  -- of every college a caller's grants for this module permit, when they
+  -- hold more than one scoped grant. NULL (the default) = unrestricted by
+  -- this dimension — every existing caller that doesn't pass it is unaffected.
+  p_college_ids uuid[] default null
 )
 returns table (
   college_id uuid, name text, city text, state text, college_type text,
@@ -548,6 +553,7 @@ begin
       left join pd   on pd.college_id   = c.id
       left join act  on act.actor_id    = c.id
      where (p_college_id is null or c.id = p_college_id)
+       and (p_college_ids is null or c.id = any(p_college_ids))
        and (p_search is null or p_search = ''
             or strpos(lower(c.name), lower(p_search)) > 0
             or strpos(lower(coalesce(c.city, '')), lower(p_search)) > 0)
@@ -601,7 +607,9 @@ create or replace function public.admin_list_companies(
   p_search text default null, p_activity text default null, p_verified boolean default null,
   p_company_id uuid default null,
   p_sort text default 'applications', p_dir text default 'desc',
-  p_limit int default 25, p_offset int default 0
+  p_limit int default 25, p_offset int default 0,
+  -- Admin permission scoping — see admin_list_colleges' p_college_ids.
+  p_company_ids uuid[] default null
 )
 returns table (
   company_id uuid, name text, industry text, size text, is_verified boolean,
@@ -656,6 +664,7 @@ begin
       left join dr   on dr.company_id   = c.id
       left join act  on act.actor_id    = c.id
      where (p_company_id is null or c.id = p_company_id)
+       and (p_company_ids is null or c.id = any(p_company_ids))
        and (p_verified is null or c.is_verified = p_verified)
        and (p_search is null or p_search = ''
             or strpos(lower(c.name), lower(p_search)) > 0
@@ -710,7 +719,9 @@ create or replace function public.admin_list_candidates(
   p_company_id uuid default null, p_drive_id uuid default null,
   p_status text default null, p_registered_in_range boolean default false,
   p_sort text default 'registered_at', p_dir text default 'desc',
-  p_limit int default 25, p_offset int default 0
+  p_limit int default 25, p_offset int default 0,
+  -- Admin permission scoping — see admin_list_colleges' p_college_ids.
+  p_college_ids uuid[] default null
 )
 returns table (
   candidate_id uuid, name text, email text,
@@ -757,6 +768,7 @@ begin
       left join fagg on fagg.student_id = p.id
      where p.role = 'candidate'
        and (p_college_id is null or p.college_id = p_college_id)
+       and (p_college_ids is null or p.college_id = any(p_college_ids))
        and (p_search is null or p_search = ''
             or strpos(lower(coalesce(p.name, '')), lower(p_search)) > 0
             or strpos(lower(coalesce(p.first_name, '') || ' ' || coalesce(p.last_name, '')), lower(p_search)) > 0
@@ -801,7 +813,12 @@ create or replace function public.admin_list_drives(
   p_search text default null, p_status text default null,
   p_company_id uuid default null, p_college_id uuid default null,
   p_sort text default 'applications', p_dir text default 'desc',
-  p_limit int default 25, p_offset int default 0
+  p_limit int default 25, p_offset int default 0,
+  -- Admin permission scoping (see admin_list_colleges' p_college_ids). Drives
+  -- are scopable by EITHER dimension, so when a caller's grants cover both
+  -- (e.g. drives.view at College A and drives.view at Company X), a drive
+  -- matching either counts — not just one that matches both.
+  p_college_ids uuid[] default null, p_company_ids uuid[] default null
 )
 returns table (
   drive_id uuid, job_id uuid, job_title text,
@@ -845,6 +862,11 @@ begin
        and (p_status is null or p_status = '' or d.status = p_status)
        and (p_company_id is null or j.company_id = p_company_id)
        and (p_college_id is null or d.college_id = p_college_id)
+       and (
+             (p_college_ids is null and p_company_ids is null)
+          or (p_college_ids is not null and d.college_id = any(p_college_ids))
+          or (p_company_ids is not null and j.company_id = any(p_company_ids))
+           )
        and (p_search is null or p_search = ''
             or strpos(lower(j.title), lower(p_search)) > 0
             or strpos(lower(cmp.name), lower(p_search)) > 0
@@ -889,7 +911,9 @@ create or replace function public.admin_list_partnerships(
   p_from timestamptz, p_to timestamptz,
   p_search text default null, p_company_id uuid default null, p_college_id uuid default null,
   p_sort text default 'applications', p_dir text default 'desc',
-  p_limit int default 25, p_offset int default 0
+  p_limit int default 25, p_offset int default 0,
+  -- Admin permission scoping — see admin_list_drives' p_college_ids / p_company_ids.
+  p_college_ids uuid[] default null, p_company_ids uuid[] default null
 )
 returns table (
   company_id uuid, company_name text, college_id uuid, college_name text,
@@ -932,6 +956,11 @@ begin
       left join fagg on fagg.company_id = pr.company_id and fagg.college_id = pr.college_id
      where (p_company_id is null or pr.company_id = p_company_id)
        and (p_college_id is null or pr.college_id = p_college_id)
+       and (
+             (p_college_ids is null and p_company_ids is null)
+          or (p_college_ids is not null and pr.college_id = any(p_college_ids))
+          or (p_company_ids is not null and pr.company_id = any(p_company_ids))
+           )
        and (p_search is null or p_search = ''
             or strpos(lower(cmp.name), lower(p_search)) > 0
             or strpos(lower(col.name), lower(p_search)) > 0)
@@ -1529,7 +1558,16 @@ $$;
 -- 6.8 Global search — colleges, companies, candidates, drives. Applications
 --     are not a fifth branch: they aren't identified by a human-typed string,
 --     so they are reached by filtering the Candidates page instead.
-create or replace function public.admin_global_search(p_query text, p_limit int default 8)
+create or replace function public.admin_global_search(
+  p_query text, p_limit int default 8,
+  -- Admin permission scoping (app/services/admin/permissions.py): candidate
+  -- results carry a real email address, so a caller whose candidates.view is
+  -- scoped to specific colleges must not find candidates OUTSIDE that scope
+  -- through search either. NULL (the default) = unrestricted, unchanged for
+  -- every existing caller. The other three branches return no personal data
+  -- (an institution/company/job name), so they are not scoped by this.
+  p_college_ids uuid[] default null
+)
 returns table (entity_type text, id uuid, title text, subtitle text)
 language sql stable security definer
 set search_path = public
@@ -1555,6 +1593,7 @@ as $$
            p.email
       from public.profiles p, q
      where p.role = 'candidate' and q.v is not null
+       and (p_college_ids is null or p.college_id = any(p_college_ids))
        and (strpos(lower(coalesce(p.name, '')), lower(q.v)) > 0
             or strpos(lower(coalesce(p.email, '')), lower(q.v)) > 0)
      order by p.created_at desc limit greatest(p_limit, 0)

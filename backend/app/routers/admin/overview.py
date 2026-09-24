@@ -14,6 +14,7 @@ from fastapi import APIRouter, Depends, Query
 
 from ...deps import require_admin_role
 from ...services.admin.common import DateRange, date_range, ratio, rpc
+from ...services.admin.permissions import require_permission
 
 router = APIRouter(prefix="/admin", tags=["admin"], dependencies=[Depends(require_admin_role)])
 
@@ -37,7 +38,17 @@ def _derived(totals: Dict[str, Any], period: Dict[str, Any]) -> Dict[str, Any]:
 
 
 @router.get("/overview")
-def platform_overview(rng: DateRange = Depends(date_range)):
+def platform_overview(rng: DateRange = Depends(date_range), admin: dict = Depends(require_admin_role)):
+    """Unscoped by design, reviewed for sensitivity: admin_overview() returns
+    only platform-wide COUNTS (users, colleges, drives, applications, ...) —
+    no names, emails, financial figures or per-record data (finance.py /
+    billing.view is the only place money-shaped numbers appear, and it has
+    none of this function's fields). CandidatesPage / CollegesPage /
+    UsersPage all reuse this endpoint for their own KPI header, not just the
+    Overview page, so it is available to any admin (delegated or not) rather
+    than gated behind analytics.view specifically — narrowing it would break
+    those pages' KPI cards for a delegated admin who legitimately has, say,
+    only users.view."""
     raw = rpc("admin_overview", rng.params())
     return {
         "range": _range_out(rng),
@@ -51,18 +62,19 @@ def platform_overview(rng: DateRange = Depends(date_range)):
 def platform_trends(
     rng: DateRange = Depends(date_range),
     tz: str = Query("UTC", max_length=64, description="IANA time zone used to bucket days"),
+    admin: dict = Depends(require_permission("analytics.view")),
 ):
     points = rpc("admin_trends", {**rng.params(), "p_bucket": rng.bucket, "p_tz": tz}) or []
     return {"bucket": rng.bucket, "points": points}
 
 
 @router.get("/activity")
-def recent_activity(limit: int = Query(20, ge=1, le=50)):
+def recent_activity(limit: int = Query(20, ge=1, le=50), admin: dict = Depends(require_permission("analytics.view"))):
     return {"items": rpc("admin_activity", {"p_limit": limit}) or []}
 
 
 @router.get("/placements")
-def placement_summary(rng: DateRange = Depends(date_range)):
+def placement_summary(rng: DateRange = Depends(date_range), admin: dict = Depends(require_permission("analytics.view"))):
     """Funnel, drive status mix and CTC statistics. Drive-, college- and
     company-level breakdowns come from their own paged endpoints."""
     raw = rpc("admin_overview", rng.params())

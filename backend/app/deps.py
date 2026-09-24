@@ -201,19 +201,26 @@ def require_admin_role(current_user: dict = Depends(get_current_user)) -> dict:
     the JWT's user_metadata, which the account holder can edit. A missing
     profile is a 403 (not self-healed): admin accounts are provisioned, never
     created on first sign-in. Every /admin route depends on this.
+
+    Also attaches `is_super_admin`: a Super Admin has unconditional full
+    access to every /admin route (see services/admin/permissions.py); a
+    delegated admin's access is instead governed by their
+    admin_user_permissions grants, checked by that module's
+    `require_permission` — layered on top of this, never instead of it.
     """
     try:
         res = db_client.table("profiles").select(
-            "id, role"
+            "id, role, is_super_admin"
         ).eq("id", current_user["id"]).single().execute()
     except APIError as e:
         raise HTTPException(status_code=403, detail=f"Profile lookup failed: {e.message}")
 
-    role = (res.data or {}).get("role")
+    row = res.data or {}
+    role = row.get("role")
     if role != "admin":
         raise HTTPException(status_code=403, detail="Admin role required")
 
-    return {**current_user, "profile_role": role}
+    return {**current_user, "profile_role": role, "is_super_admin": bool(row.get("is_super_admin"))}
 
 
 def require_candidate_role(current_user: dict = Depends(get_current_user)) -> dict:

@@ -355,7 +355,9 @@ export type EventType =
   | "user_blocked"
   | "user_unblocked"
   | "csv_exported"
-  | "report_generated";
+  | "report_generated"
+  | "permission_granted"
+  | "permission_revoked";
 
 export interface EventItem {
   id: string;
@@ -477,4 +479,71 @@ export interface PlatformUsage {
    * login/export/report data because tracking did not exist yet, not
    * because nothing happened. */
   events_tracking_since: string | null;
+}
+
+// ── Admin Management: granular permissions ───────────────────────────
+// See backend/app/services/admin/permissions.py — the backend is the actual
+// authorization boundary; everything here is UI-only convenience (hiding nav,
+// disabling actions, showing a matrix), never itself a security check.
+
+/** Every permission string the backend understands, e.g. "colleges.view". */
+export type Permission = string;
+
+export type ScopeType = "global" | "college" | "company";
+
+export interface PermissionModule {
+  module: string;
+  label: string;
+  permissions: Permission[];
+  /** Which scope types (beyond "global") at least one permission in this
+   * module supports — e.g. ["college"] for Colleges, [] for Users & Access. */
+  scopable_as: ScopeType[];
+}
+
+export interface PermissionCatalog {
+  modules: PermissionModule[];
+}
+
+export interface PermissionGrant {
+  id: string;
+  user_id: string;
+  permission: Permission;
+  scope_type: ScopeType;
+  /** null for a global grant. */
+  scope_id: string | null;
+  granted_by: string | null;
+  granted_at: string;
+  expires_at: string | null;
+  /** false once expires_at has passed — the row still exists (for history)
+   * until it is explicitly revoked or superseded by a new grant. */
+  is_active: boolean;
+}
+
+export interface AdminMe {
+  id: string;
+  email: string;
+  is_super_admin: boolean;
+  /** Empty for a Super Admin — they don't need explicit grants. */
+  permissions: PermissionGrant[];
+}
+
+export interface AdminPermissionsDetail {
+  user_id: string;
+  permissions: PermissionGrant[];
+  /** permission_granted / permission_revoked events for this admin, newest first. */
+  history: EventItem[];
+}
+
+export interface CreateDelegatedAdminInput {
+  email: string;
+  first_name: string;
+  last_name: string;
+}
+
+export interface GrantPermissionInput {
+  permission: Permission;
+  scope_type: ScopeType;
+  scope_id?: string | null;
+  /** ISO 8601 instant; omit for no expiry. */
+  expires_at?: string | null;
 }

@@ -50,6 +50,8 @@ def block_user(user_id: str, payload: BlockUserIn, admin: Dict[str, Any]) -> Dic
     if user_id == admin["id"]:
         raise HTTPException(status_code=409, detail="You cannot block your own account.")
     target = _get_target(user_id)
+    if target.get("role") == "admin" and target.get("is_super_admin") and not admin.get("is_super_admin"):
+        raise HTTPException(status_code=403, detail="Only a Super Admin can disable another Super Admin.")
     if target.get("role") == "admin" and _other_active_admins(user_id) == 0:
         raise HTTPException(
             status_code=409,

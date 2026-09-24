@@ -17,6 +17,7 @@ from fastapi import APIRouter, Depends
 from ...deps import require_admin_role
 from ...services.admin.common import DateRange, ExportResult, csv_response, date_range, rpc, rpc_all
 from ...services.admin.events import log_event
+from ...services.admin.permissions import require_permission
 
 router = APIRouter(prefix="/admin/reports", tags=["admin-reports"], dependencies=[Depends(require_admin_role)])
 
@@ -41,7 +42,7 @@ def _log_report(admin: dict, report: str, rows: int, total: int, truncated: bool
 
 
 @router.get("/application-funnel/export")
-def export_application_funnel_report(rng: DateRange = Depends(date_range), admin: dict = Depends(require_admin_role)):
+def export_application_funnel_report(rng: DateRange = Depends(date_range), admin: dict = Depends(require_permission("reports.export"))):
     """Every college in the directory (not registered-only — see
     admin_list_colleges' p_registration='all'), so a gap in participation is
     visible rather than hidden by filtering it out."""
@@ -54,7 +55,7 @@ def export_application_funnel_report(rng: DateRange = Depends(date_range), admin
 
 
 @router.get("/compensation/export")
-def export_compensation_report(rng: DateRange = Depends(date_range), admin: dict = Depends(require_admin_role)):
+def export_compensation_report(rng: DateRange = Depends(date_range), admin: dict = Depends(require_permission("reports.export"))):
     rows = rpc("admin_ctc_by_company", rng.params()) or []
     result = ExportResult(rows=rows, total=len(rows), truncated=False)
     _log_report(admin, "compensation", len(rows), len(rows), False)
@@ -62,5 +63,5 @@ def export_compensation_report(rng: DateRange = Depends(date_range), admin: dict
 
 
 @router.get("/platform-usage")
-def platform_usage_report(rng: DateRange = Depends(date_range)):
+def platform_usage_report(rng: DateRange = Depends(date_range), admin: dict = Depends(require_permission("reports.view"))):
     return rpc("admin_platform_usage", rng.params())

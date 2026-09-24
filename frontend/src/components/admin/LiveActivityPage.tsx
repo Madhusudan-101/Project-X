@@ -3,7 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { formatDistanceToNow, parseISO } from "date-fns";
 import { Loader2, Pause, Play } from "lucide-react";
 import {
-  Award, Building2, CalendarPlus, FileCheck2, FileDown, GraduationCap, LogIn, ShieldCheck as ShieldCheckIcon,
+  Award, Building2, CalendarPlus, FileCheck2, FileDown, GraduationCap, KeyRound, LogIn, ShieldCheck as ShieldCheckIcon,
   ShieldOff, UserPlus, type LucideIcon,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -30,6 +30,8 @@ const ICONS: Record<string, LucideIcon> = {
   user_unblocked: ShieldCheckIcon,
   csv_exported: FileDown,
   report_generated: FileDown,
+  permission_granted: KeyRound,
+  permission_revoked: KeyRound,
 };
 
 const KIND_OPTIONS = Object.entries(EVENT_TYPE_LABEL).map(([value, label]) => ({ value, label }));
@@ -48,6 +50,8 @@ function describe(item: FeedItem): string {
     case "user_unblocked": return `${item.subject} unblocked ${item.detail ?? "a user"}`;
     case "csv_exported": return `${item.subject} exported ${item.detail ?? "a CSV"}`;
     case "report_generated": return `${item.subject} generated ${item.detail ?? "a report"}`;
+    case "permission_granted": return `${item.subject} granted a permission${item.detail ? ` to ${item.detail}` : ""}`;
+    case "permission_revoked": return `${item.subject} revoked a permission${item.detail ? ` from ${item.detail}` : ""}`;
     default: return `${item.subject}${item.detail ? ` — ${item.detail}` : ""}`;
   }
 }

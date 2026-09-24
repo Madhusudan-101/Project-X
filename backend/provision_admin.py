@@ -1,5 +1,8 @@
-"""Create an Admin account. The only way to get one — there is no public admin
-signup and the API cannot mint the first admin.
+"""Create an Admin account, as a Super Admin (full, unrestricted access). The
+only way to get one — there is no public admin signup and the API cannot
+mint the first admin. Further delegated admins, with a narrower, granular
+set of permissions, are created by a Super Admin from the Admin Portal itself
+(POST /admin/admin-users) once this bootstrap account exists.
 
     python provision_admin.py --email you@company.com --first-name Ada --last-name Lovelace
 
@@ -30,6 +33,7 @@ def main() -> int:
         result = provision_account(
             email=args.email, role="admin",
             first_name=args.first_name.strip(), last_name=args.last_name.strip(),
+            is_super_admin=True,
         )
     except HTTPException as e:
         print(f"Failed: {e.detail}")

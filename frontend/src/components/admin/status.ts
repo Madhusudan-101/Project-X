@@ -30,6 +30,8 @@ export const EVENT_TYPE_LABEL: Record<string, string> = {
   user_unblocked: "User unblocked",
   csv_exported: "CSV exported",
   report_generated: "Report generated",
+  permission_granted: "Permission granted",
+  permission_revoked: "Permission revoked",
   candidate_registered: "Candidate registered",
   company_registered: "Company registered",
   college_registered: "College registered",

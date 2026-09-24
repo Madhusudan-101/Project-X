@@ -14,6 +14,7 @@ from ...services.admin.common import (
     page_params, rpc, rpc_all, rpc_page,
 )
 from ...services.admin.events import log_event
+from ...services.admin.permissions import require_permission, scope_college_ids, scope_company_ids
 
 router = APIRouter(prefix="/admin", tags=["admin-placements"], dependencies=[Depends(require_admin_role)])
 
@@ -67,6 +68,16 @@ def _partner_params(
     }
 
 
+def _apply_scope(params: dict, admin: dict) -> dict:
+    college_ids = scope_college_ids(admin)
+    company_ids = scope_company_ids(admin)
+    if college_ids:
+        params["p_college_ids"] = college_ids
+    if company_ids:
+        params["p_company_ids"] = company_ids
+    return params
+
+
 @router.get("/drives")
 def list_drives(
     rng: DateRange = Depends(date_range),
@@ -77,8 +88,10 @@ def list_drives(
     college_id: Optional[UUID] = Query(None),
     sort: Optional[str] = Query(None),
     dir: str = Query("desc"),
+    admin: dict = Depends(require_permission("drives.view")),
 ):
-    return rpc_page("admin_list_drives", _drive_params(rng, search, status, company_id, college_id, sort, dir), page)
+    params = _apply_scope(_drive_params(rng, search, status, company_id, college_id, sort, dir), admin)
+    return rpc_page("admin_list_drives", params, page)
 
 
 @router.get("/drives/export")
@@ -90,9 +103,10 @@ def export_drives(
     college_id: Optional[UUID] = Query(None),
     sort: Optional[str] = Query(None),
     dir: str = Query("desc"),
-    admin: dict = Depends(require_admin_role),
+    admin: dict = Depends(require_permission("drives.export")),
 ):
-    result = rpc_all("admin_list_drives", _drive_params(rng, search, status, company_id, college_id, sort, dir))
+    params = _apply_scope(_drive_params(rng, search, status, company_id, college_id, sort, dir), admin)
+    result = rpc_all("admin_list_drives", params)
     log_event("csv_exported", actor_user_id=admin["id"], actor_role=admin["profile_role"], actor_label=admin["email"],
               target_type="drives", metadata={"rows": len(result.rows), "total": result.total, "truncated": result.truncated})
     return csv_response(result, _DRIVE_COLUMNS, "drives.csv")
@@ -107,8 +121,10 @@ def list_partnerships(
     college_id: Optional[UUID] = Query(None),
     sort: Optional[str] = Query(None),
     dir: str = Query("desc"),
+    admin: dict = Depends(require_permission("partnerships.view")),
 ):
-    return rpc_page("admin_list_partnerships", _partner_params(rng, search, company_id, college_id, sort, dir), page)
+    params = _apply_scope(_partner_params(rng, search, company_id, college_id, sort, dir), admin)
+    return rpc_page("admin_list_partnerships", params, page)
 
 
 @router.get("/partnerships/export")
@@ -119,16 +135,17 @@ def export_partnerships(
     college_id: Optional[UUID] = Query(None),
     sort: Optional[str] = Query(None),
     dir: str = Query("desc"),
-    admin: dict = Depends(require_admin_role),
+    admin: dict = Depends(require_permission("partnerships.export")),
 ):
-    result = rpc_all("admin_list_partnerships", _partner_params(rng, search, company_id, college_id, sort, dir))
+    params = _apply_scope(_partner_params(rng, search, company_id, college_id, sort, dir), admin)
+    result = rpc_all("admin_list_partnerships", params)
     log_event("csv_exported", actor_user_id=admin["id"], actor_role=admin["profile_role"], actor_label=admin["email"],
               target_type="partnerships", metadata={"rows": len(result.rows), "total": result.total, "truncated": result.truncated})
     return csv_response(result, _PARTNER_COLUMNS, "company_college_partnerships.csv")
 
 
 @router.get("/ctc-by-company")
-def ctc_by_company(rng: DateRange = Depends(date_range)):
+def ctc_by_company(rng: DateRange = Depends(date_range), admin: dict = Depends(require_permission("analytics.view"))):
     """Advertised (posted) vs actual-offer (filled) CTC per company — see
     admin_ctc_stats for the same advertised-vs-actual distinction platform-wide."""
     return {"items": rpc("admin_ctc_by_company", rng.params()) or []}

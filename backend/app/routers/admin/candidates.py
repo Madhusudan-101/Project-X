@@ -20,6 +20,7 @@ from ...services.admin.common import (
     page_params, rpc, rpc_all, rpc_page,
 )
 from ...services.admin.events import log_event
+from ...services.admin.permissions import require_permission, scope_college_ids
 
 log = logging.getLogger(__name__)
 router = APIRouter(prefix="/admin", tags=["admin-candidates"], dependencies=[Depends(require_admin_role)])
@@ -68,8 +69,12 @@ def list_candidates(
     registered_in_range: bool = Query(False),
     sort: Optional[str] = Query(None),
     dir: str = Query("desc"),
+    admin: dict = Depends(require_permission("candidates.view")),
 ):
     params = _list_params(rng, search, college_id, company_id, drive_id, status, registered_in_range, sort, dir)
+    scoped = scope_college_ids(admin)
+    if scoped:
+        params["p_college_ids"] = scoped
     return rpc_page("admin_list_candidates", params, page)
 
 
@@ -84,9 +89,12 @@ def export_candidates(
     registered_in_range: bool = Query(False),
     sort: Optional[str] = Query(None),
     dir: str = Query("desc"),
-    admin: dict = Depends(require_admin_role),
+    admin: dict = Depends(require_permission("candidates.export")),
 ):
     params = _list_params(rng, search, college_id, company_id, drive_id, status, registered_in_range, sort, dir)
+    scoped = scope_college_ids(admin)
+    if scoped:
+        params["p_college_ids"] = scoped
     result = rpc_all("admin_list_candidates", params)
     log_event("csv_exported", actor_user_id=admin["id"], actor_role=admin["profile_role"], actor_label=admin["email"],
               target_type="candidates", metadata={"rows": len(result.rows), "total": result.total, "truncated": result.truncated})
@@ -94,7 +102,7 @@ def export_candidates(
 
 
 @router.get("/options")
-def filter_options():
+def filter_options(admin: dict = Depends(require_permission("candidates.view"))):
     """Id/label lists for the admin filter dropdowns (colleges, companies,
     recent drives). Capped — a search box takes over if these outgrow a select."""
     try:

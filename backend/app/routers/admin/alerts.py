@@ -13,10 +13,11 @@ from fastapi import APIRouter, Depends
 
 from ...deps import require_admin_role
 from ...services.admin.common import rpc
+from ...services.admin.permissions import require_permission
 
 router = APIRouter(prefix="/admin/alerts", tags=["admin-alerts"], dependencies=[Depends(require_admin_role)])
 
 
 @router.get("")
-def list_alerts():
+def list_alerts(admin: dict = Depends(require_permission("alerts.view"))):
     return {"items": rpc("admin_alerts", {}) or []}

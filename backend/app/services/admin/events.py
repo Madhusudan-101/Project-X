@@ -31,6 +31,8 @@ EVENT_TYPES = frozenset({
     "user_unblocked",
     "csv_exported",
     "report_generated",
+    "permission_granted",
+    "permission_revoked",
 })
 
 

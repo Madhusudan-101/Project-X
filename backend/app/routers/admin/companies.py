@@ -13,6 +13,7 @@ from ...services.admin.common import (
     page_params, rpc_all, rpc_one, rpc_page,
 )
 from ...services.admin.events import log_event
+from ...services.admin.permissions import require_permission, scope_company_ids
 
 router = APIRouter(prefix="/admin/companies", tags=["admin-companies"], dependencies=[Depends(require_admin_role)])
 
@@ -54,8 +55,13 @@ def list_companies(
     verified: Optional[bool] = Query(None),
     sort: Optional[str] = Query(None),
     dir: str = Query("desc"),
+    admin: dict = Depends(require_permission("companies.view")),
 ):
-    return rpc_page("admin_list_companies", _list_params(rng, search, activity, verified, sort, dir), page)
+    params = _list_params(rng, search, activity, verified, sort, dir)
+    scoped = scope_company_ids(admin)
+    if scoped:
+        params["p_company_ids"] = scoped
+    return rpc_page("admin_list_companies", params, page)
 
 
 @router.get("/export")
@@ -66,9 +72,13 @@ def export_companies(
     verified: Optional[bool] = Query(None),
     sort: Optional[str] = Query(None),
     dir: str = Query("desc"),
-    admin: dict = Depends(require_admin_role),
+    admin: dict = Depends(require_permission("companies.export")),
 ):
-    result = rpc_all("admin_list_companies", _list_params(rng, search, activity, verified, sort, dir))
+    params = _list_params(rng, search, activity, verified, sort, dir)
+    scoped = scope_company_ids(admin)
+    if scoped:
+        params["p_company_ids"] = scoped
+    result = rpc_all("admin_list_companies", params)
     log_event("csv_exported", actor_user_id=admin["id"], actor_role=admin["profile_role"], actor_label=admin["email"],
               target_type="companies", metadata={"rows": len(result.rows), "total": result.total, "truncated": result.truncated})
     return csv_response(result, _EXPORT_COLUMNS, "companies.csv")
@@ -76,7 +86,10 @@ def export_companies(
 
 # Registered after /export so "export" is never captured as a company id.
 @router.get("/{company_id}")
-def company_detail(company_id: UUID, rng: DateRange = Depends(date_range)):
+def company_detail(
+    company_id: UUID, rng: DateRange = Depends(date_range),
+    admin: dict = Depends(require_permission("companies.view", scope_param="company_id")),
+):
     row = rpc_one("admin_list_companies", {
         **rng.params(), "p_search": None, "p_activity": None, "p_verified": None,
         "p_company_id": str(company_id), "p_sort": "name", "p_dir": "asc",

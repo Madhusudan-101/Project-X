@@ -48,6 +48,11 @@ do $$ begin  -- roles are cluster-wide and survive the dropped database
   if not exists (select 1 from pg_roles where rolname = 'authenticated') then create role authenticated nologin; end if;
   if not exists (select 1 from pg_roles where rolname = 'service_role')  then create role service_role nologin; end if;
 end $$;
+-- Supabase grants service_role BYPASSRLS at the platform level (outside any
+-- migration file); mirrored here so `set role service_role` genuinely
+-- exercises the same bypass a real backend request gets, for every
+-- RLS-enabled, no-policy table (admin_events, admin_user_permissions, ...).
+alter role service_role bypassrls;
 create schema auth; create schema storage;
 create table auth.users (id uuid primary key default gen_random_uuid(), email text);
 create function auth.uid() returns uuid language sql stable as
@@ -76,6 +81,7 @@ MIGRATIONS = [
     "db/job_internship_perks_and_colleges_seed.sql",
     "db/job_drives_migration.sql",
     "db/admin_portal_migration.sql",
+    "db/admin_permissions_migration.sql",
 ]
 
 # ── Fixture (all timestamps explicit, UTC; every updated_at pinned so
@@ -633,6 +639,22 @@ def main() -> int:
     res = fn(cur, "admin_global_search", "", 5)
     check("a blank query returns nothing (no accidental full-table dump)", res == [], res)
 
+    print("\n== Admin Permissions: global search's candidate branch respects candidates.view scoping ==")
+    unscoped = fn(cur, "admin_global_search", "stu", 20)
+    unscoped_ids = {r["id"] for r in unscoped if r["entity_type"] == "candidate"}
+    check("unscoped: candidates from more than one college are found ('stu' matches every seeded candidate)",
+          {U['s1'], U['s4']} <= unscoped_ids, unscoped_ids)
+
+    scoped = scoped_call = q(cur, 'select * from public.admin_global_search(%s, %s, %s::uuid[])', ["stu", 20, [C['c1']]])
+    scoped_ids = {r["id"] for r in scoped if r["entity_type"] == "candidate"}
+    check("p_college_ids=[c1]: only c1's candidates are found (s4 at c2 is excluded)",
+          U['s1'] in scoped_ids and U['s4'] not in scoped_ids, scoped_ids)
+    check("...and every candidate found genuinely belongs to c1",
+          scoped_ids <= {U['s1'], U['s2'], U['s3'], S9}, scoped_ids)
+    college_hits = {r["id"] for r in scoped if r["entity_type"] == "college"}
+    check("scoping only narrows the CANDIDATE branch — college/company/drive results are unaffected",
+          college_hits == {r["id"] for r in unscoped if r["entity_type"] == "college"}, college_hits)
+
     print("\n== Platform Control Center: platform usage counts only what is actually tracked ==")
     usage = scalar_json(cur, "admin_platform_usage", *ALL)
     check("counts the events just inserted (1 success + 1 failure user_login, 1 user_blocked)",
@@ -699,9 +721,156 @@ def main() -> int:
     check("direct DB session (migrations / SQL editor) is unrestricted",
           attempt(cur, f"update public.profiles set role = 'candidate' where id = '{U['s7']}'") == "ok")
 
+    print("\n== Admin Permissions: is_super_admin cannot be self-granted via direct table access ==")
+    # profiles has no RLS of its own -- this trigger is its ONLY defense.
+    # Without guarding is_super_admin specifically, any authenticated user
+    # (not just a delegated admin) could PATCH their own row through
+    # PostgREST and grant themselves full Admin Portal access, bypassing
+    # every check in app/services/admin/permissions.py entirely.
+    cur.execute("set role authenticated")
+    check("authenticated cannot promote themselves to Super Admin",
+          attempt(cur, f"update public.profiles set is_super_admin = true where id = '{U['s1']}'") == "42501")
+    check("...not even a delegated (non-super) admin can, on their own row",
+          attempt(cur, f"update public.profiles set is_super_admin = true where id = '{U['admin']}'") == "42501")
+    check("...and nothing actually changed", q(cur, f"select is_super_admin from public.profiles where id='{U['s1']}'")[0]["is_super_admin"] is False)
+    cur.execute("reset role")
+    cur.execute("set role service_role")
+    check("service_role (the backend's CLI bootstrap path) CAN set is_super_admin",
+          attempt(cur, f"update public.profiles set is_super_admin = true where id = '{U['s1']}'") == "ok")
+    cur.execute(f"update public.profiles set is_super_admin = false where id = '{U['s1']}'")
+    cur.execute("reset role")
+
+    print("\n== Admin Permissions: schema ==")
+    check("profiles.is_super_admin column exists, defaults false",
+          q(cur, f"select is_super_admin from public.profiles where id = '{U['s1']}'")[0]["is_super_admin"] is False)
+    cur.execute("set role service_role")
+    cur.execute(f"""
+      insert into public.admin_user_permissions (user_id, permission, scope_type, scope_id, granted_by)
+      values ('{U['admin']}', 'colleges.view', 'college', '{C['c1']}', '{U['admin']}')
+    """)
+    row = q(cur, f"select * from public.admin_user_permissions where user_id = '{U['admin']}'")[0]
+    check("a scoped grant round-trips (permission / scope_type / scope_id / granted_by)",
+          row["permission"] == "colleges.view" and row["scope_type"] == "college" and str(row["scope_id"]) == C['c1'], row)
+    cur.execute("reset role")
+
+    check("scope consistency check: scope_type='global' requires the sentinel scope_id",
+          attempt(cur, f"""insert into public.admin_user_permissions (user_id, permission, scope_type, scope_id)
+                            values ('{U['admin']}', 'reports.view', 'global', '{C['c1']}')""") == "23514")
+    check("scope consistency check: a scoped permission cannot use the sentinel scope_id",
+          attempt(cur, f"""insert into public.admin_user_permissions (user_id, permission, scope_type)
+                            values ('{U['admin']}', 'reports.view', 'college')""") == "23514")
+    check("unique(user, permission, scope_type, scope_id): granting the exact same thing twice is rejected at the DB level",
+          attempt(cur, f"""insert into public.admin_user_permissions (user_id, permission, scope_type, scope_id, granted_by)
+                            values ('{U['admin']}', 'colleges.view', 'college', '{C['c1']}', '{U['admin']}')""") == "23505")
+    cur.execute(f"delete from public.admin_user_permissions where user_id = '{U['admin']}'")
+
+    print("\n== Admin Permissions: RLS (service_role only, same posture as admin_events) ==")
+    cur.execute("set role authenticated")
+    check("authenticated: SELECT on admin_user_permissions returns nothing (default-deny RLS, no policies)",
+          q(cur, "select * from public.admin_user_permissions") == [])
+    check("authenticated: INSERT into admin_user_permissions is blocked by RLS",
+          attempt(cur, f"""insert into public.admin_user_permissions (user_id, permission, scope_type, scope_id)
+                            values ('{U['admin']}', 'reports.view', 'global', '00000000-0000-0000-0000-000000000000')""") == "42501")
+    cur.execute("reset role")
+    cur.execute("set role service_role")
+    check("service_role (the backend) bypasses RLS and can read/write grants",
+          attempt(cur, f"""insert into public.admin_user_permissions (user_id, permission, scope_type, scope_id, granted_by)
+                            values ('{U['admin']}', 'reports.view', 'global', '00000000-0000-0000-0000-000000000000', '{U['admin']}')""") == "ok")
+    cur.execute("reset role")
+    cur.execute(f"delete from public.admin_user_permissions where user_id = '{U['admin']}'")
+
+    print("\n== Admin Permissions: multi-scope list/export filters (p_college_ids / p_company_ids) ==")
+    # PostgREST casts a JSON array request body to the function's declared
+    # array type (introspected from pg_proc) before calling it; a raw
+    # psycopg2 %s does not, so these calls cast explicitly with ::uuid[] —
+    # a test-harness detail, not something the real HTTP path needs.
+    def scoped(name, *args, college_ids=None, company_ids=None):
+        ph = ", ".join(["%s"] * len(args))
+        extra_sql, extra_vals = [], []
+        if college_ids is not None:
+            extra_sql.append('"p_college_ids" => %s::uuid[]'); extra_vals.append(college_ids)
+        if company_ids is not None:
+            extra_sql.append('"p_company_ids" => %s::uuid[]'); extra_vals.append(company_ids)
+        sql = f"select * from public.{name}({ph}{', ' if extra_sql else ''}{', '.join(extra_sql)})"
+        return q(cur, sql, list(args) + extra_vals)
+
+    all_colleges = {r["college_id"] for r in fn(cur, "admin_list_colleges", *ALL, None, "all", None, None, "name", "asc", 1000, 0)}
+    check("sanity: more than 2 colleges exist in the directory, so a 2-id filter is a genuine narrowing",
+          len(all_colleges) > 2, all_colleges)
+
+    rows = scoped("admin_list_colleges", *ALL, None, "all", None, None, "name", "asc", 1000, 0, college_ids=[C['c1'], C['c2']])
+    check("p_college_ids=[c1,c2]: admin_list_colleges returns EXACTLY those two colleges (a real union, not just one)",
+          {r["college_id"] for r in rows} == {C['c1'], C['c2']}, {r["college_id"] for r in rows})
+
+    rows1 = scoped("admin_list_colleges", *ALL, None, "all", None, None, "name", "asc", 1000, 0, college_ids=[C['c1']])
+    check("p_college_ids=[c1] alone: exactly one college back", {r["college_id"] for r in rows1} == {C['c1']}, rows1)
+
+    unfiltered = fn(cur, "admin_list_colleges", *ALL, None, "all", None, None, "name", "asc", 1000, 0)
+    check("omitting p_college_ids entirely (every existing caller): unaffected, still returns every college",
+          {r["college_id"] for r in unfiltered} == all_colleges, len(unfiltered))
+
+    cand_all = fn(cur, "admin_list_candidates", *ALL, None, None, None, None, None, False, "name", "asc", 1000, 0)
+    cand_scoped = scoped("admin_list_candidates", *ALL, None, None, None, None, None, False, "name", "asc", 1000, 0,
+                          college_ids=[C['c1'], C['c2']])
+    cand_scoped_colleges = {r["college_id"] for r in cand_scoped}
+    check("p_college_ids on admin_list_candidates: every returned candidate belongs to c1 or c2, none outside it",
+          cand_scoped_colleges <= {C['c1'], C['c2']} and 0 < len(cand_scoped) < len(cand_all),
+          (cand_scoped_colleges, len(cand_scoped), len(cand_all)))
+
+    # Drives/partnerships are scopable by EITHER dimension — a grant covering a
+    # college AND a grant covering a DIFFERENT company must union (OR), not
+    # intersect (AND): a drive matching either counts.
+    drives_college_only = scoped("admin_list_drives", *ALL, None, None, None, None, "applications", "desc", 1000, 0, college_ids=[C['c1']])
+    drives_company_only = scoped("admin_list_drives", *ALL, None, None, None, None, "applications", "desc", 1000, 0, company_ids=[K['k1']])
+    drives_union = scoped("admin_list_drives", *ALL, None, None, None, None, "applications", "desc", 1000, 0,
+                           college_ids=[C['c1']], company_ids=[K['k1']])
+    expected_union = {r["drive_id"] for r in drives_college_only} | {r["drive_id"] for r in drives_company_only}
+    check("drives: college-scope + company-scope combine with OR (union), not AND (intersection)",
+          {r["drive_id"] for r in drives_union} == expected_union and len(expected_union) > 0,
+          ({r["drive_id"] for r in drives_union}, expected_union))
+
     conn.close()
     with admin.cursor() as cur2:
         cur2.execute(f"drop database if exists {DB}")
+
+    print("\n== Admin Permissions: one-time backfill promotes pre-existing admins, never a later one ==")
+    # A SEPARATE scratch database, in the order production actually sees it:
+    # admin_portal_migration.sql (profiles/role exist) -> an admin already in
+    # the table -> admin_permissions_migration.sql applied for the FIRST time
+    # (must promote it) -> a NEW admin created afterwards -> the migration
+    # re-applied, idempotently (must NOT promote the new one).
+    DB2 = "admin_permissions_backfill_test"
+    with admin.cursor() as cur2:
+        cur2.execute(f"drop database if exists {DB2}")
+        cur2.execute(f"create database {DB2}")
+    conn2 = psycopg2.connect(urlunparse(_parsed._replace(path=f"/{DB2}")))
+    conn2.autocommit = True
+    cur2 = conn2.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    cur2.execute(PRELUDE)
+    for path in MIGRATIONS[:-1]:  # everything up to and including admin_portal_migration.sql
+        with open(os.path.join(BACKEND, path), encoding="utf-8") as f:
+            cur2.execute(f.read())
+    pre_id = "00000000-0000-0000-0000-000000000501"
+    cur2.execute(f"insert into auth.users (id, email) values ('{pre_id}', 'pre@x.test')")
+    cur2.execute(f"insert into public.profiles (id, email, role) values ('{pre_id}', 'pre@x.test', 'admin')")
+    with open(os.path.join(BACKEND, "db/admin_permissions_migration.sql"), encoding="utf-8") as f:
+        cur2.execute(f.read())
+    check("an admin that existed BEFORE the permission system is backfilled to Super Admin",
+          q(cur2, f"select is_super_admin from public.profiles where id = '{pre_id}'")[0]["is_super_admin"] is True)
+
+    post_id = "00000000-0000-0000-0000-000000000502"
+    cur2.execute(f"insert into auth.users (id, email) values ('{post_id}', 'post@x.test')")
+    cur2.execute(f"insert into public.profiles (id, email, role) values ('{post_id}', 'post@x.test', 'admin')")
+    with open(os.path.join(BACKEND, "db/admin_permissions_migration.sql"), encoding="utf-8") as f:
+        cur2.execute(f.read())  # re-applied, must be a no-op for anyone created after the first run
+    check("a delegated admin created AFTER the migration is NOT retroactively promoted by a re-run",
+          q(cur2, f"select is_super_admin from public.profiles where id = '{post_id}'")[0]["is_super_admin"] is False)
+    check("...and the original Super Admin is untouched by the re-run",
+          q(cur2, f"select is_super_admin from public.profiles where id = '{pre_id}'")[0]["is_super_admin"] is True)
+
+    conn2.close()
+    with admin.cursor() as cur2:
+        cur2.execute(f"drop database if exists {DB2}")
     admin.close()
 
     print(f"\n=== {passed}/{passed + failed} passed, {failed} failed ===")

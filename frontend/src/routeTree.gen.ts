@@ -54,6 +54,7 @@ import { Route as CompanyJobsJobIdRouteImport } from './routes/company-jobs/$job
 import { Route as CompanyRolesIndexRouteImport } from './routes/company-roles/index'
 import { Route as CompanyRolesRoleIdRouteImport } from './routes/company-roles/$roleId'
 import { Route as ResumeTailorApplicationIdRouteImport } from './routes/resume-tailor/$applicationId'
+import { Route as AdminAdminUsersIndexRouteImport } from './routes/admin/admin-users/index'
 import { Route as AdminCollegesIndexRouteImport } from './routes/admin/colleges/index'
 import { Route as AdminCollegesCollegeIdRouteImport } from './routes/admin/colleges/$collegeId'
 import { Route as AdminCompaniesIndexRouteImport } from './routes/admin/companies/index'
@@ -287,6 +288,11 @@ const ResumeTailorApplicationIdRoute =
     path: '/resume-tailor/$applicationId',
     getParentRoute: () => rootRouteImport,
   } as any)
+const AdminAdminUsersIndexRoute = AdminAdminUsersIndexRouteImport.update({
+  id: '/admin-users/',
+  path: '/admin-users/',
+  getParentRoute: () => AdminRoute,
+} as any)
 const AdminCollegesIndexRoute = AdminCollegesIndexRouteImport.update({
   id: '/colleges/',
   path: '/colleges/',
@@ -367,6 +373,7 @@ export interface FileRoutesByFullPath {
   '/admin/colleges/$collegeId': typeof AdminCollegesCollegeIdRoute
   '/admin/companies/$companyId': typeof AdminCompaniesCompanyIdRoute
   '/admin/users/$userId': typeof AdminUsersUserIdRoute
+  '/admin/admin-users/': typeof AdminAdminUsersIndexRoute
   '/admin/colleges/': typeof AdminCollegesIndexRoute
   '/admin/companies/': typeof AdminCompaniesIndexRoute
   '/admin/users/': typeof AdminUsersIndexRoute
@@ -418,6 +425,7 @@ export interface FileRoutesByTo {
   '/admin/colleges/$collegeId': typeof AdminCollegesCollegeIdRoute
   '/admin/companies/$companyId': typeof AdminCompaniesCompanyIdRoute
   '/admin/users/$userId': typeof AdminUsersUserIdRoute
+  '/admin/admin-users': typeof AdminAdminUsersIndexRoute
   '/admin/colleges': typeof AdminCollegesIndexRoute
   '/admin/companies': typeof AdminCompaniesIndexRoute
   '/admin/users': typeof AdminUsersIndexRoute
@@ -472,6 +480,7 @@ export interface FileRoutesById {
   '/admin/colleges/$collegeId': typeof AdminCollegesCollegeIdRoute
   '/admin/companies/$companyId': typeof AdminCompaniesCompanyIdRoute
   '/admin/users/$userId': typeof AdminUsersUserIdRoute
+  '/admin/admin-users/': typeof AdminAdminUsersIndexRoute
   '/admin/colleges/': typeof AdminCollegesIndexRoute
   '/admin/companies/': typeof AdminCompaniesIndexRoute
   '/admin/users/': typeof AdminUsersIndexRoute
@@ -527,6 +536,7 @@ export interface FileRouteTypes {
     | '/admin/colleges/$collegeId'
     | '/admin/companies/$companyId'
     | '/admin/users/$userId'
+    | '/admin/admin-users/'
     | '/admin/colleges/'
     | '/admin/companies/'
     | '/admin/users/'
@@ -578,6 +588,7 @@ export interface FileRouteTypes {
     | '/admin/colleges/$collegeId'
     | '/admin/companies/$companyId'
     | '/admin/users/$userId'
+    | '/admin/admin-users'
     | '/admin/colleges'
     | '/admin/companies'
     | '/admin/users'
@@ -631,6 +642,7 @@ export interface FileRouteTypes {
     | '/admin/colleges/$collegeId'
     | '/admin/companies/$companyId'
     | '/admin/users/$userId'
+    | '/admin/admin-users/'
     | '/admin/colleges/'
     | '/admin/companies/'
     | '/admin/users/'
@@ -970,6 +982,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ResumeTailorApplicationIdRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/admin/admin-users/': {
+      id: '/admin/admin-users/'
+      path: '/admin-users'
+      fullPath: '/admin/admin-users/'
+      preLoaderRoute: typeof AdminAdminUsersIndexRouteImport
+      parentRoute: typeof AdminRoute
+    }
     '/admin/colleges/': {
       id: '/admin/colleges/'
       path: '/colleges'
@@ -1030,6 +1049,7 @@ interface AdminRouteChildren {
   AdminCollegesCollegeIdRoute: typeof AdminCollegesCollegeIdRoute
   AdminCompaniesCompanyIdRoute: typeof AdminCompaniesCompanyIdRoute
   AdminUsersUserIdRoute: typeof AdminUsersUserIdRoute
+  AdminAdminUsersIndexRoute: typeof AdminAdminUsersIndexRoute
   AdminCollegesIndexRoute: typeof AdminCollegesIndexRoute
   AdminCompaniesIndexRoute: typeof AdminCompaniesIndexRoute
   AdminUsersIndexRoute: typeof AdminUsersIndexRoute
@@ -1050,6 +1070,7 @@ const AdminRouteChildren: AdminRouteChildren = {
   AdminCollegesCollegeIdRoute: AdminCollegesCollegeIdRoute,
   AdminCompaniesCompanyIdRoute: AdminCompaniesCompanyIdRoute,
   AdminUsersUserIdRoute: AdminUsersUserIdRoute,
+  AdminAdminUsersIndexRoute: AdminAdminUsersIndexRoute,
   AdminCollegesIndexRoute: AdminCollegesIndexRoute,
   AdminCompaniesIndexRoute: AdminCompaniesIndexRoute,
   AdminUsersIndexRoute: AdminUsersIndexRoute,

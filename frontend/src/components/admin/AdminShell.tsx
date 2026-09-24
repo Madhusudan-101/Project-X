@@ -1,5 +1,5 @@
 import { Link, Outlet, useNavigate, useRouterState } from "@tanstack/react-router";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Activity,
   AlertTriangle,
@@ -10,6 +10,7 @@ import {
   GraduationCap,
   Handshake,
   HeartPulse,
+  KeyRound,
   LayoutDashboard,
   Landmark,
   LogOut,
@@ -34,6 +35,7 @@ import {
   SidebarTrigger,
 } from "@/components/ui/sidebar";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { adminService } from "@/services/api/admin/admin";
 import { useAuthStore } from "@/store/auth";
 import type { Session } from "@/types";
 import { DateRangeFilter } from "./DateRangeFilter";
@@ -44,6 +46,15 @@ interface NavItem {
   label: string;
   icon: LucideIcon;
   exact?: boolean;
+  /** Any ONE of these makes the item visible to a delegated admin. Omitted
+   * = always visible (an unscoped endpoint, or Admin Management itself,
+   * which every admin can open to see at least their own permissions).
+   * A Super Admin always sees everything regardless of this list — and so
+   * does anyone while their own permissions are still loading, so the nav
+   * never flickers empty on first paint. This is UX only: the backend is
+   * the real gate, via require_permission (see services/admin/permissions.py) — hiding
+   * a link here never substitutes for that. */
+  anyOf?: string[];
 }
 
 const NAV: { label?: string; items: NavItem[] }[] = [
@@ -51,34 +62,35 @@ const NAV: { label?: string; items: NavItem[] }[] = [
   {
     label: "Organizations",
     items: [
-      { to: "/admin/colleges", label: "Colleges", icon: GraduationCap },
-      { to: "/admin/companies", label: "Companies", icon: Building2 },
-      { to: "/admin/partnerships", label: "Partnerships", icon: Handshake },
+      { to: "/admin/colleges", label: "Colleges", icon: GraduationCap, anyOf: ["colleges.view"] },
+      { to: "/admin/companies", label: "Companies", icon: Building2, anyOf: ["companies.view"] },
+      { to: "/admin/partnerships", label: "Partnerships", icon: Handshake, anyOf: ["partnerships.view"] },
     ],
   },
   {
     label: "People",
     items: [
-      { to: "/admin/candidates", label: "Candidates", icon: Users },
-      { to: "/admin/departments", label: "Departments", icon: GraduationCap },
+      { to: "/admin/candidates", label: "Candidates", icon: Users, anyOf: ["candidates.view"] },
+      { to: "/admin/departments", label: "Departments", icon: GraduationCap, anyOf: ["analytics.view"] },
     ],
   },
-  { label: "Placements", items: [{ to: "/admin/placements", label: "Placement analytics", icon: BarChart3 }] },
+  { label: "Placements", items: [{ to: "/admin/placements", label: "Placement analytics", icon: BarChart3, anyOf: ["analytics.view"] }] },
   {
     label: "Platform control",
     items: [
-      { to: "/admin/users", label: "Users & Access", icon: ShieldCheck },
-      { to: "/admin/activity", label: "Live Activity", icon: Activity },
-      { to: "/admin/audit-log", label: "Audit Log", icon: ClipboardList },
-      { to: "/admin/alerts", label: "Alerts", icon: AlertTriangle },
-      { to: "/admin/system-health", label: "System Health", icon: HeartPulse },
+      { to: "/admin/users", label: "Users & Access", icon: ShieldCheck, anyOf: ["users.view"] },
+      { to: "/admin/admin-users", label: "Admin Management", icon: KeyRound },
+      { to: "/admin/activity", label: "Live Activity", icon: Activity, anyOf: ["audit.view"] },
+      { to: "/admin/audit-log", label: "Audit Log", icon: ClipboardList, anyOf: ["audit.view"] },
+      { to: "/admin/alerts", label: "Alerts", icon: AlertTriangle, anyOf: ["alerts.view"] },
+      { to: "/admin/system-health", label: "System Health", icon: HeartPulse, anyOf: ["system.view"] },
     ],
   },
   {
     label: "Finance & Reports",
     items: [
-      { to: "/admin/finance", label: "Financial overview", icon: Landmark },
-      { to: "/admin/reports", label: "Reports", icon: FileBarChart },
+      { to: "/admin/finance", label: "Financial overview", icon: Landmark, anyOf: ["billing.view"] },
+      { to: "/admin/reports", label: "Reports", icon: FileBarChart, anyOf: ["reports.view", "reports.export"] },
     ],
   },
 ];
@@ -99,6 +111,11 @@ export function AdminShell({ session }: { session: Session }) {
     navigate({ to: "/" });
   };
 
+  const me = useQuery({ queryKey: ["admin", "me"], queryFn: () => adminService.me(), staleTime: 60_000 });
+  const isSuperAdmin = me.data?.is_super_admin ?? true; // default open while loading — see NavItem.anyOf docs
+  const held = new Set((me.data?.permissions ?? []).filter((g) => g.is_active).map((g) => g.permission));
+  const visible = (item: NavItem) => isSuperAdmin || !item.anyOf || item.anyOf.some((p) => held.has(p));
+
   return (
     <TooltipProvider>
       <SidebarProvider>
@@ -115,12 +132,15 @@ export function AdminShell({ session }: { session: Session }) {
             </Link>
           </SidebarHeader>
           <SidebarContent>
-            {NAV.map((group, i) => (
+            {NAV.map((group, i) => {
+              const items = group.items.filter(visible);
+              if (items.length === 0) return null;
+              return (
               <SidebarGroup key={group.label ?? i}>
                 {group.label && <SidebarGroupLabel>{group.label}</SidebarGroupLabel>}
                 <SidebarGroupContent>
                   <SidebarMenu>
-                    {group.items.map((item) => {
+                    {items.map((item) => {
                       const active = item.exact ? pathname === item.to : pathname.startsWith(item.to);
                       return (
                         <SidebarMenuItem key={item.to}>
@@ -136,7 +156,8 @@ export function AdminShell({ session }: { session: Session }) {
                   </SidebarMenu>
                 </SidebarGroupContent>
               </SidebarGroup>
-            ))}
+              );
+            })}
           </SidebarContent>
           <SidebarFooter>
             <div className="px-2 py-1 text-xs">

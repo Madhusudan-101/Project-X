@@ -75,12 +75,24 @@ def provision_account(
     last_name: str,
     college_id: Optional[str] = None,
     actor: Optional[Dict[str, Any]] = None,
+    is_super_admin: bool = False,
 ) -> Dict[str, Any]:
     """Create an account for a provisioned-only role.
 
     `actor` is the admin's `require_admin_role` dict, when there is one — the
     only caller without one is provision_admin.py, the CLI bootstrap script
-    that creates the very first Admin account before any admin exists.
+    that creates the very first Admin account before any admin exists (and
+    which, having direct server/CLI access — already the platform's highest
+    trust level — always creates that account as a Super Admin: see
+    is_super_admin below).
+
+    `is_super_admin` only ever applies when role='admin'. A NEW delegated
+    admin created through the Admin Portal (POST /admin/admin-users) always
+    passes False here — is_super_admin is never client-suppliable there,
+    only settable by this CLI script. See db/admin_permissions_migration.sql
+    for why an already-existing admin keeps full access without this flag
+    (they are grandfathered in by the migration itself, once, not by this
+    function).
 
     Returns {"user_id", "created", "invite_sent", "replaced_legacy_account"}.
     Raises HTTPException: 422 bad input, 409 the email already belongs to
@@ -132,6 +144,7 @@ def provision_account(
             # Admins have no onboarding wizard; a College TPO still completes theirs.
             "onboarded": role == "admin",
             **({"college_id": college_id} if college_id else {}),
+            **({"is_super_admin": True} if role == "admin" and is_super_admin else {}),
         })
     except APIError as e:
         # Don't leave an auth user with no profile behind.

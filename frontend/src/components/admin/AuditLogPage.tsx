@@ -11,9 +11,10 @@ import { fmtDate } from "./format";
 import { EVENT_TYPE_LABEL, RESULT_TONE, USER_ROLE_LABEL } from "./status";
 
 const EVENT_TYPE_OPTIONS = Object.entries(EVENT_TYPE_LABEL)
-  // Only actor-attributable events — the six the backend logs to admin_events
+  // Only actor-attributable events — the eight the backend logs to admin_events
   // (the others are derived timestamps merged only into Live Activity).
-  .filter(([v]) => ["user_login", "account_provisioned", "user_blocked", "user_unblocked", "csv_exported", "report_generated"].includes(v))
+  .filter(([v]) => ["user_login", "account_provisioned", "user_blocked", "user_unblocked", "csv_exported",
+    "report_generated", "permission_granted", "permission_revoked"].includes(v))
   .map(([value, label]) => ({ value, label }));
 const ROLE_OPTIONS: { value: UserRole; label: string }[] = [
   { value: "admin", label: "Admin" }, { value: "college", label: "College" },
