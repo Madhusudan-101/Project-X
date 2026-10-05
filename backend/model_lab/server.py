@@ -28,7 +28,8 @@ load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 
 from .catalog import PROVIDERS, native_pdf, price_for, seed_models  # noqa: E402
 from .providers import api_key_for, call_model, discover_models  # noqa: E402
-from .tasks import TASKS, Inputs, parse_json  # noqa: E402
+from .portfolio import build_portfolio  # noqa: E402
+from .tasks import TASKS, Inputs, extract_pdf_text, parse_json  # noqa: E402
 
 HERE = Path(__file__).resolve().parent
 RESULTS_DIR = HERE / "results"
@@ -98,6 +99,10 @@ async def create_run(
     job_description: str = Form(""),
     job_skills: str = Form(""),
     weights: str = Form(""),  # JSON
+    auto_portfolio: bool = Form(True),  # fetch GitHub/LeetCode/Codeforces from the resume's links
+    github_user: str = Form(""),
+    leetcode_user: str = Form(""),
+    codeforces_user: str = Form(""),
     input_mode: str = Form("text"),  # text | native
     temperature: float = Form(0.2),
     timeout_s: float = Form(120),
@@ -147,12 +152,30 @@ async def create_run(
         "best": None,
     }
     RUNS[run_id] = run
-    TASK_HANDLES[run_id] = asyncio.create_task(_execute(run, spec, inp, keys, input_mode, temperature, timeout_s))
+    overrides = {k: v.strip() for k, v in (("github", github_user), ("leetcode", leetcode_user), ("codeforces", codeforces_user)) if v.strip()}
+    fetch_portfolio = auto_portfolio and task in ("resume", "job_scoring") and not portfolio_json.strip()
+    TASK_HANDLES[run_id] = asyncio.create_task(
+        _execute(run, spec, inp, keys, input_mode, temperature, timeout_s, fetch_portfolio, overrides)
+    )
     return {"id": run_id}
 
 
-async def _execute(run, spec, inp: Inputs, keys: Dict[str, str], input_mode: str, temperature: float, timeout_s: float):
+async def _execute(run, spec, inp: Inputs, keys: Dict[str, str], input_mode: str, temperature: float, timeout_s: float,
+                   fetch_portfolio: bool = False, overrides: Optional[Dict[str, str]] = None):
     try:
+        if fetch_portfolio:
+            # Once, before any model: every model is judged on the same verified data.
+            run["phase"] = "Fetching GitHub / LeetCode / Codeforces from the resume's links…"
+            _save(run)
+            try:
+                pf = await build_portfolio(inp.resume_pdf, extract_pdf_text(inp.resume_pdf), overrides or {})
+                inp.portfolio_json = pf.metrics_json
+                inp.portfolio_notes = pf.notes
+                run["portfolio"] = pf.report
+                run["portfolio_notes"] = pf.notes
+            except Exception as exc:  # noqa: BLE001 — models still run, just without verified data
+                run["portfolio"] = {"error": f"{type(exc).__name__}: {exc}"}
+            run["phase"] = None
         # Strictly sequential, in the order chosen — one model at a time.
         for res in run["results"]:
             if run["status"] == "cancelled":

@@ -36,6 +36,7 @@ class Inputs:
     target_role: str = "Software Engineer"
     portfolio_json: str = ""
     prior_audit_json: str = ""
+    portfolio_notes: List[str] = field(default_factory=list)  # verification notes from model_lab.portfolio
     job_title: str = ""
     job_domain: str = ""
     job_experience: str = ""
@@ -108,6 +109,7 @@ def _build_resume(inp: Inputs, native: bool) -> Prompt:
         f"Today's real-world date is {date.today().isoformat()}. Use this as the ONLY ground "
         "truth for any date/timeline reasoning in the resume.",
     ]
+    parts += inp.portfolio_notes
     return Prompt(rs.SYSTEM_INSTRUCTION, parts, pdfs)
 
 
@@ -150,6 +152,7 @@ def _build_job(inp: Inputs, native: bool) -> Prompt:
         "PRIOR RESUME-AUTHENTICITY AUDIT JSON (context — not the JD-specific verdict):\n"
         + (inp.prior_audit_json.strip() or "null"),
     ]
+    parts += inp.portfolio_notes
     return Prompt(job.SYSTEM_INSTRUCTION, parts, [])
 
 

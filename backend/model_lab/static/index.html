@@ -84,6 +84,12 @@ pre{background:var(--code);padding:8px;border-radius:7px;overflow:auto;max-heigh
     <div class="row" id="weights"></div>
   </div>
 
+  <div id="pfBox">
+    <label class="m" style="margin-top:12px"><input type="checkbox" id="autoPf" checked>
+      <span>Verify GitHub / LeetCode / Codeforces from the resume's links<small>Fetched once, shared by all models. Missing platforms are flagged to the model.</small></span></label>
+    <details><summary>Override usernames (if the resume has no link)</summary>
+      <div class="row"><input type="text" id="ghUser" placeholder="GitHub"><input type="text" id="lcUser" placeholder="LeetCode"><input type="text" id="cfUser" placeholder="Codeforces"></div></details>
+  </div>
   <details><summary>Optional context (portfolio / prior audit JSON)</summary>
     <label>Verified portfolio metrics JSON (GitHub / LeetCode / Codeforces)</label><textarea id="portfolio" placeholder="Leave empty to test resume-only"></textarea>
     <div id="priorBox"><label>Prior resume audit JSON</label><textarea id="prior"></textarea></div>
@@ -119,6 +125,8 @@ pre{background:var(--code);padding:8px;border-radius:7px;overflow:auto;max-heigh
       <div id="runTitle" style="font-weight:600;flex:3"></div>
       <div style="flex:0 0 auto;display:flex;gap:6px"><button id="cancel" style="display:none">Stop after current</button><button id="export">Export JSON</button></div>
     </div>
+    <div id="phase" class="warn" style="display:none"></div>
+    <div id="pf" class="panel" style="margin-bottom:12px;display:none"></div>
     <div id="strip"></div>
     <div class="panel tw" style="margin-bottom:12px"><table id="summary"></table></div>
     <div class="cols" id="cols"></div>
@@ -197,6 +205,7 @@ function onTask() {
   $('#taskDesc').textContent = t.description;
   $('#linkedinBox').style.display = t.id === 'linkedin' ? '' : 'none';
   $('#jobBox').style.display = t.id === 'job_scoring' ? '' : 'none';
+  $('#pfBox').style.display = t.id === 'linkedin' ? 'none' : '';
   $('#priorBox').style.display = t.id === 'job_scoring' ? '' : 'none';
   $('#resumeBox label').textContent = t.id === 'linkedin' ? 'Resume PDF (optional — enables cross-check)' : 'Resume PDF';
 }
@@ -225,6 +234,8 @@ $('#run').onclick = async () => {
     fd.append('job_experience', $('#jobExp').value); fd.append('job_skills', $('#jobSkills').value);
     fd.append('job_description', $('#jobDesc').value);
   }
+  fd.append('auto_portfolio', $('#autoPf').checked); fd.append('github_user', $('#ghUser').value);
+  fd.append('leetcode_user', $('#lcUser').value); fd.append('codeforces_user', $('#cfUser').value);
   fd.append('input_mode', $('#mode').value); fd.append('temperature', $('#temp').value); fd.append('timeout_s', $('#timeout').value);
   const keys = {}; document.querySelectorAll('#keys input').forEach(i => i.value.trim() && (keys[i.dataset.prov] = i.value.trim()));
   fd.append('api_keys', JSON.stringify(keys));
@@ -255,6 +266,8 @@ function render(run) {
   $('#runTitle').textContent = `${task.label} · ${run.config.resume_file || run.config.linkedin_file || ''} · ${run.input_mode} input · ${run.status}`;
   $('#cancel').style.display = run.status === 'running' ? '' : 'none';
   $('#strip').innerHTML = run.results.map(r => `<span class="st ${status(r)}">${esc(r.model)} ${{pending:'·',running:'⏳',done:'✓',invalid:'⚠ schema',error:'✕',skipped:'–'}[status(r)]}</span>`).join('');
+  $('#phase').style.display = run.phase ? '' : 'none'; $('#phase').textContent = run.phase || '';
+  renderPortfolio(run);
   renderSummary(run);
   run.results.forEach((r, i) => {
     const sig = JSON.stringify([r.status, r.valid, r.rating, run.best === i]);
@@ -263,6 +276,19 @@ function render(run) {
     if (c.sig === sig) return;
     c.sig = sig; c.el.className = 'card' + (run.best === i ? ' best' : ''); drawCard(c.el, r, i, run);
   });
+}
+
+function renderPortfolio(run) {
+  const el = $('#pf'), pf = run.portfolio;
+  if (!pf) { el.style.display = 'none'; return; }
+  el.style.display = '';
+  if (pf.error) { el.innerHTML = `<b>Portfolio verification</b><div class="err" style="margin-top:6px">${esc(pf.error)}</div>`; return; }
+  const L = { github: 'GitHub', leetcode: 'LeetCode', codeforces: 'Codeforces' };
+  const badge = e => ({ verified: ['ok', 'verified'], fetch_failed: ['no', 'fetch failed'], not_provided: ['no', 'NOT PROVIDED — flagged'] }[e.status]);
+  el.innerHTML = `<b>Portfolio verification</b> <span class="hint">(fetched once, same data for every model)</span><table style="margin-top:6px">` +
+    Object.entries(pf.platforms).map(([p, e]) => { const [c, t] = badge(e);
+      return `<tr><td>${L[p]}</td><td class="mono">${esc(e.username || '—')}</td><td>${esc(e.source || '')}</td><td><span class="badge ${c}">${t}</span> ${esc(e.error || '')}</td></tr>`; }).join('') +
+    `</table><details><summary>Links found in the resume (${(pf.links_found || []).length})</summary><pre>${esc((pf.links_found || []).join('\n') || 'none')}</pre></details>`;
 }
 
 function renderSummary(run) {
