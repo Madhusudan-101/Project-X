@@ -48,7 +48,7 @@ _SEED: List[_Seed] = [
     # ── Gemini: what the app uses today + the obvious upgrade/downgrade paths
     ("gemini", "gemini-3.5-flash", "Primary model in the app today", True, None, True),
     ("gemini", "gemini-3.1-flash-lite", "App fallback #1 — cheapest/fastest", True, None, True),
-    ("gemini", "gemini-2.0-flash", "App fallback #2", True, (0.10, 0.40), True),
+    ("gemini", "gemini-3.8-flash", "Newest flash (suggested by Google after 2.0 was retired)", False, None, True),
     ("gemini", "gemini-2.5-flash", "Previous-gen flash, stable", False, (0.30, 2.50), True),
     ("gemini", "gemini-2.5-flash-lite", "Previous-gen lite", False, None, True),
     ("gemini", "gemini-2.5-pro", "Higher-quality Gemini; slower/pricier", False, (1.25, 10.00), True),
@@ -67,6 +67,8 @@ _SEED: List[_Seed] = [
     ("openrouter", "meta-llama/llama-3.3-70b-instruct", "Open Llama 70B", False, None, False),
     ("openrouter", "qwen/qwen-2.5-72b-instruct", "Open Qwen 72B", False, None, False),
     ("openrouter", "mistralai/mistral-large", "Mistral Large", False, None, False),
+    ("groq", "openai/gpt-oss-120b", "OpenAI open-weight model on Groq — free tier, no OpenAI credits needed", False, None, False),
+    ("openrouter", "openai/gpt-oss-120b:free", "OpenAI open-weight model, free on OpenRouter", False, (0.0, 0.0), False),
     ("groq", "llama-3.3-70b-versatile", "Llama 70B on Groq — very low latency", False, None, False),
     ("deepseek", "deepseek-chat", "DeepSeek direct API", False, None, False),
     ("mistral", "mistral-large-latest", "Mistral direct API", False, None, False),
