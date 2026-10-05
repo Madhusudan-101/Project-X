@@ -62,6 +62,7 @@ _SEED: List[_Seed] = [
     ("openai", "gpt-5", "Flagship OpenAI — verify ID with Discover", False, None, False),
     ("openai", "gpt-4.1-mini", "Non-reasoning, predictable JSON", False, (0.40, 1.60), False),
     # ── Open-weight / budget options (OpenRouter = one key for all of these)
+    ("openrouter", "nvidia/nemotron-3-super-120b-a12b:free", "NVIDIA Nemotron 3 Super (120B MoE) — free tier, 262K ctx", False, (0.0, 0.0), False),
     ("openrouter", "deepseek/deepseek-chat", "DeepSeek V3 line — very cheap", False, None, False),
     ("openrouter", "meta-llama/llama-3.3-70b-instruct", "Open Llama 70B", False, None, False),
     ("openrouter", "qwen/qwen-2.5-72b-instruct", "Open Qwen 72B", False, None, False),
