@@ -317,7 +317,7 @@ function CandidatePortal() {
             {/* Tab bodies */}
             <div className="pt-6 pb-12">
               <TabsContent value="overview" className="mt-0" forceMount>
-                <OverviewTab />
+                <OverviewTab onOpenAiInterview={() => setTab("ai-interview")} />
               </TabsContent>
               <TabsContent value="jobs" className="mt-0">
                 <JobsTab />
@@ -347,7 +347,7 @@ function CandidatePortal() {
 
 // ---------- Overview ----------
 
-function OverviewTab() {
+function OverviewTab({ onOpenAiInterview }: { onOpenAiInterview: () => void }) {
   const session = useAuthStore((s) => s.session);
   const [peerModalOpen, setPeerModalOpen] = useState(false);
   // Shares the ["candidate-applications"] cache with the Jobs tab — react-query
@@ -465,6 +465,7 @@ function OverviewTab() {
               title="AI Interview"
               body="Adaptive mocks, honest feedback."
               status="Live"
+              onClick={onOpenAiInterview}
             />
             {activePeerRoom ? (
               <ActivePeerRoomCard
