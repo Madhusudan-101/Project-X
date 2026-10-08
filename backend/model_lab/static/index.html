@@ -1,0 +1,373 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Model Lab</title>
+<style>
+:root{--bg:#f6f7f9;--panel:#fff;--ink:#14171c;--mute:#667085;--line:#e3e6eb;--accent:#4f46e5;--ok:#0f9d58;--bad:#d93025;--warn:#b26a00;--chip:#eef0f4;--code:#f2f4f8}
+@media (prefers-color-scheme:dark){:root{--bg:#0f1115;--panel:#171a21;--ink:#e8eaee;--mute:#98a1b2;--line:#2a2f3a;--accent:#818cf8;--ok:#34d399;--bad:#f87171;--warn:#fbbf24;--chip:#232834;--code:#1d212b}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.45 system-ui,-apple-system,Segoe UI,sans-serif}
+header{padding:14px 20px;border-bottom:1px solid var(--line);background:var(--panel);display:flex;gap:12px;align-items:center;justify-content:space-between;flex-wrap:wrap}
+h1{font-size:17px;margin:0}h2{font-size:13px;text-transform:uppercase;letter-spacing:.05em;color:var(--mute);margin:18px 0 8px}
+.layout{display:grid;grid-template-columns:380px 1fr;gap:16px;padding:16px 20px;align-items:start}
+@media(max-width:980px){.layout{grid-template-columns:1fr}}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px}
+main{min-width:0}
+.side{position:sticky;top:12px;max-height:calc(100vh - 24px);overflow:auto}
+@media(max-width:980px){.side{position:static;max-height:none}}
+label{display:block;font-size:12px;color:var(--mute);margin:10px 0 4px}
+input[type=text],input[type=number],textarea,select{width:100%;padding:7px 9px;border:1px solid var(--line);border-radius:7px;background:var(--bg);color:var(--ink);font:inherit}
+textarea{min-height:64px;resize:vertical;font-family:ui-monospace,Menlo,monospace;font-size:12px}
+input[type=file]{width:100%;font-size:12px}
+button{font:inherit;border:1px solid var(--line);background:var(--panel);color:var(--ink);padding:7px 12px;border-radius:7px;cursor:pointer}
+button:hover{border-color:var(--accent)}button.primary{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:600;width:100%;padding:10px}
+button:disabled{opacity:.5;cursor:not-allowed}
+details{margin-top:8px}summary{cursor:pointer;color:var(--mute);font-size:12px}
+.row{display:flex;gap:8px;align-items:center}.row>*{flex:1}
+.prov{margin-top:10px;border-top:1px solid var(--line);padding-top:8px}
+.prov-h{display:flex;justify-content:space-between;align-items:center;font-weight:600;font-size:13px}
+.badge{font-size:11px;padding:1px 7px;border-radius:99px;background:var(--chip);color:var(--mute);font-weight:500}
+.badge.ok{color:var(--ok)}.badge.no{color:var(--bad)}.badge.cur{color:var(--accent)}
+.m{display:flex;gap:6px;align-items:flex-start;padding:3px 0;font-size:13px}.m input{margin-top:3px}.m small{display:block;color:var(--mute);font-size:11px}
+.pill{background:var(--chip);border-radius:6px;padding:2px 8px;font-size:12px;white-space:nowrap}
+.mono{font-family:ui-monospace,Menlo,monospace}
+#strip{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px}
+.st{padding:4px 10px;border-radius:99px;background:var(--chip);font-size:12px;border:1px solid transparent}
+.st.running{border-color:var(--accent);color:var(--accent);animation:p 1.2s infinite}.st.done{color:var(--ok)}.st.error{color:var(--bad)}.st.invalid{color:var(--warn)}
+@keyframes p{50%{opacity:.5}}
+table{width:100%;border-collapse:collapse;font-size:13px}th,td{padding:7px 8px;border-bottom:1px solid var(--line);text-align:left;white-space:nowrap}
+th{font-size:11px;text-transform:uppercase;color:var(--mute);letter-spacing:.04em;cursor:pointer}
+td.n{text-align:right;font-variant-numeric:tabular-nums}.tw{overflow:auto}
+.best{outline:2px solid var(--ok)}
+.cols{display:grid;grid-auto-flow:column;grid-auto-columns:minmax(380px,1fr);gap:12px;overflow-x:auto;padding-bottom:8px;align-items:start}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:12px;min-width:0}
+.card h3{margin:0;font-size:14px;word-break:break-all}.card .sub{color:var(--mute);font-size:12px;margin-bottom:8px}
+.chips{display:flex;gap:6px;flex-wrap:wrap;margin:8px 0}
+.big{font-size:28px;font-weight:700;line-height:1}
+.stars button{border:0;background:none;padding:0 2px;font-size:20px;color:var(--mute);cursor:pointer}.stars button.on{color:#f5a623}
+.err{background:color-mix(in srgb,var(--bad) 12%,transparent);color:var(--bad);padding:8px;border-radius:7px;white-space:pre-wrap;word-break:break-word;font-size:12px}
+.warn{background:color-mix(in srgb,var(--warn) 14%,transparent);color:var(--warn);padding:8px;border-radius:7px;white-space:pre-wrap;font-size:12px;margin:8px 0}
+.tree{font-size:13px;max-height:560px;overflow:auto;border-top:1px solid var(--line);margin-top:8px;padding-top:6px}
+.tree .k{color:var(--mute);font-size:11px;text-transform:uppercase;letter-spacing:.04em;margin-top:8px}
+.tree ul{margin:2px 0 2px 16px;padding:0}.tree .obj{margin-left:10px;padding-left:8px;border-left:2px solid var(--line)}
+pre{background:var(--code);padding:8px;border-radius:7px;overflow:auto;max-height:420px;font-size:11px;margin:6px 0}
+.empty{color:var(--mute);text-align:center;padding:60px 0}
+.note{margin-top:6px}.hint{font-size:11px;color:var(--mute);margin-top:4px}
+</style>
+</head>
+<body>
+<header>
+  <h1>Model Lab <span class="badge">resume · linkedin · job scoring</span></h1>
+  <div class="row" style="flex:0 0 auto">
+    <select id="history" style="min-width:230px"><option value="">Past runs…</option></select>
+  </div>
+</header>
+
+<div class="layout">
+<aside class="panel side">
+  <label style="margin-top:0">Task</label>
+  <select id="task"></select><div class="hint" id="taskDesc"></div>
+
+  <div id="resumeBox"><label>Resume PDF</label><input type="file" id="resume" accept=".pdf,application/pdf"></div>
+  <div id="linkedinBox"><label>LinkedIn "Save to PDF" export</label><input type="file" id="linkedin" accept=".pdf,application/pdf"></div>
+
+  <label>Target role</label><input type="text" id="role" value="Software Engineer">
+
+  <div id="jobBox">
+    <label>Job title</label><input type="text" id="jobTitle" placeholder="Backend Engineer">
+    <div class="row"><div><label>Domain</label><input type="text" id="jobDomain" placeholder="Backend"></div>
+    <div><label>Experience</label><input type="text" id="jobExp" placeholder="0-2 yrs"></div></div>
+    <label>Required skills (comma separated)</label><input type="text" id="jobSkills" placeholder="Python, SQL, REST">
+    <label>Job description</label><textarea id="jobDesc" style="min-height:90px"></textarea>
+    <label>Weights (must sum to 100)</label>
+    <div class="row" id="weights"></div>
+  </div>
+
+  <div id="pfBox">
+    <label class="m" style="margin-top:12px"><input type="checkbox" id="autoPf" checked>
+      <span>Verify GitHub / LeetCode / Codeforces from the resume's links<small>Fetched once, shared by all models. Missing platforms are flagged to the model.</small></span></label>
+    <details><summary>Override usernames (if the resume has no link)</summary>
+      <div class="row"><input type="text" id="ghUser" placeholder="GitHub"><input type="text" id="lcUser" placeholder="LeetCode"><input type="text" id="cfUser" placeholder="Codeforces"></div></details>
+  </div>
+  <details><summary>Optional context (portfolio / prior audit JSON)</summary>
+    <label>Verified portfolio metrics JSON (GitHub / LeetCode / Codeforces)</label><textarea id="portfolio" placeholder="Leave empty to test resume-only"></textarea>
+    <div id="priorBox"><label>Prior resume audit JSON</label><textarea id="prior"></textarea></div>
+  </details>
+
+  <h2>Models <span class="badge" id="selCount">0 selected</span></h2>
+  <div class="hint">Run top-to-bottom, one at a time. Tick the ones to compare.</div>
+  <div id="models"></div>
+
+  <details><summary>Add custom model</summary>
+    <div class="row" style="margin-top:6px"><select id="cProv"></select><input type="text" id="cModel" placeholder="model id"></div>
+    <button id="cAdd" style="margin-top:6px;width:100%">Add</button>
+  </details>
+
+  <details><summary>Run settings</summary>
+    <label>Input mode</label>
+    <select id="mode"><option value="text">Extracted text — identical input for every model (fair)</option>
+    <option value="native">Native PDF where supported (Gemini/Claude), text elsewhere</option></select>
+    <div class="row"><div><label>Temperature</label><input type="number" id="temp" value="0.2" step="0.1" min="0" max="2"></div>
+    <div><label>Timeout (s)</label><input type="number" id="timeout" value="120"></div></div>
+    <label>API keys for this session (optional — else read from backend/.env)</label>
+    <div id="keys"></div>
+  </details>
+
+  <div style="margin-top:14px"><button class="primary" id="run">Run comparison</button></div>
+  <div id="formErr" class="err" style="display:none;margin-top:8px"></div>
+</aside>
+
+<main>
+  <div id="empty" class="panel empty">Upload a PDF, choose models and run. Results appear here as each model finishes.</div>
+  <div id="results" style="display:none">
+    <div class="row" style="margin-bottom:8px">
+      <div id="runTitle" style="font-weight:600;flex:3"></div>
+      <div style="flex:0 0 auto;display:flex;gap:6px"><button id="cancel" style="display:none">Stop after current</button><button id="export">Export JSON</button></div>
+    </div>
+    <div id="phase" class="warn" style="display:none"></div>
+    <div id="pf" class="panel" style="margin-bottom:12px;display:none"></div>
+    <div id="strip"></div>
+    <div class="panel tw" style="margin-bottom:12px"><table id="summary"></table></div>
+    <div class="cols" id="cols"></div>
+  </div>
+</main>
+</div>
+
+<script>
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+let META, RUN_ID = null, poll = null;
+const selected = new Map(); // "provider|model" -> {provider, model}
+const key = m => m.provider + '|' + m.model;
+const WEIGHTS = [['resume_weight','Resume',30],['github_weight','GitHub',25],['leetcode_weight','LeetCode',25],['interview_weight','Interview',10],['assessment_weight','Assess.',10]];
+
+async function api(path, opts) {
+  const r = await fetch(path, opts);
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(j.detail || r.statusText);
+  return j;
+}
+
+async function init() {
+  META = await api('/api/meta');
+  $('#task').innerHTML = META.tasks.map(t => `<option value="${t.id}">${esc(t.label)}</option>`).join('');
+  $('#cProv').innerHTML = META.providers.map(p => `<option value="${p.id}">${esc(p.label)}</option>`).join('');
+  $('#weights').innerHTML = WEIGHTS.map(([id,l,v]) => `<div><label style="margin-top:0">${l}</label><input type="number" id="${id}" value="${v}" min="0" max="100"></div>`).join('');
+  $('#keys').innerHTML = META.providers.map(p => `<input type="text" data-prov="${p.id}" placeholder="${esc(p.key_env)}" style="margin-top:4px" autocomplete="off">`).join('');
+  // Default selection: the models the app uses today.
+  META.models.filter(m => m.current).forEach(m => selected.set(key(m), m));
+  renderModels(); onTask(); loadHistory();
+}
+
+function renderModels() {
+  const byProv = {};
+  META.models.forEach(m => (byProv[m.provider] ||= []).push(m));
+  $('#models').innerHTML = META.providers.filter(p => byProv[p.id]).map(p => `
+    <div class="prov"><div class="prov-h"><span>${esc(p.label)}</span>
+      <span><span class="badge ${p.has_key ? 'ok' : 'no'}" title="${esc(p.key_env)}">${p.has_key ? 'key found' : 'no key'}</span>
+      <button data-disc="${p.id}" style="padding:1px 8px;font-size:11px">Discover</button></span></div>
+      ${byProv[p.id].map(m => `<label class="m"><input type="checkbox" data-k="${esc(key(m))}" ${selected.has(key(m)) ? 'checked' : ''}>
+        <span><span class="mono">${esc(m.model)}</span> ${m.current ? '<span class="badge cur">in app</span>' : ''}
+        <small>${esc(m.note || '')}${m.price ? ` · ~$${m.price[0]}/$${m.price[1]} per 1M` : ''}</small></span></label>`).join('')}
+    </div>`).join('');
+  $('#models').querySelectorAll('input[data-k]').forEach(cb => cb.onchange = () => {
+    const m = META.models.find(x => key(x) === cb.dataset.k);
+    cb.checked ? selected.set(cb.dataset.k, m) : selected.delete(cb.dataset.k); count();
+  });
+  $('#models').querySelectorAll('[data-disc]').forEach(b => b.onclick = () => discover(b));
+  count();
+}
+const count = () => $('#selCount').textContent = selected.size + ' selected';
+
+async function discover(btn) {
+  const prov = btn.dataset.disc, fd = new FormData();
+  fd.append('provider', prov); fd.append('api_key', ($(`#keys [data-prov=${prov}]`).value || '').trim());
+  btn.disabled = true; btn.textContent = '…';
+  try {
+    const { models } = await api('/api/discover', { method: 'POST', body: fd });
+    const known = new Set(META.models.filter(m => m.provider === prov).map(m => m.model));
+    models.filter(m => !known.has(m)).forEach(m => META.models.push({ provider: prov, model: m, note: 'discovered', current: false, price: null }));
+    renderModels();
+  } catch (e) { alert(e.message); }
+  btn.disabled = false; btn.textContent = 'Discover';
+}
+
+$('#cAdd').onclick = () => {
+  const model = $('#cModel').value.trim(); if (!model) return;
+  const m = { provider: $('#cProv').value, model, note: 'custom', current: false, price: null };
+  if (!META.models.some(x => key(x) === key(m))) META.models.push(m);
+  selected.set(key(m), m); $('#cModel').value = ''; renderModels();
+};
+
+function onTask() {
+  const t = META.tasks.find(x => x.id === $('#task').value);
+  $('#taskDesc').textContent = t.description;
+  $('#linkedinBox').style.display = t.id === 'linkedin' ? '' : 'none';
+  $('#jobBox').style.display = t.id === 'job_scoring' ? '' : 'none';
+  $('#pfBox').style.display = t.id === 'linkedin' ? 'none' : '';
+  $('#priorBox').style.display = t.id === 'job_scoring' ? '' : 'none';
+  $('#resumeBox label').textContent = t.id === 'linkedin' ? 'Resume PDF (optional — enables cross-check)' : 'Resume PDF';
+}
+$('#task').onchange = onTask;
+
+$('#run').onclick = async () => {
+  const err = $('#formErr'); err.style.display = 'none';
+  const fail = m => { err.textContent = m; err.style.display = ''; };
+  const task = $('#task').value, fd = new FormData();
+  if (!selected.size) return fail('Select at least one model.');
+  const resume = $('#resume').files[0], li = $('#linkedin').files[0];
+  if (task !== 'linkedin' && !resume) return fail('Upload a resume PDF.');
+  if (task === 'linkedin' && !li) return fail('Upload a LinkedIn PDF export.');
+  fd.append('task', task);
+  fd.append('models', JSON.stringify([...selected.values()].map(m => ({ provider: m.provider, model: m.model }))));
+  if (resume) fd.append('resume', resume);
+  if (task === 'linkedin' && li) fd.append('linkedin', li);
+  fd.append('target_role', $('#role').value);
+  fd.append('portfolio_json', $('#portfolio').value); fd.append('prior_audit_json', $('#prior').value);
+  if (task === 'job_scoring') {
+    const w = {}; WEIGHTS.forEach(([id]) => w[id] = +$('#' + id).value || 0);
+    const sum = Object.values(w).reduce((a, b) => a + b, 0);
+    if (sum !== 100) return fail(`Weights sum to ${sum}, expected 100.`);
+    fd.append('weights', JSON.stringify(w));
+    fd.append('job_title', $('#jobTitle').value); fd.append('job_domain', $('#jobDomain').value);
+    fd.append('job_experience', $('#jobExp').value); fd.append('job_skills', $('#jobSkills').value);
+    fd.append('job_description', $('#jobDesc').value);
+  }
+  fd.append('auto_portfolio', $('#autoPf').checked); fd.append('github_user', $('#ghUser').value);
+  fd.append('leetcode_user', $('#lcUser').value); fd.append('codeforces_user', $('#cfUser').value);
+  fd.append('input_mode', $('#mode').value); fd.append('temperature', $('#temp').value); fd.append('timeout_s', $('#timeout').value);
+  const keys = {}; document.querySelectorAll('#keys input').forEach(i => i.value.trim() && (keys[i.dataset.prov] = i.value.trim()));
+  fd.append('api_keys', JSON.stringify(keys));
+  $('#run').disabled = true;
+  try { const { id } = await api('/api/runs', { method: 'POST', body: fd }); watch(id); }
+  catch (e) { fail(e.message); }
+  $('#run').disabled = false;
+};
+
+function watch(id) {
+  RUN_ID = id; clearInterval(poll); CARDS.clear(); $('#cols').innerHTML = '';
+  $('#empty').style.display = 'none'; $('#results').style.display = '';
+  const tick = async () => {
+    const run = await api('/api/runs/' + id).catch(() => null); if (!run || RUN_ID !== id) return;
+    render(run);
+    if (run.status !== 'running') { clearInterval(poll); loadHistory(); }
+  };
+  tick(); poll = setInterval(tick, 1200);
+}
+
+const CARDS = new Map(); let LAST;
+const status = r => r.status === 'done' ? (r.valid ? 'done' : 'invalid') : r.status;
+const fmt = (n, d = 0) => n == null ? '—' : Number(n).toFixed(d);
+
+function render(run) {
+  LAST = run;
+  const task = META.tasks.find(t => t.id === run.task);
+  $('#runTitle').textContent = `${task.label} · ${run.config.resume_file || run.config.linkedin_file || ''} · ${run.input_mode} input · ${run.status}`;
+  $('#cancel').style.display = run.status === 'running' ? '' : 'none';
+  $('#strip').innerHTML = run.results.map(r => `<span class="st ${status(r)}">${esc(r.model)} ${{pending:'·',running:'⏳',done:'✓',invalid:'⚠ schema',error:'✕',skipped:'–'}[status(r)]}</span>`).join('');
+  $('#phase').style.display = run.phase ? '' : 'none'; $('#phase').textContent = run.phase || '';
+  renderPortfolio(run);
+  renderSummary(run);
+  run.results.forEach((r, i) => {
+    const sig = JSON.stringify([r.status, r.valid, r.rating, run.best === i]);
+    let c = CARDS.get(i);
+    if (!c) { c = { el: document.createElement('div') }; c.el.className = 'card'; $('#cols').appendChild(c.el); CARDS.set(i, c); }
+    if (c.sig === sig) return;
+    c.sig = sig; c.el.className = 'card' + (run.best === i ? ' best' : ''); drawCard(c.el, r, i, run);
+  });
+}
+
+function renderPortfolio(run) {
+  const el = $('#pf'), pf = run.portfolio;
+  if (!pf) { el.style.display = 'none'; return; }
+  el.style.display = '';
+  if (pf.error) { el.innerHTML = `<b>Portfolio verification</b><div class="err" style="margin-top:6px">${esc(pf.error)}</div>`; return; }
+  const L = { github: 'GitHub', leetcode: 'LeetCode', codeforces: 'Codeforces' };
+  const badge = e => ({ verified: ['ok', 'verified'], fetch_failed: ['no', 'fetch failed'], not_provided: ['no', 'NOT PROVIDED — flagged'] }[e.status]);
+  el.innerHTML = `<b>Portfolio verification</b> <span class="hint">(fetched once, same data for every model)</span><table style="margin-top:6px">` +
+    Object.entries(pf.platforms).map(([p, e]) => { const [c, t] = badge(e);
+      return `<tr><td>${L[p]}</td><td class="mono">${esc(e.username || '—')}</td><td>${esc(e.source || '')}</td><td><span class="badge ${c}">${t}</span> ${esc(e.error || '')}</td></tr>`; }).join('') +
+    `</table><details><summary>Links found in the resume (${(pf.links_found || []).length})</summary><pre>${esc((pf.links_found || []).join('\n') || 'none')}</pre></details>`;
+}
+
+function renderSummary(run) {
+  const rows = run.results.map((r, i) => ({ r, i }));
+  const maxLat = Math.max(...run.results.map(r => r.latency_s || 0), 0);
+  $('#summary').innerHTML = `<tr><th>Model</th><th>Status</th><th class="n">Score</th><th>Verdict</th><th class="n">Time</th><th class="n">In tok</th><th class="n">Out tok</th><th class="n">~Cost</th><th class="n">Rating</th></tr>` +
+    rows.map(({ r, i }) => `<tr ${run.best === i ? 'class="best"' : ''}><td class="mono">${esc(r.model)}${run.best === i ? ' 🏆' : ''}</td>
+      <td>${esc(status(r))}</td><td class="n"><b>${fmt(r.headline?.score, 0)}</b></td>
+      <td>${esc(r.headline?.verdict || '')}</td><td class="n">${r.latency_s ? r.latency_s + 's' : '—'}</td>
+      <td class="n">${fmt(r.input_tokens)}</td><td class="n">${fmt(r.output_tokens)}</td>
+      <td class="n">${r.cost_usd != null ? '$' + r.cost_usd : '—'}</td><td class="n">${r.rating ? '★'.repeat(r.rating) : '—'}</td></tr>`).join('');
+  // score spread is itself a quality signal: big disagreement between models = unstable prompt/rubric
+  const sc = run.results.map(r => r.headline?.score).filter(s => s != null);
+  if (sc.length > 1) $('#summary').insertAdjacentHTML('beforeend', `<tr><td colspan="9" style="color:var(--mute);font-size:12px">Score spread across models: ${Math.min(...sc)}–${Math.max(...sc)} (Δ${Math.max(...sc) - Math.min(...sc)}). A wide spread means the models disagree — read the rationales before trusting any one number.</td></tr>`);
+}
+
+function drawCard(el, r, i, run) {
+  const h = r.headline || {};
+  let body = '';
+  if (r.status === 'pending' || r.status === 'skipped') body = `<div class="sub">${r.status === 'pending' ? 'Waiting for earlier models…' : 'Skipped'}</div>`;
+  else if (r.status === 'running') body = '<div class="sub">Running…</div>';
+  else if (r.status === 'error') body = `<div class="err">${esc(r.error)}</div>`;
+  else {
+    const extra = Object.entries(h).filter(([k]) => !['score', 'verdict'].includes(k)).map(([k, v]) => `<span class="pill">${esc(k.replace(/_/g, ' '))}: ${esc(typeof v === 'object' ? JSON.stringify(v) : v)}</span>`).join('');
+    body = `<div class="row" style="align-items:flex-end"><div><div class="big">${fmt(h.score, 0)}</div><div class="sub" style="margin:0">${esc(h.verdict || '')}</div></div></div>
+      <div class="chips"><span class="pill">${r.latency_s}s</span><span class="pill">${fmt(r.input_tokens)} in / ${fmt(r.output_tokens)} out</span>
+      ${r.cost_usd != null ? `<span class="pill">~$${r.cost_usd}</span>` : ''}<span class="pill">${esc(r.input_mode)}</span>${extra}</div>
+      ${r.valid ? '' : `<div class="warn">Schema check failed — ${esc(r.parse_error)}</div>`}
+      <div class="stars" data-i="${i}">${[1, 2, 3, 4, 5].map(n => `<button data-n="${n}" class="${r.rating >= n ? 'on' : ''}">★</button>`).join('')}
+        <button data-best style="font-size:12px;margin-left:8px;border:1px solid var(--line);padding:2px 8px;border-radius:6px;color:var(--ink)">${run.best === i ? '🏆 Best' : 'Mark best'}</button></div>
+      <input type="text" class="note" data-note placeholder="Notes on this output…" value="${esc(r.note || '')}">
+      ${r.output ? `<div class="tree">${tree(r.output)}</div>` : ''}
+      <details><summary>Raw output</summary><pre>${esc(r.raw || '')}</pre></details>`;
+  }
+  el.innerHTML = `<h3>${esc(r.model)}</h3><div class="sub">${esc(r.provider)}</div>${body}`;
+  const stars = el.querySelector('.stars');
+  if (stars) {
+    stars.querySelectorAll('[data-n]').forEach(b => b.onclick = () => review(i, +b.dataset.n === r.rating ? 0 : +b.dataset.n, null));
+    stars.querySelector('[data-best]').onclick = () => review(i, null, null, run.best !== i);
+    el.querySelector('[data-note]').onchange = e => review(i, null, e.target.value);
+  }
+}
+
+async function review(i, rating, note, best) {
+  const r = LAST.results[i], fd = new FormData();
+  fd.append('index', i); fd.append('rating', rating ?? r.rating ?? 0); fd.append('note', note ?? r.note ?? '');
+  fd.append('best', best ?? LAST.best === i);
+  await api(`/api/runs/${RUN_ID}/review`, { method: 'POST', body: fd });
+  render(await api('/api/runs/' + RUN_ID));
+}
+
+// Generic JSON → readable tree (works for all three task schemas; all text is escaped)
+function tree(v, depth = 0) {
+  if (v == null) return '<i style="color:var(--mute)">null</i>';
+  if (Array.isArray(v)) {
+    if (!v.length) return '<i style="color:var(--mute)">none</i>';
+    return v.every(x => typeof x !== 'object' || x === null)
+      ? `<ul>${v.map(x => `<li>${esc(x)}</li>`).join('')}</ul>`
+      : v.map(x => `<div class="obj">${tree(x, depth + 1)}</div>`).join('');
+  }
+  if (typeof v === 'object') return Object.entries(v).map(([k, x]) => `<div><div class="k">${esc(k.replace(/_/g, ' '))}</div>${tree(x, depth + 1)}</div>`).join('');
+  return `<div>${esc(v)}</div>`;
+}
+
+$('#cancel').onclick = () => api(`/api/runs/${RUN_ID}/cancel`, { method: 'POST' });
+$('#export').onclick = () => {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([JSON.stringify(LAST, null, 2)], { type: 'application/json' }));
+  a.download = `model-lab-${LAST.id}.json`; a.click();
+};
+
+async function loadHistory() {
+  const items = await api('/api/runs').catch(() => []);
+  $('#history').innerHTML = '<option value="">Past runs…</option>' + items.map(r =>
+    `<option value="${r.id}">${new Date(r.created * 1000).toLocaleString()} · ${esc(r.task)} · ${r.models} models${r.file ? ' · ' + esc(r.file) : ''}</option>`).join('');
+}
+$('#history').onchange = e => e.target.value && watch(e.target.value);
+
+init().catch(e => document.body.insertAdjacentHTML('afterbegin', `<div class="err">Failed to load: ${esc(e.message)}</div>`));
+</script>
+</body>
+</html>
