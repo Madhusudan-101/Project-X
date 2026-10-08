@@ -18,6 +18,7 @@ import {
   Loader2,
   LogIn,
   LogOut,
+  Mic,
   Play,
   Search,
   Settings,
@@ -61,6 +62,7 @@ import { practiceService } from "@/services/api/candidate/practice";
 import { peerService, type PeerReport } from "@/services/api/candidate/peer";
 import { reservePeerMeetTab } from "@/lib/peerMeetTab";
 import { toast } from "sonner";
+import { AiInterviewTab } from "@/components/candidate/ai-interview/AiInterviewTab";
 import { PeerInterviewMatchModal } from "@/components/candidate/PeerInterviewMatchModal";
 import { ScheduledMeetingsList } from "@/components/candidate/ScheduledMeetingsList";
 import { UpcomingMeetings } from "@/components/candidate/UpcomingMeetings";
@@ -290,6 +292,7 @@ function CandidatePortal() {
                 { v: "jobs", label: "Jobs", icon: Briefcase },
                 { v: "analyzer", label: "Analyzer", icon: Zap },
                 { v: "practice", label: "Practice", icon: TerminalSquare },
+                { v: "ai-interview", label: "AI Interview", icon: Mic },
                 { v: "dna", label: "Skill DNA", icon: Dna },
               ].map((t) => {
                 const Icon = t.icon;
@@ -324,6 +327,10 @@ function CandidatePortal() {
               </TabsContent>
               <TabsContent value="practice" className="mt-0" forceMount>
                 <PracticeTab />
+              </TabsContent>
+              {/* No forceMount: unmounting an inactive tab tears down the live room. */}
+              <TabsContent value="ai-interview" className="mt-0">
+                <AiInterviewTab />
               </TabsContent>
               <TabsContent value="dna" className="mt-0" forceMount>
                 <TechDnaTab />
