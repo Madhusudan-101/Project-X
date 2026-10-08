@@ -3,7 +3,7 @@ import os
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from .routers.shared import auth, peer_reports
+from .routers.shared import auth, peer_reports, ai_interview_reports
 
 # Without this, every `logger.exception(...)`/`logger.warning(...)` call across
 # the whole backend is a silent no-op — the root logger has no handler
@@ -13,7 +13,7 @@ logging.basicConfig(
     format="%(asctime)s %(levelname)s %(name)s: %(message)s",
 )
 from .routers.college import students, drives, dashboard, shortlist, departments
-from .routers.candidate import sync, analyze, practice, peer
+from .routers.candidate import sync, analyze, practice, peer, ai_interview
 from .routers.candidate import jobs as candidate_jobs
 from .routers.candidate import assessment as candidate_assessment
 from .routers.candidate import assessment_code as candidate_assessment_code
@@ -91,6 +91,8 @@ app.include_router(analyze.router)
 app.include_router(practice.router)
 app.include_router(peer.router)
 app.include_router(peer_reports.router)
+app.include_router(ai_interview.router)
+app.include_router(ai_interview_reports.router)
 app.include_router(company.router)
 app.include_router(company_roles.router)
 app.include_router(company_jobs.router)
