@@ -41,6 +41,8 @@ import { Route as AuthResetPasswordRouteImport } from './routes/auth.reset-passw
 import { Route as AuthSetPasswordRouteImport } from './routes/auth.set-password'
 import { Route as AuthSignupRouteImport } from './routes/auth.signup'
 import { Route as CandidateJobsJobIdRouteImport } from './routes/candidate-jobs/$jobId'
+import { Route as CandidateOaApplicationIdIndexRouteImport } from './routes/candidate-oa/$applicationId/index'
+import { Route as CandidateOaApplicationIdTestRouteImport } from './routes/candidate-oa/$applicationId/test'
 import { Route as CollegeIndexRouteImport } from './routes/college/index'
 import { Route as CollegeAnalyticsRouteImport } from './routes/college/analytics'
 import { Route as CollegeDepartmentsRouteImport } from './routes/college/departments'
@@ -222,6 +224,18 @@ const CandidateJobsJobIdRoute = CandidateJobsJobIdRouteImport.update({
   path: '/candidate-jobs/$jobId',
   getParentRoute: () => rootRouteImport,
 } as any)
+const CandidateOaApplicationIdIndexRoute =
+  CandidateOaApplicationIdIndexRouteImport.update({
+    id: '/candidate-oa/$applicationId/',
+    path: '/candidate-oa/$applicationId/',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const CandidateOaApplicationIdTestRoute =
+  CandidateOaApplicationIdTestRouteImport.update({
+    id: '/candidate-oa/$applicationId/test',
+    path: '/candidate-oa/$applicationId/test',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const CollegeIndexRoute = CollegeIndexRouteImport.update({
   id: '/',
   path: '/',
@@ -356,6 +370,8 @@ export interface FileRoutesByFullPath {
   '/auth/set-password': typeof AuthSetPasswordRoute
   '/auth/signup': typeof AuthSignupRoute
   '/candidate-jobs/$jobId': typeof CandidateJobsJobIdRoute
+  '/candidate-oa/$applicationId/test': typeof CandidateOaApplicationIdTestRoute
+  '/candidate-oa/$applicationId/': typeof CandidateOaApplicationIdIndexRoute
   '/college/analytics': typeof CollegeAnalyticsRoute
   '/college/departments': typeof CollegeDepartmentsRoute
   '/college/drives': typeof CollegeDrivesRoute
@@ -408,6 +424,8 @@ export interface FileRoutesByTo {
   '/auth/set-password': typeof AuthSetPasswordRoute
   '/auth/signup': typeof AuthSignupRoute
   '/candidate-jobs/$jobId': typeof CandidateJobsJobIdRoute
+  '/candidate-oa/$applicationId/test': typeof CandidateOaApplicationIdTestRoute
+  '/candidate-oa/$applicationId': typeof CandidateOaApplicationIdIndexRoute
   '/college/analytics': typeof CollegeAnalyticsRoute
   '/college/departments': typeof CollegeDepartmentsRoute
   '/college/drives': typeof CollegeDrivesRoute
@@ -463,6 +481,8 @@ export interface FileRoutesById {
   '/auth/set-password': typeof AuthSetPasswordRoute
   '/auth/signup': typeof AuthSignupRoute
   '/candidate-jobs/$jobId': typeof CandidateJobsJobIdRoute
+  '/candidate-oa/$applicationId/test': typeof CandidateOaApplicationIdTestRoute
+  '/candidate-oa/$applicationId/': typeof CandidateOaApplicationIdIndexRoute
   '/college/analytics': typeof CollegeAnalyticsRoute
   '/college/departments': typeof CollegeDepartmentsRoute
   '/college/drives': typeof CollegeDrivesRoute
@@ -519,6 +539,8 @@ export interface FileRouteTypes {
     | '/auth/set-password'
     | '/auth/signup'
     | '/candidate-jobs/$jobId'
+    | '/candidate-oa/$applicationId/test'
+    | '/candidate-oa/$applicationId/'
     | '/college/analytics'
     | '/college/departments'
     | '/college/drives'
@@ -571,6 +593,8 @@ export interface FileRouteTypes {
     | '/auth/set-password'
     | '/auth/signup'
     | '/candidate-jobs/$jobId'
+    | '/candidate-oa/$applicationId/test'
+    | '/candidate-oa/$applicationId'
     | '/college/analytics'
     | '/college/departments'
     | '/college/drives'
@@ -625,6 +649,8 @@ export interface FileRouteTypes {
     | '/auth/set-password'
     | '/auth/signup'
     | '/candidate-jobs/$jobId'
+    | '/candidate-oa/$applicationId/test'
+    | '/candidate-oa/$applicationId/'
     | '/college/analytics'
     | '/college/departments'
     | '/college/drives'
@@ -658,6 +684,8 @@ export interface RootRouteChildren {
   PortalsRoute: typeof PortalsRoute
   SitemapDotxmlRoute: typeof SitemapDotxmlRoute
   CandidateJobsJobIdRoute: typeof CandidateJobsJobIdRoute
+  CandidateOaApplicationIdTestRoute: typeof CandidateOaApplicationIdTestRoute
+  CandidateOaApplicationIdIndexRoute: typeof CandidateOaApplicationIdIndexRoute
   CompanyJobsJobIdRoute: typeof CompanyJobsJobIdRoute
   CompanyRolesRoleIdRoute: typeof CompanyRolesRoleIdRoute
   ResumeTailorApplicationIdRoute: typeof ResumeTailorApplicationIdRoute
@@ -889,6 +917,20 @@ declare module '@tanstack/react-router' {
       path: '/candidate-jobs/$jobId'
       fullPath: '/candidate-jobs/$jobId'
       preLoaderRoute: typeof CandidateJobsJobIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/candidate-oa/$applicationId/': {
+      id: '/candidate-oa/$applicationId/'
+      path: '/candidate-oa/$applicationId'
+      fullPath: '/candidate-oa/$applicationId/'
+      preLoaderRoute: typeof CandidateOaApplicationIdIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/candidate-oa/$applicationId/test': {
+      id: '/candidate-oa/$applicationId/test'
+      path: '/candidate-oa/$applicationId/test'
+      fullPath: '/candidate-oa/$applicationId/test'
+      preLoaderRoute: typeof CandidateOaApplicationIdTestRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/college/': {
@@ -1145,6 +1187,8 @@ const rootRouteChildren: RootRouteChildren = {
   PortalsRoute: PortalsRoute,
   SitemapDotxmlRoute: SitemapDotxmlRoute,
   CandidateJobsJobIdRoute: CandidateJobsJobIdRoute,
+  CandidateOaApplicationIdTestRoute: CandidateOaApplicationIdTestRoute,
+  CandidateOaApplicationIdIndexRoute: CandidateOaApplicationIdIndexRoute,
   CompanyJobsJobIdRoute: CompanyJobsJobIdRoute,
   CompanyRolesRoleIdRoute: CompanyRolesRoleIdRoute,
   ResumeTailorApplicationIdRoute: ResumeTailorApplicationIdRoute,
