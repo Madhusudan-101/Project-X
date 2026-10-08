@@ -19,9 +19,7 @@ import type { CombinedAnalysisResponse, SavedResumeAnalysisResponse } from "@/ty
 export function extractGitHubUsername(input: string): string {
   const trimmed = input.trim().replace(/\/+$/, "");
   try {
-    const url = new URL(
-      trimmed.startsWith("http") ? trimmed : `https://${trimmed}`,
-    );
+    const url = new URL(trimmed.startsWith("http") ? trimmed : `https://${trimmed}`);
     if (url.hostname === "github.com" || url.hostname === "www.github.com") {
       const parts = url.pathname.split("/").filter(Boolean);
       if (parts.length >= 1) return parts[0];
@@ -46,9 +44,7 @@ export function extractGitHubUsername(input: string): string {
 export function extractLeetCodeUsername(input: string): string {
   const trimmed = input.trim().replace(/\/+$/, "");
   try {
-    const url = new URL(
-      trimmed.startsWith("http") ? trimmed : `https://${trimmed}`,
-    );
+    const url = new URL(trimmed.startsWith("http") ? trimmed : `https://${trimmed}`);
     if (url.hostname === "leetcode.com" || url.hostname === "www.leetcode.com") {
       const parts = url.pathname.split("/").filter(Boolean);
       // handle /u/username or /username
@@ -73,9 +69,7 @@ export function extractLeetCodeUsername(input: string): string {
 export function extractCodeforcesHandle(input: string): string {
   const trimmed = input.trim().replace(/\/+$/, "");
   try {
-    const url = new URL(
-      trimmed.startsWith("http") ? trimmed : `https://${trimmed}`,
-    );
+    const url = new URL(trimmed.startsWith("http") ? trimmed : `https://${trimmed}`);
     if (url.hostname === "codeforces.com" || url.hostname === "www.codeforces.com") {
       const parts = url.pathname.split("/").filter(Boolean);
       // handle /profile/handle or /handle
@@ -101,7 +95,11 @@ export const syncService = {
   analyzeResume: (
     file: File,
     targetRole: string,
-    usernames: { github?: string | null; leetcode?: string | null; codeforces?: string | null } = {},
+    usernames: {
+      github?: string | null;
+      leetcode?: string | null;
+      codeforces?: string | null;
+    } = {},
   ) => {
     const formData = new FormData();
     formData.append("file", file);
@@ -110,13 +108,10 @@ export const syncService = {
     if (usernames.leetcode) formData.append("leetcode_username", usernames.leetcode);
     if (usernames.codeforces) formData.append("codeforces_username", usernames.codeforces);
 
-    return request<CombinedAnalysisResponse>(
-      `/api/v1/analyze-resume`,
-      {
-        method: "POST",
-        body: formData,
-      },
-    );
+    return request<CombinedAnalysisResponse>(`/api/v1/analyze-resume`, {
+      method: "POST",
+      body: formData,
+    });
   },
 
   /**

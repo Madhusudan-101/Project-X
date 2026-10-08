@@ -15,12 +15,7 @@ export interface MatchmakingStatus {
   waiting_since: string | null;
 }
 
-export type ScheduledMeetingStatus =
-  | "scheduled"
-  | "waiting"
-  | "live"
-  | "cancelled"
-  | "completed";
+export type ScheduledMeetingStatus = "scheduled" | "waiting" | "live" | "cancelled" | "completed";
 
 export interface ScheduledMeeting {
   id: string;
@@ -44,9 +39,9 @@ export interface PublicScheduledMeeting {
   duration_minutes: number;
   status: ScheduledMeetingStatus;
   host_display_name: string;
-  is_open: boolean;       // no invitee -> any authed student may join
+  is_open: boolean; // no invitee -> any authed student may join
   is_authorized: boolean; // caller may join THIS meeting
-  can_join_now: boolean;  // is_authorized AND inside join window
+  can_join_now: boolean; // is_authorized AND inside join window
 }
 
 export interface CreateScheduledMeetingIn {

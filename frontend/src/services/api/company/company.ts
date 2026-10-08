@@ -9,7 +9,12 @@
  */
 
 import { request } from "../client";
-import type { Company, CompanySession, CompanySignupPayload, CompanyUpdatePayload } from "@/types/company/company";
+import type {
+  Company,
+  CompanySession,
+  CompanySignupPayload,
+  CompanyUpdatePayload,
+} from "@/types/company/company";
 
 // ── Shape helpers (snake_case DB → camelCase TS) ───────────────────────
 
@@ -36,22 +41,19 @@ export const companyService = {
    * Calls POST /auth/company-signup (no auth required — creates the user).
    */
   signup: (payload: CompanySignupPayload): Promise<CompanySession> =>
-    request<Record<string, unknown>>(
-      "/auth/company-signup",
-      {
-        method: "POST",
-        body: {
-          email: payload.email,
-          password: payload.password,
-          first_name: payload.firstName,
-          last_name: payload.lastName,
-          company_name: payload.companyName,
-          industry: payload.industry,
-          size: payload.size,
-          hiring_domains: payload.hiringDomains,
-        },
+    request<Record<string, unknown>>("/auth/company-signup", {
+      method: "POST",
+      body: {
+        email: payload.email,
+        password: payload.password,
+        first_name: payload.firstName,
+        last_name: payload.lastName,
+        company_name: payload.companyName,
+        industry: payload.industry,
+        size: payload.size,
+        hiring_domains: payload.hiringDomains,
       },
-    ).then((raw) => ({
+    }).then((raw) => ({
       user: raw.user as CompanySession["user"],
       token: raw.token as string,
       refreshToken: raw.refreshToken as string,
@@ -71,18 +73,15 @@ export const companyService = {
    * Requires a valid Bearer token (company role).
    */
   updateMe: (payload: CompanyUpdatePayload): Promise<Company> =>
-    request<Record<string, unknown>>(
-      "/company/me",
-      {
-        method: "PATCH",
-        body: {
-          ...(payload.name !== undefined && { name: payload.name }),
-          ...(payload.industry !== undefined && { industry: payload.industry }),
-          ...(payload.size !== undefined && { size: payload.size }),
-          ...(payload.hiringDomains !== undefined && { hiring_domains: payload.hiringDomains }),
-          ...(payload.website !== undefined && { website: payload.website }),
-          ...(payload.logoUrl !== undefined && { logo_url: payload.logoUrl }),
-        },
+    request<Record<string, unknown>>("/company/me", {
+      method: "PATCH",
+      body: {
+        ...(payload.name !== undefined && { name: payload.name }),
+        ...(payload.industry !== undefined && { industry: payload.industry }),
+        ...(payload.size !== undefined && { size: payload.size }),
+        ...(payload.hiringDomains !== undefined && { hiring_domains: payload.hiringDomains }),
+        ...(payload.website !== undefined && { website: payload.website }),
+        ...(payload.logoUrl !== undefined && { logo_url: payload.logoUrl }),
       },
-    ).then(normalizeCompany),
+    }).then(normalizeCompany),
 };

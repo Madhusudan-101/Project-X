@@ -24,8 +24,11 @@ _STUB = {
 }
 
 
-def _coding(title: str, prompt: str, points: int = 100) -> Dict[str, Any]:
+def _coding(title: str, prompt: str, points: int = 100, library_problem: str | None = None) -> Dict[str, Any]:
+    """`library_problem`: id of a validated oa_problems row that replaces this stored-only
+    question when the library is loaded (see provision_template). Never written to the DB."""
     return {
+        "library_problem": library_problem,
         "qtype": "coding",
         "title": title,
         "prompt": prompt,
@@ -70,6 +73,7 @@ _CODING_SECTIONS: List[Dict[str, Any]] = [
                 "**Output**\n- A pair of indices.\n\n"
                 "**Example**\n`nums = [2, 7, 11, 15], target = 9` → `[0, 1]`\n\n"
                 "Aim for O(n) time.",
+                library_problem="two-sum",
             )
         ],
     },
@@ -85,6 +89,7 @@ _CODING_SECTIONS: List[Dict[str, Any]] = [
                 "Intervals that touch (e.g. `[1, 3]` and `[3, 5]`) count as overlapping.\n\n"
                 "**Example**\n`[[1,3],[2,6],[8,10],[15,18]]` → `[[1,6],[8,10],[15,18]]`\n\n"
                 "**Constraints**\n- 1 <= intervals.length <= 10^5\n- 0 <= start <= end <= 10^9",
+                library_problem="merge-intervals",
             )
         ],
     },
@@ -102,6 +107,7 @@ _CODING_SECTIONS: List[Dict[str, Any]] = [
                 "**Example**\n`n = 4, prerequisites = [[1,0],[2,1],[3,2]]` → `true, [0,1,2,3]`\n\n"
                 "`n = 2, prerequisites = [[1,0],[0,1]]` → `false`\n\n"
                 "**Constraints**\n- 1 <= n <= 10^5\n- 0 <= prerequisites.length <= 2 * 10^5",
+                library_problem="course-schedule",
             )
         ],
     },

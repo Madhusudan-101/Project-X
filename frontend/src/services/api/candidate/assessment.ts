@@ -9,17 +9,24 @@
  *   GET  /candidate/oa/{applicationId}/session          current section + questions
  *   PUT  /candidate/oa/{applicationId}/answers          autosave one answer
  *   POST /candidate/oa/{applicationId}/sections/submit  close the current section
- *   POST /candidate/oa/{applicationId}/events           proctoring signal
+ *   POST /candidate/oa/{applicationId}/events           integrity signal (tab switch / fullscreen exit / paste)
+ *   POST /candidate/oa/{applicationId}/questions/{qid}/run     run visible examples (+ custom input)
+ *   POST /candidate/oa/{applicationId}/questions/{qid}/submit  grade against all tests
  */
 
 import { request } from "../client";
 import type {
+  OACaseResult,
+  OAEventType,
   OAListItem,
   OAOverview,
   OAQuestion,
+  OARunResult,
   OASection,
   OASession,
   OAState,
+  OASubmitResult,
+  CodeLanguage,
 } from "@/types/candidate/assessment";
 
 type Raw = Record<string, unknown>;
@@ -34,6 +41,19 @@ function normalizeQuestion(raw: Raw): OAQuestion {
     options: (raw.options as string[] | null) ?? null,
     starterCode: (raw.starter_code as Record<string, string> | null) ?? null,
     points: Number(raw.points),
+    promptFormat: (raw.prompt_format as OAQuestion["promptFormat"]) ?? "markdown",
+    problem: raw.problem
+      ? {
+          id: (raw.problem as Raw).id as string,
+          functionName: (raw.problem as Raw).function_name as string,
+          languages: ((raw.problem as Raw).languages as CodeLanguage[]) ?? [],
+          constraintsHtml: ((raw.problem as Raw).constraints_html as string) ?? "",
+          examples: (((raw.problem as Raw).examples as Raw[]) ?? []).map((e) => ({
+            input: e.input as string,
+            expected: e.expected as string,
+          })),
+        }
+      : null,
     answer: (raw.answer as string | null) ?? null,
     language: (raw.language as string | null) ?? null,
   };
@@ -44,6 +64,7 @@ function normalizeSession(raw: Raw): OASession {
   return {
     status: raw.status as OASession["status"],
     serverTime: raw.server_time as string,
+    codingEnabled: Boolean(raw.coding_enabled),
     section: s
       ? {
           position: Number(s.position),
@@ -71,6 +92,7 @@ function normalizeOverview(raw: Raw): OAOverview {
     serverTime: raw.server_time as string,
     totalDurationMinutes: Number(raw.total_duration_minutes),
     totalQuestions: Number(raw.total_questions),
+    codingEnabled: Boolean(raw.coding_enabled),
     sections: ((raw.sections as Raw[]) ?? []).map((s) => ({
       position: Number(s.position),
       title: s.title as string,
@@ -86,6 +108,27 @@ function normalizeOverview(raw: Raw): OAOverview {
           submittedAt: (a.submitted_at as string | null) ?? null,
         }
       : null,
+  };
+}
+
+function normalizeCase(c: Raw): OACaseResult {
+  return {
+    label: c.label as string,
+    status: c.status as OACaseResult["status"],
+    input: c.input as string,
+    expected: (c.expected as string | null) ?? null,
+    actual: (c.actual as string | null) ?? null,
+    error: (c.error as string | null) ?? null,
+  };
+}
+
+function normalizeRun(raw: Raw): OARunResult {
+  return {
+    verdict: raw.verdict as OARunResult["verdict"],
+    compileError: (raw.compile_error as string | null) ?? null,
+    crash: (raw.crash as string | null) ?? null,
+    stdout: (raw.stdout as string) ?? "",
+    cases: ((raw.cases as Raw[]) ?? []).map(normalizeCase),
   };
 }
 
@@ -125,9 +168,38 @@ export const candidateAssessmentService = {
       normalizeSession,
     ),
 
-  reportTabSwitch: (applicationId: string): Promise<void> =>
+  reportEvent: (applicationId: string, type: OAEventType): Promise<void> =>
     request<unknown>(`/candidate/oa/${applicationId}/events`, {
       method: "POST",
-      body: { type: "tab_switch" },
+      body: { type },
     }).then(() => undefined),
+
+  runCode: (
+    applicationId: string,
+    questionId: string,
+    body: { language: CodeLanguage; source: string; customArgs?: unknown[] | null },
+  ): Promise<OARunResult> =>
+    request<Raw>(`/candidate/oa/${applicationId}/questions/${questionId}/run`, {
+      method: "POST",
+      body: { language: body.language, source: body.source, custom_args: body.customArgs ?? null },
+    }).then(normalizeRun),
+
+  submitCode: (
+    applicationId: string,
+    questionId: string,
+    body: { language: CodeLanguage; source: string },
+  ): Promise<OASubmitResult> =>
+    request<Raw>(`/candidate/oa/${applicationId}/questions/${questionId}/submit`, {
+      method: "POST",
+      body: { language: body.language, source: body.source },
+    }).then((raw) => ({
+      ...normalizeRun(raw),
+      passed: Number(raw.passed),
+      total: Number(raw.total),
+      hiddenPassed: Number(raw.hidden_passed),
+      hiddenTotal: Number(raw.hidden_total),
+      score: Number(raw.score),
+      points: Number(raw.points),
+      submissionsLeft: Number(raw.submissions_left),
+    })),
 };

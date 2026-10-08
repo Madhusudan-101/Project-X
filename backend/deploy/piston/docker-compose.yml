@@ -1,0 +1,18 @@
+# Self-hosted Piston — the sandbox the Online Assessment judge calls in production.
+# Needs a real Linux Docker host (Piston isolates with namespaces/cgroups; WSL2 and
+# most managed container platforms can't run it). See README.md in this folder.
+services:
+  piston:
+    image: ghcr.io/engineer-man/piston
+    container_name: piston_api
+    restart: always
+    privileged: true            # required by Piston's isolate sandbox
+    ports:
+      - "127.0.0.1:2000:2000"   # bind to localhost; put the backend on the same host or a private network
+    volumes:
+      - piston_packages:/piston/packages
+    tmpfs:
+      - /piston/jobs:exec
+
+volumes:
+  piston_packages:

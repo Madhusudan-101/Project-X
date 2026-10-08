@@ -2,7 +2,7 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Check, CheckCircle2, Circle, Loader2, ShieldAlert, Timer } from "lucide-react";
+import { Check, CheckCircle2, Circle, Loader2, Maximize, ShieldAlert, Timer } from "lucide-react";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -18,10 +18,17 @@ import { Card } from "@/components/ui/card";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Skeleton } from "@/components/ui/skeleton";
 import { CodeEditor } from "@/components/candidate/oa/CodeEditor";
+import { CodingWorkspace } from "@/components/candidate/oa/CodingWorkspace";
 import { PromptText } from "@/components/candidate/oa/PromptText";
 import { useCandidateGuard } from "@/hooks/candidate/use-candidate-guard";
 import { candidateAssessmentService } from "@/services/api/candidate/assessment";
-import type { OAQuestion, OASession } from "@/types/candidate/assessment";
+import type {
+  CodeLanguage,
+  OAEventType,
+  OAQuestion,
+  OASession,
+  OASubmitResult,
+} from "@/types/candidate/assessment";
 
 export const Route = createFileRoute("/candidate-oa/$applicationId/test")({
   head: () => ({ meta: [{ title: "Assessment — Mirracle" }] }),
@@ -46,7 +53,8 @@ function fmtClock(ms: number): string {
 
 function defaultLanguage(q: OAQuestion): string | null {
   if (q.qtype !== "coding") return null;
-  return q.language ?? Object.keys(q.starterCode ?? {})[0] ?? null;
+  const offered = q.problem?.languages ?? Object.keys(q.starterCode ?? {});
+  return q.language && offered.includes(q.language) ? q.language : (offered[0] ?? null);
 }
 
 function isAnswered(q: OAQuestion, a: LocalAnswer | undefined): boolean {
@@ -80,6 +88,9 @@ function AssessmentRunnerPage() {
   const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [tabSwitches, setTabSwitches] = useState(0);
+  const [best, setBest] = useState<Record<string, OASubmitResult>>({});
+  const [inFullscreen, setInFullscreen] = useState(false);
+  const [otherTab, setOtherTab] = useState(false);
 
   // Clock skew: server time at fetch vs this device's clock.
   const skewRef = useRef(0);
@@ -103,6 +114,7 @@ function AssessmentRunnerPage() {
       };
     }
     setAnswers(init);
+    setBest({});
     setActiveIdx(0);
     setSaveState("idle");
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -200,26 +212,60 @@ function AssessmentRunnerPage() {
     },
   });
 
-  // ── Integrity: tab switches + accidental navigation ──
+  // ── Integrity: tab switches, fullscreen exits, pastes, second tabs ──
   const inProgress = data?.status === "in_progress";
+  const report = useCallback(
+    (type: OAEventType) => {
+      candidateAssessmentService.reportEvent(applicationId, type).catch(() => undefined);
+    },
+    [applicationId],
+  );
+
   useEffect(() => {
     if (!inProgress) return;
     const onVisibility = () => {
       if (document.visibilityState !== "hidden") return;
       setTabSwitches((n) => n + 1);
-      candidateAssessmentService.reportTabSwitch(applicationId).catch(() => undefined);
+      report("tab_switch");
       toast.warning("You left the assessment tab. This has been recorded.");
+    };
+    const onFullscreen = () => {
+      const now = !!document.fullscreenElement;
+      setInFullscreen((was) => {
+        if (was && !now) {
+          report("fullscreen_exit");
+          toast.warning("You left fullscreen. This has been recorded.");
+        }
+        return now;
+      });
     };
     const onBeforeUnload = (e: BeforeUnloadEvent) => {
       e.preventDefault();
       e.returnValue = "";
     };
     document.addEventListener("visibilitychange", onVisibility);
+    document.addEventListener("fullscreenchange", onFullscreen);
     window.addEventListener("beforeunload", onBeforeUnload);
     return () => {
       document.removeEventListener("visibilitychange", onVisibility);
+      document.removeEventListener("fullscreenchange", onFullscreen);
       window.removeEventListener("beforeunload", onBeforeUnload);
     };
+  }, [inProgress, report]);
+
+  // A second tab on the same assessment tells the first one (state lives on the
+  // server, so nothing breaks — but two editors on one attempt is confusing).
+  useEffect(() => {
+    if (!inProgress || typeof BroadcastChannel === "undefined") return;
+    const ch = new BroadcastChannel(`mirracle-oa-${applicationId}`);
+    ch.onmessage = (m) => {
+      if (m.data === "hello") {
+        setOtherTab(true);
+        ch.postMessage("present");
+      } else if (m.data === "present") setOtherTab(true);
+    };
+    ch.postMessage("hello");
+    return () => ch.close();
   }, [inProgress, applicationId]);
 
   // Not started (or no longer ours) → back to the instructions page.
@@ -264,6 +310,9 @@ function AssessmentRunnerPage() {
   const a = answers[q.id];
   const isLast = section.position === section.totalSections;
   const answeredCount = section.questions.filter((x) => isAnswered(x, answers[x.id])).length;
+  const unsubmittedCoding = section.questions.filter(
+    (x) => x.qtype === "coding" && x.problem && !best[x.id] && isAnswered(x, answers[x.id]),
+  ).length;
   const lowTime = remainingMs !== null && remainingMs <= 5 * 60 * 1000;
   const critical = remainingMs !== null && remainingMs <= 60 * 1000;
 
@@ -363,7 +412,50 @@ function AssessmentRunnerPage() {
           </p>
         )}
 
-        {q.qtype === "coding" ? (
+        {otherTab && (
+          <p className="rounded-md border border-amber-400/50 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:bg-amber-950/30 dark:text-amber-300">
+            This assessment is open in another tab. Close the other one — your answers are saved on
+            the server, so edits in two tabs can overwrite each other.
+          </p>
+        )}
+        {!inFullscreen && typeof document !== "undefined" && document.fullscreenEnabled && (
+          <button
+            onClick={() => document.documentElement.requestFullscreen().catch(() => undefined)}
+            className="inline-flex w-fit items-center gap-1.5 rounded-md border border-border bg-surface px-3 py-1.5 text-xs hover:bg-muted"
+          >
+            <Maximize className="h-3.5 w-3.5" /> Enter fullscreen (recommended)
+          </button>
+        )}
+
+        {q.qtype === "coding" && q.problem ? (
+          <CodingWorkspace
+            key={q.id}
+            applicationId={applicationId}
+            question={q}
+            language={(a?.language ?? defaultLanguage(q) ?? "python") as CodeLanguage}
+            code={a?.answer ?? ""}
+            codingEnabled={data.codingEnabled}
+            best={best[q.id] ?? null}
+            onPaste={() => report("paste")}
+            onSubmitted={(r) =>
+              setBest((prev) =>
+                !prev[q.id] || r.score >= prev[q.id].score ? { ...prev, [q.id]: r } : prev,
+              )
+            }
+            onEdit={(code, lang) => {
+              if (lang !== a?.language) {
+                const oldStarter = (a?.language && q.starterCode?.[a.language]) || "";
+                const untouched = !a?.answer.trim() || a.answer === oldStarter;
+                update(q, {
+                  language: lang,
+                  answer: untouched ? (q.starterCode?.[lang] ?? "") : (a?.answer ?? ""),
+                });
+              } else {
+                update(q, { answer: code, language: lang });
+              }
+            }}
+          />
+        ) : q.qtype === "coding" ? (
           <div className="grid flex-1 gap-4 lg:grid-cols-[minmax(0,5fr)_minmax(0,6fr)]">
             <Card className="max-h-[calc(100vh-11rem)] overflow-y-auto p-5">
               <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
@@ -374,6 +466,7 @@ function AssessmentRunnerPage() {
             </Card>
             <CodeEditor
               key={q.id}
+              onPaste={() => report("paste")}
               languages={Object.keys(q.starterCode ?? { python: "" })}
               language={a?.language ?? defaultLanguage(q) ?? "python"}
               value={a?.answer ?? ""}
@@ -464,6 +557,12 @@ function AssessmentRunnerPage() {
                   You&apos;ve answered <b>{answeredCount}</b> of <b>{section.questions.length}</b>{" "}
                   question{section.questions.length === 1 ? "" : "s"} in this section.
                 </p>
+                {unsubmittedCoding > 0 && (
+                  <p className="font-medium text-amber-700 dark:text-amber-400">
+                    {unsubmittedCoding} coding question{unsubmittedCoding === 1 ? " has" : "s have"}{" "}
+                    code that hasn&apos;t been submitted. Only submitted solutions are scored.
+                  </p>
+                )}
                 <p>
                   {isLast
                     ? "This ends your assessment. You won't be able to change anything afterwards."

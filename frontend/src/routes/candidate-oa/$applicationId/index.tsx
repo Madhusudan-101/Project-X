@@ -107,6 +107,7 @@ function AssessmentInstructionsPage() {
       : oa?.state;
   const canStart = state === "open" && agreed;
   const sectionCount = oa?.sections.length ?? 0;
+  const hasCoding = oa?.sections.some((x) => x.kind !== "mcq") ?? false;
 
   return (
     <div className="min-h-screen bg-surface-2">
@@ -205,10 +206,20 @@ function AssessmentInstructionsPage() {
                       before its section closes.
                     </Rule>
                     <Rule>
-                      Coding questions can be answered in the languages offered in the editor. Your
-                      code is saved and reviewed by the hiring team; there is no run button, so
-                      check your solution by hand.
+                      For coding questions, pick a language in the editor. <b>Run</b> tests your
+                      code on the examples (and your own input); <b>Submit</b> grades it against all
+                      tests, including hidden ones. <b>Only submitted solutions are scored</b>, and
+                      your best submission counts.
                     </Rule>
+                    {hasCoding && !oa.codingEnabled && (
+                      <Rule>
+                        <span className="text-amber-700 dark:text-amber-400">
+                          Code execution isn&apos;t switched on for this assessment right now, so
+                          Run and Submit will be unavailable. Contact the recruiter before you
+                          start.
+                        </span>
+                      </Rule>
+                    )}
                   </ul>
                 </Card>
 
@@ -295,7 +306,10 @@ function AssessmentInstructionsPage() {
                       {oa.windowEnd ? ` (${fmtDateTime(oa.windowEnd)})` : ""}. Once you begin, your
                       sections run to their full length even if the window ends.
                     </Rule>
-                    <Rule>You can attempt the assessment only once.</Rule>
+                    <Rule>
+                      Pasting, leaving fullscreen and switching tabs are logged and shown to the
+                      recruiter. You can attempt the assessment only once.
+                    </Rule>
                   </ul>
                 </Card>
 

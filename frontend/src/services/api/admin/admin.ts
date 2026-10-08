@@ -52,12 +52,18 @@ const list = <T>(path: string, range: AdminRange, params: Query) =>
 /** Same filters as the paged list, minus paging — the backend returns the full set as CSV (fetched in
  * chunks) and reports via headers whether the hard row cap cut it short. */
 async function exportCsv(path: string, range: AdminRange, params: Query): Promise<CsvExport> {
-  const res = await fetch(`${getApiBaseUrl()}/admin/${path}/export${buildQuery({ ...range, ...params })}`, {
-    headers: { ...(await getAuthHeader()) },
-  });
+  const res = await fetch(
+    `${getApiBaseUrl()}/admin/${path}/export${buildQuery({ ...range, ...params })}`,
+    {
+      headers: { ...(await getAuthHeader()) },
+    },
+  );
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
-    throw new ApiClientError(typeof body?.detail === "string" ? body.detail : "Export failed.", res.status);
+    throw new ApiClientError(
+      typeof body?.detail === "string" ? body.detail : "Export failed.",
+      res.status,
+    );
   }
   const rows = Number(res.headers.get("X-Export-Rows"));
   const total = Number(res.headers.get("X-Export-Total"));
@@ -108,45 +114,56 @@ export type AuditLogFilters = {
 };
 
 export const adminService = {
-  overview: (range: AdminRange) => request<AdminOverview>(`/admin/overview${buildQuery({ ...range })}`),
+  overview: (range: AdminRange) =>
+    request<AdminOverview>(`/admin/overview${buildQuery({ ...range })}`),
 
   trends: (range: AdminRange) =>
     request<TrendResponse>(
       `/admin/trends${buildQuery({ ...range, tz: Intl.DateTimeFormat().resolvedOptions().timeZone })}`,
     ),
 
-  activity: (limit = 12) => request<{ items: ActivityItem[] }>(`/admin/activity${buildQuery({ limit })}`),
+  activity: (limit = 12) =>
+    request<{ items: ActivityItem[] }>(`/admin/activity${buildQuery({ limit })}`),
 
-  placements: (range: AdminRange) => request<PlacementSummary>(`/admin/placements${buildQuery({ ...range })}`),
+  placements: (range: AdminRange) =>
+    request<PlacementSummary>(`/admin/placements${buildQuery({ ...range })}`),
 
-  finance: (range: AdminRange) => request<FinanceSummary>(`/admin/finance/summary${buildQuery({ ...range })}`),
+  finance: (range: AdminRange) =>
+    request<FinanceSummary>(`/admin/finance/summary${buildQuery({ ...range })}`),
 
   options: () => request<FilterOptions>("/admin/options"),
 
   colleges: {
-    list: (range: AdminRange, p: ListParams & CollegeFilters) => list<CollegeRow>("colleges", range, p),
+    list: (range: AdminRange, p: ListParams & CollegeFilters) =>
+      list<CollegeRow>("colleges", range, p),
     detail: (id: string, range: AdminRange) =>
       request<CollegeDetail>(`/admin/colleges/${id}${buildQuery({ ...range })}`),
-    export: (range: AdminRange, p: Partial<ListParams> & CollegeFilters) => exportCsv("colleges", range, p),
+    export: (range: AdminRange, p: Partial<ListParams> & CollegeFilters) =>
+      exportCsv("colleges", range, p),
     provision: (body: CollegeProvisionInput) =>
       request<CollegeProvisionResult>("/admin/colleges", { method: "POST", body }),
   },
 
   companies: {
-    list: (range: AdminRange, p: ListParams & CompanyFilters) => list<CompanyRow>("companies", range, p),
+    list: (range: AdminRange, p: ListParams & CompanyFilters) =>
+      list<CompanyRow>("companies", range, p),
     detail: (id: string, range: AdminRange) =>
       request<{ company: CompanyRow }>(`/admin/companies/${id}${buildQuery({ ...range })}`),
-    export: (range: AdminRange, p: Partial<ListParams> & CompanyFilters) => exportCsv("companies", range, p),
+    export: (range: AdminRange, p: Partial<ListParams> & CompanyFilters) =>
+      exportCsv("companies", range, p),
   },
 
   candidates: {
-    list: (range: AdminRange, p: ListParams & CandidateFilters) => list<CandidateRow>("candidates", range, p),
-    export: (range: AdminRange, p: Partial<ListParams> & CandidateFilters) => exportCsv("candidates", range, p),
+    list: (range: AdminRange, p: ListParams & CandidateFilters) =>
+      list<CandidateRow>("candidates", range, p),
+    export: (range: AdminRange, p: Partial<ListParams> & CandidateFilters) =>
+      exportCsv("candidates", range, p),
   },
 
   drives: {
     list: (range: AdminRange, p: ListParams & DriveFilters) => list<DriveRow>("drives", range, p),
-    export: (range: AdminRange, p: Partial<ListParams> & DriveFilters) => exportCsv("drives", range, p),
+    export: (range: AdminRange, p: Partial<ListParams> & DriveFilters) =>
+      exportCsv("drives", range, p),
   },
 
   partnerships: {
@@ -156,30 +173,42 @@ export const adminService = {
       exportCsv("partnerships", range, p),
   },
 
-  ctcByCompany: (range: AdminRange) => request<{ items: CtcByCompanyRow[] }>(`/admin/ctc-by-company${buildQuery({ ...range })}`),
+  ctcByCompany: (range: AdminRange) =>
+    request<{ items: CtcByCompanyRow[] }>(`/admin/ctc-by-company${buildQuery({ ...range })}`),
 
   departments: (range: AdminRange, collegeId?: string) =>
-    request<{ items: DepartmentRow[] }>(`/admin/departments${buildQuery({ ...range, college_id: collegeId })}`),
+    request<{ items: DepartmentRow[] }>(
+      `/admin/departments${buildQuery({ ...range, college_id: collegeId })}`,
+    ),
 
   users: {
     list: (range: AdminRange, p: ListParams & UserFilters) => list<UserRow>("users", range, p),
-    detail: (id: string, range: AdminRange) => request<UserDetail>(`/admin/users/${id}${buildQuery({ ...range })}`),
-    export: (range: AdminRange, p: Partial<ListParams> & UserFilters) => exportCsv("users", range, p),
+    detail: (id: string, range: AdminRange) =>
+      request<UserDetail>(`/admin/users/${id}${buildQuery({ ...range })}`),
+    export: (range: AdminRange, p: Partial<ListParams> & UserFilters) =>
+      exportCsv("users", range, p),
     block: (id: string, body: BlockUserInput) =>
-      request<{ user_id: string; is_blocked: boolean; permanent: boolean; blocked_until: string | null }>(
-        `/admin/users/${id}/block`,
-        { method: "POST", body },
-      ),
+      request<{
+        user_id: string;
+        is_blocked: boolean;
+        permanent: boolean;
+        blocked_until: string | null;
+      }>(`/admin/users/${id}/block`, { method: "POST", body }),
     unblock: (id: string, reason?: string) =>
-      request<{ user_id: string; is_blocked: boolean }>(`/admin/users/${id}/unblock`, { method: "POST", body: { reason } }),
+      request<{ user_id: string; is_blocked: boolean }>(`/admin/users/${id}/unblock`, {
+        method: "POST",
+        body: { reason },
+      }),
   },
 
   liveActivity: (range: AdminRange, p: { before?: string; kind?: string; limit?: number }) =>
     request<LiveActivityResponse>(`/admin/live-activity${buildQuery({ ...range, ...p })}`),
 
   auditLog: {
-    list: (range: AdminRange, p: ListParams & AuditLogFilters) => list<EventItem>("audit-log", range, p),
-    export: (range: AdminRange, p: Partial<ListParams> & AuditLogFilters) => exportCsv("audit-log", range, p),
+    list: (range: AdminRange, p: ListParams & AuditLogFilters) =>
+      list<EventItem>("audit-log", range, p),
+    export: (range: AdminRange, p: Partial<ListParams> & AuditLogFilters) =>
+      exportCsv("audit-log", range, p),
   },
 
   alerts: () => request<{ items: AlertItem[] }>("/admin/alerts"),
@@ -189,15 +218,21 @@ export const adminService = {
   systemHealth: () => request<SystemHealth>("/admin/system-health"),
 
   reports: {
-    applicationFunnelExportUrl: (range: AdminRange) => `${getApiBaseUrl()}/admin/reports/application-funnel/export${buildQuery({ ...range })}`,
-    compensationExportUrl: (range: AdminRange) => `${getApiBaseUrl()}/admin/reports/compensation/export${buildQuery({ ...range })}`,
-    platformUsage: (range: AdminRange) => request<PlatformUsage>(`/admin/reports/platform-usage${buildQuery({ ...range })}`),
+    applicationFunnelExportUrl: (range: AdminRange) =>
+      `${getApiBaseUrl()}/admin/reports/application-funnel/export${buildQuery({ ...range })}`,
+    compensationExportUrl: (range: AdminRange) =>
+      `${getApiBaseUrl()}/admin/reports/compensation/export${buildQuery({ ...range })}`,
+    platformUsage: (range: AdminRange) =>
+      request<PlatformUsage>(`/admin/reports/platform-usage${buildQuery({ ...range })}`),
     // Downloads the funnel/compensation reports the same authenticated way ExportButton does.
     download: async (url: string): Promise<CsvExport> => {
       const res = await fetch(url, { headers: { ...(await getAuthHeader()) } });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
-        throw new ApiClientError(typeof body?.detail === "string" ? body.detail : "Report failed.", res.status);
+        throw new ApiClientError(
+          typeof body?.detail === "string" ? body.detail : "Report failed.",
+          res.status,
+        );
       }
       const rows = Number(res.headers.get("X-Export-Rows"));
       const total = Number(res.headers.get("X-Export-Total"));
@@ -218,15 +253,28 @@ export const adminService = {
 
   adminUsers: {
     /** Reuses the general Users & Access list, filtered to role='admin'. */
-    list: (range: AdminRange, p: ListParams) => list<UserRow>("users", range, { ...p, role: "admin" }),
+    list: (range: AdminRange, p: ListParams) =>
+      list<UserRow>("users", range, { ...p, role: "admin" }),
     create: (body: CreateDelegatedAdminInput) =>
-      request<{ user_id: string; created: boolean; invite_sent: boolean }>("/admin/admin-users", { method: "POST", body }),
-    permissions: (userId: string) => request<AdminPermissionsDetail>(`/admin/admin-users/${userId}/permissions`),
+      request<{ user_id: string; created: boolean; invite_sent: boolean }>("/admin/admin-users", {
+        method: "POST",
+        body,
+      }),
+    permissions: (userId: string) =>
+      request<AdminPermissionsDetail>(`/admin/admin-users/${userId}/permissions`),
     grant: (userId: string, body: GrantPermissionInput) =>
-      request<PermissionGrant>(`/admin/admin-users/${userId}/permissions`, { method: "POST", body }),
+      request<PermissionGrant>(`/admin/admin-users/${userId}/permissions`, {
+        method: "POST",
+        body,
+      }),
     revoke: (userId: string, permissionId: string) =>
-      request<{ revoked: boolean }>(`/admin/admin-users/${userId}/permissions/${permissionId}/revoke`, { method: "POST" }),
+      request<{ revoked: boolean }>(
+        `/admin/admin-users/${userId}/permissions/${permissionId}/revoke`,
+        { method: "POST" },
+      ),
     revokeAll: (userId: string) =>
-      request<{ revoked_count: number }>(`/admin/admin-users/${userId}/permissions/revoke-all`, { method: "POST" }),
+      request<{ revoked_count: number }>(`/admin/admin-users/${userId}/permissions/revoke-all`, {
+        method: "POST",
+      }),
   },
 };

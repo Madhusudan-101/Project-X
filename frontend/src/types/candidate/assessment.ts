@@ -22,6 +22,7 @@ export interface OAOverview {
   totalDurationMinutes: number;
   totalQuestions: number;
   sections: OASection[];
+  codingEnabled: boolean;
   attempt: {
     status: "in_progress" | "submitted";
     currentSection: number;
@@ -39,6 +40,16 @@ export interface OAListItem {
   windowEnd: string | null;
 }
 
+export type CodeLanguage = "javascript" | "python";
+
+export interface OAProblem {
+  id: string;
+  functionName: string;
+  languages: CodeLanguage[];
+  constraintsHtml: string;
+  examples: { input: string; expected: string }[];
+}
+
 export interface OAQuestion {
   id: string;
   position: number;
@@ -48,6 +59,8 @@ export interface OAQuestion {
   options: string[] | null;
   starterCode: Record<string, string> | null;
   points: number;
+  promptFormat: "markdown" | "html";
+  problem: OAProblem | null;
   answer: string | null;
   language: string | null;
 }
@@ -55,6 +68,7 @@ export interface OAQuestion {
 export interface OASession {
   status: "in_progress" | "submitted";
   serverTime: string;
+  codingEnabled: boolean;
   section: {
     position: number;
     totalSections: number;
@@ -65,3 +79,42 @@ export interface OASession {
     questions: OAQuestion[];
   } | null;
 }
+
+export type CaseStatus = "pass" | "fail" | "error" | "timeout" | "ran";
+
+export interface OACaseResult {
+  label: string;
+  status: CaseStatus;
+  input: string;
+  expected: string | null;
+  actual: string | null;
+  error: string | null;
+}
+
+export type Verdict =
+  | "accepted"
+  | "wrong_answer"
+  | "runtime_error"
+  | "compile_error"
+  | "time_limit"
+  | "judge_error";
+
+export interface OARunResult {
+  verdict: Verdict;
+  compileError: string | null;
+  crash: string | null;
+  stdout: string;
+  cases: OACaseResult[];
+}
+
+export interface OASubmitResult extends OARunResult {
+  passed: number;
+  total: number;
+  hiddenPassed: number;
+  hiddenTotal: number;
+  score: number;
+  points: number;
+  submissionsLeft: number;
+}
+
+export type OAEventType = "tab_switch" | "fullscreen_exit" | "paste";
