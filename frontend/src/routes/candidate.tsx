@@ -73,6 +73,7 @@ import { candidateJobsService } from "@/services/api/candidate/jobs";
 import { ProfileSettingsDialog } from "@/components/candidate/ProfileSettingsDialog";
 import { PrepPlanDialog } from "@/components/candidate/PrepPlanDialog";
 import { ApplicationFormModal } from "@/components/candidate/ApplicationFormModal";
+import { OnlineAssessmentsPanel } from "@/components/candidate/OnlineAssessmentsPanel";
 import {
   APPLICATION_STATUS_LABELS,
   EXPERIENCE_LEVEL_LABELS,
@@ -1300,6 +1301,8 @@ function JobsTab() {
 
   return (
     <div className="space-y-8">
+      <OnlineAssessmentsPanel />
+
       {/* Board */}
       <section className="space-y-4">
         <div>
