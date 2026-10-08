@@ -153,8 +153,21 @@ export function AiInterviewTab() {
         <Card className="space-y-4 p-5">
           <div className="flex items-center justify-between">
             <span className="flex items-center gap-2 text-sm font-medium">
-              <span className="h-2 w-2 animate-pulse rounded-full bg-emerald-500" /> Interview in
-              progress
+              {room.interviewerJoined ? (
+                <>
+                  <span className="h-2 w-2 animate-pulse rounded-full bg-emerald-500" /> Interview
+                  in progress
+                </>
+              ) : room.interviewerMissing ? (
+                <>
+                  <span className="h-2 w-2 rounded-full bg-destructive" /> Interviewer not connected
+                </>
+              ) : (
+                <>
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" /> Waiting for the interviewer to
+                  join…
+                </>
+              )}
             </span>
             {room.secondsLeft !== null && (
               <span className="text-sm tabular-nums text-muted-foreground">
@@ -162,6 +175,14 @@ export function AiInterviewTab() {
               </span>
             )}
           </div>
+
+          {room.interviewerMissing && (
+            <p className="rounded-lg border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">
+              The AI interviewer didn&apos;t join the call, so nobody can hear you. End the
+              interview and try again. If it keeps happening, the voice agent service is probably
+              not running.
+            </p>
+          )}
 
           <div className="min-h-32 space-y-2 rounded-lg bg-muted/40 p-3 text-sm" aria-live="polite">
             {room.captions.length === 0 ? (

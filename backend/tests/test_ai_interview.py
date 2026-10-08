@@ -82,6 +82,10 @@ class _Query:
             r = {"id": str(uuid.uuid4()),
                  "created_at": datetime.now(timezone.utc).isoformat(), **self.payload}
             self.rows.append(r); return _Resp([r])
+        if self.op == "delete":
+            hit = self._match()
+            for r in hit: self.rows.remove(r)
+            return _Resp(hit)
         if self.op == "update":
             hit = self._match()
             for r in hit: r.update(self.payload)
@@ -95,6 +99,7 @@ class _Table:
     def insert(self, p): return _Query(self.rows, "insert", p)
     def upsert(self, p, on_conflict=None): return _Query(self.rows, "upsert", p, on_conflict)
     def update(self, p): return _Query(self.rows, "update", p)
+    def delete(self): return _Query(self.rows, "delete")
 
 
 class _Store:
@@ -104,9 +109,17 @@ class _Store:
 
 class _FakeLK:
     created = []
+    dispatched = []
     fail = False
+    fail_dispatch = False
 
-    def __init__(self, *a): self.room = self
+    def __init__(self, *a):
+        self.room = self
+        self.agent_dispatch = self
+
+    async def create_dispatch(self, req):
+        if _FakeLK.fail_dispatch: raise RuntimeError("dispatch failed")
+        _FakeLK.dispatched.append(req)
 
     async def create_room(self, req):
         if _FakeLK.fail: raise RuntimeError("livekit down")
@@ -125,7 +138,7 @@ def env(monkeypatch):
     monkeypatch.setattr(hook, "db_client", store)
     from livekit import api
     monkeypatch.setattr(api, "LiveKitAPI", _FakeLK)
-    _FakeLK.created, _FakeLK.fail = [], False
+    _FakeLK.created, _FakeLK.dispatched, _FakeLK.fail, _FakeLK.fail_dispatch = [], [], False, False
     user = {"id": STUDENT, "email": "ada@example.com"}
     app.dependency_overrides[require_candidate_role] = lambda: user
     yield SimpleNamespace(store=store, client=TestClient(app), user=user)
@@ -167,6 +180,30 @@ def test_session_livekit_failure_is_502_and_not_counted(env):
     _FakeLK.fail = True
     assert env.client.post("/candidate/ai-interview/session", json={"domain": "dsa"}).status_code == 502
     assert env.store.tables.get("ai_voice_interview_sessions", []) == []
+
+
+def test_session_explicitly_dispatches_the_agent_to_the_room(env):
+    room = env.client.post("/candidate/ai-interview/session", json={"domain": "dsa"}).json()["roomName"]
+    assert len(_FakeLK.dispatched) == 1
+    assert _FakeLK.dispatched[0].room == room
+    assert _FakeLK.dispatched[0].agent_name == "mirracle-interviewer"
+
+
+def test_token_carries_no_room_config(env):
+    import jwt
+    tok = env.client.post("/candidate/ai-interview/session", json={"domain": "dsa"}).json()["participantToken"]
+    claims = jwt.decode(tok, options={"verify_signature": False})
+    assert "roomConfig" not in claims
+    assert claims["sub"] == STUDENT
+
+
+def test_dispatch_failure_is_502_and_does_not_consume_quota(env):
+    _FakeLK.fail_dispatch = True
+    assert env.client.post("/candidate/ai-interview/session", json={"domain": "dsa"}).status_code == 502
+    assert env.store.tables.get("ai_voice_interview_sessions", []) == []
+    _FakeLK.fail_dispatch = False
+    for _ in range(2):  # daily limit is 2: both must still be available
+        assert env.client.post("/candidate/ai-interview/session", json={"domain": "dsa"}).status_code == 200
 
 
 def _start(env):

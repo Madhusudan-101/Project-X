@@ -170,6 +170,7 @@ async def start_session(
 
     from livekit import api  # imported lazily so the app boots without the package
 
+    agent_name = _cfg("AI_INTERVIEW_AGENT_NAME", "mirracle-interviewer")
     lkapi = api.LiveKitAPI(url, key, secret)
     try:
         # Unlike the standalone prototype, a room-creation failure is fatal:
@@ -190,9 +191,8 @@ async def start_session(
         )
     except Exception:
         logger.exception("LiveKit create_room failed")
-        raise HTTPException(status_code=502, detail="Could not start the interview room")
-    finally:
         await lkapi.aclose()
+        raise HTTPException(status_code=502, detail="Could not start the interview room")
 
     try:
         db_client.table("ai_voice_interview_sessions").insert({
@@ -201,8 +201,28 @@ async def start_session(
             "domain": body.domain,
         }).execute()
     except APIError as e:
+        await lkapi.aclose()
         logger.exception("ai_voice_interview_sessions insert failed")
         raise HTTPException(status_code=500, detail=f"Could not record session: {e.message}")
+
+    # Explicit dispatch. A RoomConfiguration inside the join token is only
+    # honoured when the token's join CREATES the room; we pre-create it (to
+    # stamp the student/domain into its metadata), so the token route would
+    # silently never start the agent.
+    try:
+        await lkapi.agent_dispatch.create_dispatch(
+            api.CreateAgentDispatchRequest(agent_name=agent_name, room=room_name)
+        )
+    except Exception:
+        logger.exception("LiveKit create_dispatch failed")
+        # Do not charge the student's daily quota for an interview that never started.
+        try:
+            db_client.table("ai_voice_interview_sessions").delete().eq("room_id", room_name).execute()
+        except Exception:  # noqa: BLE001
+            logger.exception("could not remove failed session row")
+        raise HTTPException(status_code=502, detail="Could not start the AI interviewer")
+    finally:
+        await lkapi.aclose()
 
     token = (
         api.AccessToken(key, secret)
@@ -215,11 +235,6 @@ async def start_session(
             can_publish=True,
             can_subscribe=True,
             can_publish_data=False,
-        ))
-        .with_room_config(api.RoomConfiguration(
-            agents=[api.RoomAgentDispatch(
-                agent_name=_cfg("AI_INTERVIEW_AGENT_NAME", "mirracle-interviewer"),
-            )],
         ))
     )
 

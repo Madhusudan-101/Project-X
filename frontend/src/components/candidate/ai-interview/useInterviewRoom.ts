@@ -13,6 +13,8 @@ export interface CaptionLine {
 }
 
 const MAX_CAPTIONS = 8;
+/** How long to wait for the voice agent to join before telling the user. */
+const INTERVIEWER_JOIN_TIMEOUT_MS = 25_000;
 
 /**
  * Owns the LiveKit room for one AI interview. livekit-client touches browser
@@ -23,6 +25,7 @@ export function useInterviewRoom() {
   const roomRef = useRef<Room | null>(null);
   const audioHostRef = useRef<HTMLDivElement | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const joinTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const unmountedRef = useRef(false);
 
   const [phase, setPhase] = useState<InterviewPhase>("setup");
@@ -32,10 +35,14 @@ export function useInterviewRoom() {
   const [needsAudioUnlock, setNeedsAudioUnlock] = useState(false);
   const [captions, setCaptions] = useState<CaptionLine[]>([]);
   const [secondsLeft, setSecondsLeft] = useState<number | null>(null);
+  const [interviewerJoined, setInterviewerJoined] = useState(false);
+  const [interviewerMissing, setInterviewerMissing] = useState(false);
 
   const stopTimer = () => {
     if (timerRef.current) clearInterval(timerRef.current);
     timerRef.current = null;
+    if (joinTimerRef.current) clearTimeout(joinTimerRef.current);
+    joinTimerRef.current = null;
   };
 
   const teardown = useCallback(() => {
@@ -62,6 +69,8 @@ export function useInterviewRoom() {
       setError(null);
       setCaptions([]);
       setMuted(false);
+      setInterviewerJoined(false);
+      setInterviewerMissing(false);
       setPhase("connecting");
       try {
         const session = await aiInterviewService.startSession(domain);
@@ -79,6 +88,10 @@ export function useInterviewRoom() {
         });
         room.on(RoomEvent.TrackUnsubscribed, (track) => {
           track.detach().forEach((el) => el.remove());
+        });
+        room.on(RoomEvent.ParticipantConnected, () => {
+          setInterviewerJoined(true);
+          setInterviewerMissing(false);
         });
         room.on(RoomEvent.AudioPlaybackStatusChanged, () => {
           setNeedsAudioUnlock(!room.canPlaybackAudio);
@@ -121,6 +134,16 @@ export function useInterviewRoom() {
         timerRef.current = setInterval(() => {
           setSecondsLeft(Math.max(0, Math.round((endsAt - Date.now()) / 1000)));
         }, 1000);
+        // The agent is dispatched by the backend; if it never shows up the
+        // call would otherwise look healthy while nobody is on the other end.
+        if (room.remoteParticipants.size > 0) setInterviewerJoined(true);
+        else {
+          joinTimerRef.current = setTimeout(() => {
+            if (roomRef.current && roomRef.current.remoteParticipants.size === 0) {
+              setInterviewerMissing(true);
+            }
+          }, INTERVIEWER_JOIN_TIMEOUT_MS);
+        }
         setPhase("live");
       } catch (err: unknown) {
         teardown();
@@ -160,6 +183,8 @@ export function useInterviewRoom() {
     setRoomName(null);
     setCaptions([]);
     setSecondsLeft(null);
+    setInterviewerJoined(false);
+    setInterviewerMissing(false);
     setError(null);
     setPhase("setup");
   }, [teardown]);
@@ -171,6 +196,8 @@ export function useInterviewRoom() {
     muted,
     captions,
     secondsLeft,
+    interviewerJoined,
+    interviewerMissing,
     needsAudioUnlock,
     audioHostRef,
     start,
