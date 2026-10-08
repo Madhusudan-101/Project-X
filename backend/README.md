@@ -105,6 +105,11 @@ Admin Portal
     metric against a hand-computed fixture, plus EXECUTE grants, the profile role guard and
     the application-college snapshot trigger.
 
+- Online Assessment (candidate OA: timed, one-way sections): run `db/online_assessment_migration.sql`
+  **after** `db/job_drives_migration.sql`. The assessment for a drive is provisioned lazily from the
+  default templates in `app/services/candidate/oa_bank.py` the first time a candidate opens it; the
+  window comes from `job_drives.oa_window_start/end`. Test: `python tests/test_candidate_oa.py`.
+
 Frontend
 --------
 
