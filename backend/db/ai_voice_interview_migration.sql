@@ -3,10 +3,10 @@
 -- Run AFTER migrations.sql (public.profiles must exist)
 --
 -- Two tables:
---   ai_interview_sessions  one row per interview the backend started; used
+--   ai_voice_interview_sessions  one row per interview the backend started; used
 --                          for the per-day quota and to tie a LiveKit room to
 --                          the student who started it.
---   ai_interview_reports   the graded result, written by the FastAPI
+--   ai_voice_interview_reports   the graded result, written by the FastAPI
 --                          /internal/ai-interview-reports webhook (service
 --                          role, bypasses RLS) after the voice agent finishes.
 --                          Students can only SELECT their own rows.
@@ -15,7 +15,7 @@
 -- dashboard can aggregate both sources.
 -- ============================================================
 
-create table if not exists public.ai_interview_sessions (
+create table if not exists public.ai_voice_interview_sessions (
   id           uuid         primary key default gen_random_uuid(),
   room_id      text         not null unique,
   student_id   uuid         not null references public.profiles(id) on delete cascade,
@@ -26,10 +26,10 @@ create table if not exists public.ai_interview_sessions (
   ended_at     timestamptz
 );
 
-create index if not exists idx_ai_interview_sessions_student_started
-  on public.ai_interview_sessions(student_id, started_at desc);
+create index if not exists idx_ai_voice_interview_sessions_student_started
+  on public.ai_voice_interview_sessions(student_id, started_at desc);
 
-create table if not exists public.ai_interview_reports (
+create table if not exists public.ai_voice_interview_reports (
   id                   uuid         primary key default gen_random_uuid(),
   room_id              text         not null unique,
   student_id           uuid         not null references public.profiles(id) on delete cascade,
@@ -49,36 +49,36 @@ create table if not exists public.ai_interview_reports (
   created_at           timestamptz  not null default now()
 );
 
-create index if not exists idx_ai_interview_reports_student_created
-  on public.ai_interview_reports(student_id, created_at desc);
+create index if not exists idx_ai_voice_interview_reports_student_created
+  on public.ai_voice_interview_reports(student_id, created_at desc);
 
-alter table public.ai_interview_sessions enable row level security;
-alter table public.ai_interview_reports  enable row level security;
+alter table public.ai_voice_interview_sessions enable row level security;
+alter table public.ai_voice_interview_reports  enable row level security;
 
-drop policy if exists "service_role_all_ai_interview_sessions" on public.ai_interview_sessions;
-create policy "service_role_all_ai_interview_sessions"
-  on public.ai_interview_sessions
+drop policy if exists "service_role_all_ai_voice_interview_sessions" on public.ai_voice_interview_sessions;
+create policy "service_role_all_ai_voice_interview_sessions"
+  on public.ai_voice_interview_sessions
   for all
   using      (auth.role() = 'service_role')
   with check (auth.role() = 'service_role');
 
-drop policy if exists "student_select_own_ai_interview_sessions" on public.ai_interview_sessions;
-create policy "student_select_own_ai_interview_sessions"
-  on public.ai_interview_sessions
+drop policy if exists "student_select_own_ai_voice_interview_sessions" on public.ai_voice_interview_sessions;
+create policy "student_select_own_ai_voice_interview_sessions"
+  on public.ai_voice_interview_sessions
   for select
   using (auth.uid() = student_id);
 
-drop policy if exists "service_role_all_ai_interview_reports" on public.ai_interview_reports;
-create policy "service_role_all_ai_interview_reports"
-  on public.ai_interview_reports
+drop policy if exists "service_role_all_ai_voice_interview_reports" on public.ai_voice_interview_reports;
+create policy "service_role_all_ai_voice_interview_reports"
+  on public.ai_voice_interview_reports
   for all
   using      (auth.role() = 'service_role')
   with check (auth.role() = 'service_role');
 
 -- No INSERT/UPDATE/DELETE policy for students: writes come only from the
 -- backend (service role).
-drop policy if exists "student_select_own_ai_interview_reports" on public.ai_interview_reports;
-create policy "student_select_own_ai_interview_reports"
-  on public.ai_interview_reports
+drop policy if exists "student_select_own_ai_voice_interview_reports" on public.ai_voice_interview_reports;
+create policy "student_select_own_ai_voice_interview_reports"
+  on public.ai_voice_interview_reports
   for select
   using (auth.uid() = student_id);

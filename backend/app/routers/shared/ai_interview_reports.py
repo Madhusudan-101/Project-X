@@ -3,7 +3,7 @@ Internal AI Interview Reports Webhook — /internal/ai-interview-reports
 ───────────────────────────────────────────────────────────────────────
 Server-to-server endpoint called by the AI interview agent (ai-interviewer/)
 once it has graded an interview. Authenticated with a shared secret, compared
-in constant time. Persists into public.ai_interview_reports via the
+in constant time. Persists into public.ai_voice_interview_reports via the
 service-role client and marks the matching session completed.
 
 The student is NEVER taken from the payload: it is looked up from the session
@@ -67,7 +67,7 @@ def ingest_ai_interview_report(
     _verify_secret(authorization)
 
     sess = (
-        db_client.table("ai_interview_sessions")
+        db_client.table("ai_voice_interview_sessions")
         .select("student_id, domain")
         .eq("room_id", body.room_id)
         .limit(1)
@@ -96,18 +96,18 @@ def ingest_ai_interview_report(
 
     try:
         # room_id is unique, so the agent retrying the webhook updates in place.
-        res = db_client.table("ai_interview_reports").upsert(row, on_conflict="room_id").execute()
+        res = db_client.table("ai_voice_interview_reports").upsert(row, on_conflict="room_id").execute()
     except Exception as e:
         logger.exception("ai_interview_reports upsert failed")
         raise HTTPException(status_code=500, detail=f"Insert failed: {e}")
 
     # Best effort: the report row above is what matters.
     try:
-        db_client.table("ai_interview_sessions").update({
+        db_client.table("ai_voice_interview_sessions").update({
             "status": "abandoned" if body.partial else "completed",
             "ended_at": datetime.now(timezone.utc).isoformat(),
         }).eq("room_id", body.room_id).execute()
     except Exception:  # noqa: BLE001
-        logger.exception("ai_interview_sessions status update failed")
+        logger.exception("ai_voice_interview_sessions status update failed")
 
     return {"ok": True, "id": (res.data or [{}])[0].get("id")}

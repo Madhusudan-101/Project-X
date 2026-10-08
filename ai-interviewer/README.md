@@ -6,7 +6,7 @@ It is its own long-running deployable (it cannot run inside the FastAPI app or t
 ## How it fits together
 
 1. Candidate clicks *Start interview* → frontend calls `POST /candidate/ai-interview/session` (FastAPI, authenticated).
-2. The backend checks the daily quota, creates the LiveKit room with `{domain, user_id, max_minutes}` in its metadata, records an `ai_interview_sessions` row and returns a join token that explicitly dispatches this agent (`AI_INTERVIEW_AGENT_NAME`).
+2. The backend checks the daily quota, creates the LiveKit room with `{domain, user_id, max_minutes}` in its metadata, records an `ai_voice_interview_sessions` row and returns a join token that explicitly dispatches this agent (`AI_INTERVIEW_AGENT_NAME`).
 3. The worker joins, reads the metadata, and runs the interview (`graph.py`).
 4. When the interview ends (or the candidate disconnects / the time limit hits) the worker grades it and POSTs the structured report to `POST /internal/ai-interview-reports` with `AI_INTERVIEW_SHARED_SECRET`. The backend decides which student owns it from the session row — the worker never sends a user id and has no database access.
 5. The frontend polls `GET /candidate/ai-interview/reports/{room}` until the report appears.
@@ -20,7 +20,7 @@ uv run python agent.py download-files   # one-time model weights
 uv run python agent.py dev              # local; use `start` in production
 ```
 
-Backend: apply `backend/db/ai_interview_migration.sql`, set the `LIVEKIT_*` and `AI_INTERVIEW_*` vars from `backend/.env.example`
+Backend: apply `backend/db/ai_voice_interview_migration.sql`, set the `LIVEKIT_*` and `AI_INTERVIEW_*` vars from `backend/.env.example`
 (the shared secret and agent name must match this worker's).
 
 Optional company Q&A: `COMPANY_PDF_PATH=./company.pdf uv run python ingest.py`. Without it the interviewer simply can't answer company questions.

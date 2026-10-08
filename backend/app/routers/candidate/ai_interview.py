@@ -35,7 +35,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/candidate/ai-interview", tags=["ai-interview"])
 
 # Keep in sync with ai-interviewer/domains.py and the CHECK constraints in
-# db/ai_interview_migration.sql.
+# db/ai_voice_interview_migration.sql.
 DOMAIN_LABELS = {
     "ai_ml": "AI/ML",
     "web_dev": "Web Development",
@@ -145,14 +145,14 @@ async def start_session(
     day_start = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
     try:
         used = (
-            db_client.table("ai_interview_sessions")
+            db_client.table("ai_voice_interview_sessions")
             .select("id", count="exact")
             .eq("student_id", user_id)
             .gte("started_at", day_start.isoformat())
             .execute()
         )
     except APIError as e:
-        logger.exception("ai_interview_sessions quota query failed")
+        logger.exception("ai_voice_interview_sessions quota query failed")
         raise HTTPException(status_code=500, detail=f"Quota check failed: {e.message}")
     if (used.count or 0) >= _daily_limit():
         raise HTTPException(
@@ -195,13 +195,13 @@ async def start_session(
         await lkapi.aclose()
 
     try:
-        db_client.table("ai_interview_sessions").insert({
+        db_client.table("ai_voice_interview_sessions").insert({
             "room_id": room_name,
             "student_id": user_id,
             "domain": body.domain,
         }).execute()
     except APIError as e:
-        logger.exception("ai_interview_sessions insert failed")
+        logger.exception("ai_voice_interview_sessions insert failed")
         raise HTTPException(status_code=500, detail=f"Could not record session: {e.message}")
 
     token = (
@@ -237,7 +237,7 @@ def list_my_reports(current_user: dict = Depends(require_candidate_role)):
     student_id filter is explicit and must stay."""
     try:
         res = (
-            db_client.table("ai_interview_reports")
+            db_client.table("ai_voice_interview_reports")
             .select(_LIST_COLUMNS)
             .eq("student_id", current_user["id"])
             .order("created_at", desc=True)
@@ -257,7 +257,7 @@ def get_my_report(room_id: str, current_user: dict = Depends(require_candidate_r
         raise HTTPException(status_code=400, detail="Invalid room id")
     try:
         res = (
-            db_client.table("ai_interview_reports")
+            db_client.table("ai_voice_interview_reports")
             .select(_LIST_COLUMNS + ", report_markdown, transcript")
             .eq("room_id", room_id)
             .eq("student_id", current_user["id"])

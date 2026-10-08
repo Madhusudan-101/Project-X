@@ -154,7 +154,7 @@ def test_session_creates_room_with_identity_and_records_it(env):
     meta = json.loads(_FakeLK.created[0].metadata)
     assert meta["user_id"] == STUDENT and meta["domain"] == "dsa"
     assert _FakeLK.created[0].max_participants == 2
-    assert env.store.tables["ai_interview_sessions"][0]["student_id"] == STUDENT
+    assert env.store.tables["ai_voice_interview_sessions"][0]["student_id"] == STUDENT
 
 
 def test_session_daily_quota(env):
@@ -166,7 +166,7 @@ def test_session_daily_quota(env):
 def test_session_livekit_failure_is_502_and_not_counted(env):
     _FakeLK.fail = True
     assert env.client.post("/candidate/ai-interview/session", json={"domain": "dsa"}).status_code == 502
-    assert env.store.tables.get("ai_interview_sessions", []) == []
+    assert env.store.tables.get("ai_voice_interview_sessions", []) == []
 
 
 def _start(env):
@@ -192,17 +192,17 @@ def test_webhook_attributes_student_from_session_and_is_idempotent(env):
     assert env.client.post("/internal/ai-interview-reports", json=payload, headers=AUTH).status_code == 201
     payload["technical_score"] = 80
     assert env.client.post("/internal/ai-interview-reports", json=payload, headers=AUTH).status_code == 201
-    rows = env.store.tables["ai_interview_reports"]
+    rows = env.store.tables["ai_voice_interview_reports"]
     assert len(rows) == 1
     assert rows[0]["student_id"] == STUDENT and rows[0]["domain"] == "web_dev"
     assert rows[0]["overall_score"] == 100.0 and rows[0]["technical_score"] == 80
-    assert env.store.tables["ai_interview_sessions"][0]["status"] == "completed"
+    assert env.store.tables["ai_voice_interview_sessions"][0]["status"] == "completed"
 
 
 def test_partial_report_marks_session_abandoned(env):
     room = _start(env)
     env.client.post("/internal/ai-interview-reports", json={"room_id": room, "partial": True}, headers=AUTH)
-    assert env.store.tables["ai_interview_sessions"][0]["status"] == "abandoned"
+    assert env.store.tables["ai_voice_interview_sessions"][0]["status"] == "abandoned"
 
 
 def test_reports_are_scoped_to_the_caller(env):
