@@ -22,6 +22,7 @@ from .routers.company import company, roles as company_roles
 from .routers.company import jobs as company_jobs
 from .routers.company import applicants as company_applicants
 from .routers.company import drives as company_drives
+from .routers.company import assessment as company_assessment
 from .routers.admin import overview as admin_overview
 from .routers.admin import colleges as admin_colleges
 from .routers.admin import companies as admin_companies
@@ -95,6 +96,7 @@ app.include_router(company_roles.router)
 app.include_router(company_jobs.router)
 app.include_router(company_applicants.router)
 app.include_router(company_drives.router)
+app.include_router(company_assessment.router)
 app.include_router(candidate_jobs.router)
 app.include_router(candidate_assessment.router)
 app.include_router(candidate_assessment_code.router)
