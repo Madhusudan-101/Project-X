@@ -105,6 +105,24 @@ Admin Portal
     metric against a hand-computed fixture, plus EXECUTE grants, the profile role guard and
     the application-college snapshot trigger.
 
+- Online Assessment (timed one-way sections, library coding problems graded on the server, company
+  builder / invites / results). Run, in order, **after** `db/job_drives_migration.sql`:
+
+  1. `db/online_assessment_migration.sql`
+  2. `db/online_assessment_coding_migration.sql`  (additive; safe to re-run)
+  3. Load the problem library: `python scripts/oa_import/seed_problems.py`
+     (reads `db/seed/oa_problems.json` — 198 problems, 196 validated; idempotent).
+  4. Code execution: set `OA_JUDGE_BACKEND=piston` + `OA_PISTON_URL` (see `deploy/piston/README.md`),
+     then `python scripts/check_judge.py`. Without it candidates can open the OA but can't Run/Submit.
+  5. Optional email: `RESEND_API_KEY`, `OA_EMAIL_FROM`, `APP_BASE_URL`.
+
+  Tests: `python tests/test_candidate_oa.py` and `python tests/test_oa_coding_and_company.py`
+  (the latter runs the real judge, so it needs `python3` and `node` on PATH).
+
+  Regenerating the library from the leetcode_OA clone: `scripts/oa_import/` —
+  `extract_problems.mjs` (handler → plain tests) then `build_seed.py` (sanitise + validate against
+  the independent solutions in `scripts/oa_import/solutions/`). See the docstrings there.
+
 Frontend
 --------
 
