@@ -147,7 +147,7 @@ export function ScheduledMeetingsList({ refreshKey = 0 }: { refreshKey?: number 
         toast.error(err instanceof ApiClientError ? err.message : "Could not cancel meeting.");
       }
     },
-    [],
+    [bumpScheduledMeetings],
   );
 
   const handleCopy = useCallback(async (roomId: string) => {
