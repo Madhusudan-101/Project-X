@@ -293,8 +293,17 @@ def update_job_route(
         fields["deadline"] = payload.deadline.isoformat()
 
     new_visibility = payload.visibility or job["visibility"]
-    if new_visibility == "restricted" and payload.visible_college_ids is not None and not payload.visible_college_ids:
-        raise HTTPException(status_code=400, detail="Restricted jobs must list at least one college.")
+    if new_visibility == "restricted":
+        # The college list that will be in force after this PATCH: the one
+        # sent, else what is already stored. A restricted job with no colleges
+        # is invisible to every student, so it must never be saved.
+        effective_colleges = (
+            payload.visible_college_ids
+            if payload.visible_college_ids is not None
+            else get_job_visible_college_ids(job_id)
+        )
+        if not effective_colleges:
+            raise HTTPException(status_code=400, detail="Restricted jobs must list at least one college.")
 
     try:
         if fields:
