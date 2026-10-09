@@ -140,6 +140,11 @@ class ProfileUpdateIn(BaseModel):
     preferredLocations: Optional[List[str]] = None
     willingToRelocate: Optional[bool] = None
 
+    @field_validator("graduationYear")
+    @classmethod
+    def _validate_graduation_year(cls, v: Optional[int]) -> Optional[int]:
+        return _validate_graduation_year(v)
+
 
 # ── College Portal payloads ───────────────────────────────────────────
 
@@ -149,12 +154,28 @@ class DriveEligibilityIn(BaseModel):
     minimumScore: Optional[float] = None
 
 
+COLLEGE_DRIVE_STATUSES = ("Active", "Draft", "Closed")
+
+
+def _validate_college_drive_status(v: Optional[str]) -> Optional[str]:
+    # The dashboard counts drives by these exact labels; anything else would
+    # be stored but silently vanish from every count.
+    if v is not None and v not in COLLEGE_DRIVE_STATUSES:
+        raise ValueError(f"status must be one of {COLLEGE_DRIVE_STATUSES}.")
+    return v
+
+
 class DriveIn(BaseModel):
     companyName: str
     role: str
     eligibility: DriveEligibilityIn = Field(default_factory=DriveEligibilityIn)
     date: date
     status: str = "Active"
+
+    @field_validator("status")
+    @classmethod
+    def _status(cls, v: str) -> str:
+        return _validate_college_drive_status(v)
 
 
 class DriveUpdateIn(BaseModel):
@@ -168,6 +189,11 @@ class DriveUpdateIn(BaseModel):
     # minimal repro; the `_date` alias sidesteps the name collision.
     date: Optional[_date] = None
     status: Optional[str] = None
+
+    @field_validator("status")
+    @classmethod
+    def _status(cls, v: Optional[str]) -> Optional[str]:
+        return _validate_college_drive_status(v)
 
 
 _VALID_PLACEMENT_STATUSES = {"not_placed", "placed", "offer_declined"}
@@ -471,7 +497,7 @@ class RoleCreateIn(BaseModel):
     required_skills: List[str] = Field(default_factory=list)
     experience_level: str
     deadline: date
-    minimum_employability_score: int = 0
+    minimum_employability_score: int = Field(default=0, ge=0, le=100)
 
 
 class RoleUpdateIn(BaseModel):
@@ -480,7 +506,7 @@ class RoleUpdateIn(BaseModel):
     required_skills: Optional[List[str]] = None
     experience_level: Optional[str] = None
     deadline: Optional[date] = None
-    minimum_employability_score: Optional[int] = None
+    minimum_employability_score: Optional[int] = Field(default=None, ge=0, le=100)
 
 
 class RoleOut(BaseModel):
@@ -561,6 +587,15 @@ class JobWeightsOut(BaseModel):
     assessment_weight: int
 
 
+
+def _check_money_ranges(model) -> None:
+    """min must not exceed max for each pay band that has both ends."""
+    for lo, hi in (("ctc_min", "ctc_max"), ("stipend_min", "stipend_max"), ("ppo_ctc_min", "ppo_ctc_max")):
+        a, b = getattr(model, lo), getattr(model, hi)
+        if a is not None and b is not None and a > b:
+            raise ValueError(f"{lo} cannot be greater than {hi}.")
+
+
 class JobCreateIn(BaseModel):
     title: str = Field(min_length=3, max_length=150)
     description: str = Field(min_length=20, max_length=8000)
@@ -595,15 +630,15 @@ class JobCreateIn(BaseModel):
     min_cgpa: Optional[float] = Field(default=None, ge=0, le=10)
     eligible_branches: Optional[List[str]] = None
     eligible_batch_years: Optional[List[int]] = None
-    ctc_min: Optional[float] = None
-    ctc_max: Optional[float] = None
+    ctc_min: Optional[float] = Field(default=None, ge=0)
+    ctc_max: Optional[float] = Field(default=None, ge=0)
     ctc_currency: Optional[str] = "INR"
     # ── Internship offer detail (only meaningful when employment_type=='intern') ──
-    stipend_min: Optional[float] = None
-    stipend_max: Optional[float] = None
+    stipend_min: Optional[float] = Field(default=None, ge=0)
+    stipend_max: Optional[float] = Field(default=None, ge=0)
     internship_duration_months: Optional[int] = Field(default=None, ge=1, le=24)
-    ppo_ctc_min: Optional[float] = None
-    ppo_ctc_max: Optional[float] = None
+    ppo_ctc_min: Optional[float] = Field(default=None, ge=0)
+    ppo_ctc_max: Optional[float] = Field(default=None, ge=0)
     # ── Perks / benefits (any job) — free-form list ──
     perks: Optional[List[str]] = None
 
@@ -657,6 +692,11 @@ class JobCreateIn(BaseModel):
             self.visible_college_ids = []
         return self
 
+    @model_validator(mode="after")
+    def _pay_ranges(self) -> "JobCreateIn":
+        _check_money_ranges(self)
+        return self
+
 
 class JobUpdateIn(BaseModel):
     title: Optional[str] = Field(default=None, min_length=3, max_length=150)
@@ -680,14 +720,14 @@ class JobUpdateIn(BaseModel):
     min_cgpa: Optional[float] = Field(default=None, ge=0, le=10)
     eligible_branches: Optional[List[str]] = None
     eligible_batch_years: Optional[List[int]] = None
-    ctc_min: Optional[float] = None
-    ctc_max: Optional[float] = None
+    ctc_min: Optional[float] = Field(default=None, ge=0)
+    ctc_max: Optional[float] = Field(default=None, ge=0)
     ctc_currency: Optional[str] = None
-    stipend_min: Optional[float] = None
-    stipend_max: Optional[float] = None
+    stipend_min: Optional[float] = Field(default=None, ge=0)
+    stipend_max: Optional[float] = Field(default=None, ge=0)
     internship_duration_months: Optional[int] = Field(default=None, ge=1, le=24)
-    ppo_ctc_min: Optional[float] = None
-    ppo_ctc_max: Optional[float] = None
+    ppo_ctc_min: Optional[float] = Field(default=None, ge=0)
+    ppo_ctc_max: Optional[float] = Field(default=None, ge=0)
     perks: Optional[List[str]] = None
 
     @field_validator("employment_type")
@@ -731,6 +771,11 @@ class JobUpdateIn(BaseModel):
         if v is not None and v not in JOB_VISIBILITIES:
             raise ValueError(f"visibility must be one of {JOB_VISIBILITIES}.")
         return v
+
+    @model_validator(mode="after")
+    def _pay_ranges(self) -> "JobUpdateIn":
+        _check_money_ranges(self)
+        return self
 
 
 class JobOut(BaseModel):
@@ -1051,6 +1096,31 @@ class RankedApplicantOut(BaseModel):
 # ── Job drives — per (job, college) instances (job_drives_migration.sql) ──
 
 
+
+def _as_instant(value: Optional[str]):
+    """Parse an ISO-8601 date/time to an aware datetime (naive = UTC), or None
+    when it is not parseable. Windows must be compared as instants: as text,
+    "10:00+05:30" sorts after "09:00+00:00" although it is five hours earlier."""
+    if not value:
+        return None
+    from datetime import datetime, timezone
+    try:
+        dt = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    return dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
+
+
+def _window_is_inverted(start: Optional[str], end: Optional[str]) -> bool:
+    """True when both ends are set and `end` is not after `start`."""
+    if not start or not end:
+        return False
+    a, b = _as_instant(start), _as_instant(end)
+    if a is not None and b is not None:
+        return b <= a
+    return end <= start      # unparseable -> keep the old textual comparison
+
+
 class JobDriveRoundIn(BaseModel):
     round_number: int = Field(ge=1)
     round_type: str
@@ -1074,7 +1144,7 @@ class JobDriveRoundIn(BaseModel):
 
     @model_validator(mode="after")
     def _window_order(self) -> "JobDriveRoundIn":
-        if self.window_start and self.window_end and self.window_end <= self.window_start:
+        if _window_is_inverted(self.window_start, self.window_end):
             raise ValueError("A round's window_end must be after its window_start.")
         return self
 
@@ -1094,7 +1164,7 @@ class JobDriveIn(BaseModel):
 
     @model_validator(mode="after")
     def _validate(self) -> "JobDriveIn":
-        if self.oa_window_start and self.oa_window_end and self.oa_window_end <= self.oa_window_start:
+        if _window_is_inverted(self.oa_window_start, self.oa_window_end):
             raise ValueError("oa_window_end must be after oa_window_start.")
         nums = sorted(r.round_number for r in self.rounds)
         if nums and nums != list(range(1, len(nums) + 1)):

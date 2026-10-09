@@ -21,7 +21,12 @@ async function refreshAccessToken(): Promise<string | null> {
   if (refreshPromise) return refreshPromise;
 
   const refreshToken = useAuthStore.getState().session?.refreshToken;
-  if (!refreshToken) return null;
+  if (!refreshToken) {
+    // The access token was rejected and there is nothing to renew it with —
+    // drop the dead session so route guards send the user back to login.
+    useAuthStore.getState().logout();
+    return null;
+  }
 
   refreshPromise = (async () => {
     try {

@@ -23,6 +23,7 @@ from ...schemas import (
 )
 from ...services.college.student_access import block_student, invite_students, restrict_student, unblock_student
 from ...utils.college.branch import normalize_branch
+from ...utils.csv_safe import safe_cell
 from ...utils.college.csv_students import parse_students_csv, dedupe_by_email
 
 router = APIRouter(prefix="/api/students", tags=["students"])
@@ -162,7 +163,7 @@ def export_students_csv(
     writer = csv.writer(buf)
     writer.writerow([out for _, out in _EXPORT_FIELDS])
     for r in rows:
-        writer.writerow([r.get(src, "") for src, _ in _EXPORT_FIELDS])
+        writer.writerow([safe_cell(r.get(src, "")) for src, _ in _EXPORT_FIELDS])
     buf.seek(0)
 
     return StreamingResponse(

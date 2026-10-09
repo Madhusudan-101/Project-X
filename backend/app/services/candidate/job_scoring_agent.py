@@ -314,7 +314,8 @@ def compute_weighted_composite(
     if denom <= 0:
         # Every weighted dimension is missing data — fall back to a plain
         # mean of whatever scored dimensions exist.
-        scored = [d.score for d in (dimensions.resume, dimensions.github, dimensions.leetcode)
+        scored = [d.score for d in (dimensions.resume, dimensions.github, dimensions.leetcode,
+                                    dimensions.interview, dimensions.assessment)
                   if d.score is not None]
         return round(sum(scored) / len(scored), 2) if scored else 0.0
     return round(num / denom, 2)

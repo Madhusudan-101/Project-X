@@ -14,6 +14,7 @@ from supabase import Client
 from ...deps import get_current_tpo, get_user_supabase
 from ...schemas import ShortlistFilterIn
 from ...utils.college.branch import normalize_branch
+from ...utils.csv_safe import safe_cell
 
 router = APIRouter(prefix="/api/shortlist", tags=["shortlist"])
 
@@ -78,7 +79,7 @@ def export_shortlist_csv(
     writer = csv.writer(buf)
     writer.writerow([out for _, out in _EXPORT_FIELDS])
     for r in rows:
-        writer.writerow([r.get(src, "") for src, _ in _EXPORT_FIELDS])
+        writer.writerow([safe_cell(r.get(src, "")) for src, _ in _EXPORT_FIELDS])
     buf.seek(0)
 
     return StreamingResponse(
