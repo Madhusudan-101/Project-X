@@ -1075,6 +1075,31 @@ class RankedApplicantOut(BaseModel):
 # ── Job drives — per (job, college) instances (job_drives_migration.sql) ──
 
 
+
+def _as_instant(value: Optional[str]):
+    """Parse an ISO-8601 date/time to an aware datetime (naive = UTC), or None
+    when it is not parseable. Windows must be compared as instants: as text,
+    "10:00+05:30" sorts after "09:00+00:00" although it is five hours earlier."""
+    if not value:
+        return None
+    from datetime import datetime, timezone
+    try:
+        dt = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    return dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
+
+
+def _window_is_inverted(start: Optional[str], end: Optional[str]) -> bool:
+    """True when both ends are set and `end` is not after `start`."""
+    if not start or not end:
+        return False
+    a, b = _as_instant(start), _as_instant(end)
+    if a is not None and b is not None:
+        return b <= a
+    return end <= start      # unparseable -> keep the old textual comparison
+
+
 class JobDriveRoundIn(BaseModel):
     round_number: int = Field(ge=1)
     round_type: str
@@ -1098,7 +1123,7 @@ class JobDriveRoundIn(BaseModel):
 
     @model_validator(mode="after")
     def _window_order(self) -> "JobDriveRoundIn":
-        if self.window_start and self.window_end and self.window_end <= self.window_start:
+        if _window_is_inverted(self.window_start, self.window_end):
             raise ValueError("A round's window_end must be after its window_start.")
         return self
 
@@ -1118,7 +1143,7 @@ class JobDriveIn(BaseModel):
 
     @model_validator(mode="after")
     def _validate(self) -> "JobDriveIn":
-        if self.oa_window_start and self.oa_window_end and self.oa_window_end <= self.oa_window_start:
+        if _window_is_inverted(self.oa_window_start, self.oa_window_end):
             raise ValueError("oa_window_end must be after oa_window_start.")
         nums = sorted(r.round_number for r in self.rounds)
         if nums and nums != list(range(1, len(nums) + 1)):
