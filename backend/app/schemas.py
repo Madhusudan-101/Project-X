@@ -476,7 +476,7 @@ class RoleCreateIn(BaseModel):
     required_skills: List[str] = Field(default_factory=list)
     experience_level: str
     deadline: date
-    minimum_employability_score: int = 0
+    minimum_employability_score: int = Field(default=0, ge=0, le=100)
 
 
 class RoleUpdateIn(BaseModel):
@@ -485,7 +485,7 @@ class RoleUpdateIn(BaseModel):
     required_skills: Optional[List[str]] = None
     experience_level: Optional[str] = None
     deadline: Optional[date] = None
-    minimum_employability_score: Optional[int] = None
+    minimum_employability_score: Optional[int] = Field(default=None, ge=0, le=100)
 
 
 class RoleOut(BaseModel):
