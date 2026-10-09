@@ -154,12 +154,28 @@ class DriveEligibilityIn(BaseModel):
     minimumScore: Optional[float] = None
 
 
+COLLEGE_DRIVE_STATUSES = ("Active", "Draft", "Closed")
+
+
+def _validate_college_drive_status(v: Optional[str]) -> Optional[str]:
+    # The dashboard counts drives by these exact labels; anything else would
+    # be stored but silently vanish from every count.
+    if v is not None and v not in COLLEGE_DRIVE_STATUSES:
+        raise ValueError(f"status must be one of {COLLEGE_DRIVE_STATUSES}.")
+    return v
+
+
 class DriveIn(BaseModel):
     companyName: str
     role: str
     eligibility: DriveEligibilityIn = Field(default_factory=DriveEligibilityIn)
     date: date
     status: str = "Active"
+
+    @field_validator("status")
+    @classmethod
+    def _status(cls, v: str) -> str:
+        return _validate_college_drive_status(v)
 
 
 class DriveUpdateIn(BaseModel):
@@ -173,6 +189,11 @@ class DriveUpdateIn(BaseModel):
     # minimal repro; the `_date` alias sidesteps the name collision.
     date: Optional[_date] = None
     status: Optional[str] = None
+
+    @field_validator("status")
+    @classmethod
+    def _status(cls, v: Optional[str]) -> Optional[str]:
+        return _validate_college_drive_status(v)
 
 
 _VALID_PLACEMENT_STATUSES = {"not_placed", "placed", "offer_declined"}
