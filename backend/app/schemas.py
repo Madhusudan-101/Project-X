@@ -140,6 +140,11 @@ class ProfileUpdateIn(BaseModel):
     preferredLocations: Optional[List[str]] = None
     willingToRelocate: Optional[bool] = None
 
+    @field_validator("graduationYear")
+    @classmethod
+    def _validate_graduation_year(cls, v: Optional[int]) -> Optional[int]:
+        return _validate_graduation_year(v)
+
 
 # ── College Portal payloads ───────────────────────────────────────────
 
