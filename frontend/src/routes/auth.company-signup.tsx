@@ -221,7 +221,7 @@ function CompanySignupPage() {
         <span className="text-muted-foreground">Onboarding</span>
       </div>
 
-      <form onSubmit={form.handleSubmit(onSubmit)} className="mt-6 space-y-6" noValidate>
+      <form method="post" onSubmit={form.handleSubmit(onSubmit)} className="mt-6 space-y-6" noValidate>
         {/* ── Section 1: HR Account ── */}
         <fieldset>
           <legend className="mb-3 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">

@@ -27,6 +27,7 @@ UNIQUE: Dict[str, List[tuple]] = {
     "job_drives": [("job_id", "college_id")],
     "students": [("college_id", "email")],
     "job_weights": [("job_id",)],
+    "oa_attempts": [("application_id",)],
     "profiles": [("id",)],
 }
 
@@ -39,6 +40,10 @@ DEFAULTS: Dict[str, Callable[[], dict]] = {
     "applications": lambda: {"status": "applied", "applied_at": now_iso(), "updated_at": now_iso()},
     "job_drives": lambda: {"status": "draft"},
     "application_analyses": lambda: {"generated_at": now_iso()},
+    "ai_voice_interview_sessions": lambda: {"started_at": now_iso()},
+    "oa_attempts": lambda: {"status": "in_progress", "tab_switches": 0},
+    "oa_invites": lambda: {"status": "invited"},
+    "oa_assessments": lambda: {"invite_mode": "invited"},
     "job_roles": lambda: {"status": "draft"},
     "students": lambda: {
         "employability_score": 0, "verification_status": "pending", "placement_status": "not_placed",
@@ -106,6 +111,30 @@ class Query:
             out.append(".*" if ch in "%*" else "." if ch == "_" else re.escape(ch)); i += 1
         rx = re.compile("".join(out), re.I | re.S)
         self.filters.append(lambda r: r.get(c) is not None and rx.fullmatch(str(r[c])) is not None)
+        return self
+
+    def or_(self, expr, **_k):
+        """PostgREST or=(a.eq.1,b.eq.2) -- eq / is / neq / gt/gte/lt/lte / in only."""
+        conds = []
+        for part in [x for x in expr.split(",") if x]:
+            col, op, val = part.split(".", 2)
+            conds.append((col, op, val))
+
+        def test(r):
+            for col, op, val in conds:
+                have = r.get(col)
+                if op == "eq" and str(have) == val: return True
+                if op == "neq" and str(have) != val: return True
+                if op == "is" and ((val == "null" and have is None) or str(have).lower() == val): return True
+                try:
+                    if op == "gt" and have is not None and have > type(have)(val): return True
+                    if op == "gte" and have is not None and have >= type(have)(val): return True
+                    if op == "lt" and have is not None and have < type(have)(val): return True
+                    if op == "lte" and have is not None and have <= type(have)(val): return True
+                except (TypeError, ValueError):
+                    pass
+            return False
+        self.filters.append(test)
         return self
 
     def order(self, c, desc=False, **_k): self._order = (c, desc); return self

@@ -101,7 +101,7 @@ function CollegeLayout() {
           </div>
 
           {/* ── Section tabs — same style as candidate & original college portal ── */}
-          <div className="mx-auto max-w-7xl px-4 md:px-8">
+          <div className="mx-auto max-w-7xl overflow-x-auto px-4 md:px-8">
             <div className="flex h-11 gap-1">
               {NAV_ITEMS.map((item) => {
                 const Icon = item.icon;

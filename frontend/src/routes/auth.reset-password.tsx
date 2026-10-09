@@ -57,7 +57,7 @@ function ResetPasswordPage() {
       <h1 className="font-display text-3xl font-bold">Set a new password</h1>
       <p className="mt-2 text-sm text-muted-foreground">Choose something strong and memorable.</p>
 
-      <form onSubmit={form.handleSubmit(onSubmit)} className="mt-8 space-y-4">
+      <form method="post" onSubmit={form.handleSubmit(onSubmit)} className="mt-8 space-y-4">
         <div className="space-y-2">
           <Label htmlFor="password">New password</Label>
           <Input id="password" type="password" {...form.register("password")} />

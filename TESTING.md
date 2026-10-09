@@ -14,6 +14,8 @@ dependencies and schemas are exercised.
 | PeerMeet signaling unit | `PeerMeet/server/tests/roomManager.test.js` | `cd PeerMeet/server && npm run test:unit` |
 | PeerMeet signaling integration (real socket.io) | `PeerMeet/server/tests/peermeet-integration.test.js` | `cd PeerMeet/server && npm test` (needs `npm i` in `PeerMeet/client` too) |
 | AI interviewer report client | `ai-interviewer/tests/` | `cd ai-interviewer && python -m pytest tests` |
+| **Browser end-to-end** (frontend + backend + PeerMeet, real Chromium) | `e2e/specs/` | `cd e2e && npm install && npx playwright test` — see `e2e/README.md` |
+| SQL migrations against real Postgres | `backend/tests/test_*_sql.py` | `ADMIN_TEST_DATABASE_URL=postgresql://postgres@localhost:5432/postgres python tests/test_admin_portal_sql.py` (same for `test_college_student_access_sql.py`; `OA_TEST_DATABASE_URL=… python tests/test_oa_sql.py`) |
 
 Install: `pip install -r backend/requirements.txt pytest` · `npm install` in `frontend/`, `PeerMeet/client`, `PeerMeet/server`.
 

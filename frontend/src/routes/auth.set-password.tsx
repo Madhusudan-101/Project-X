@@ -86,7 +86,7 @@ function SetPasswordPage() {
         also sign in with your email — separate from your Google password, which we never see.
       </p>
 
-      <form onSubmit={form.handleSubmit(onSubmit)} className="mt-8 space-y-4">
+      <form method="post" onSubmit={form.handleSubmit(onSubmit)} className="mt-8 space-y-4">
         <div className="space-y-2">
           <Label htmlFor="password">Password</Label>
           <Input id="password" type="password" placeholder="••••••••" {...form.register("password")} />
