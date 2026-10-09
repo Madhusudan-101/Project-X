@@ -561,6 +561,15 @@ class JobWeightsOut(BaseModel):
     assessment_weight: int
 
 
+
+def _check_money_ranges(model) -> None:
+    """min must not exceed max for each pay band that has both ends."""
+    for lo, hi in (("ctc_min", "ctc_max"), ("stipend_min", "stipend_max"), ("ppo_ctc_min", "ppo_ctc_max")):
+        a, b = getattr(model, lo), getattr(model, hi)
+        if a is not None and b is not None and a > b:
+            raise ValueError(f"{lo} cannot be greater than {hi}.")
+
+
 class JobCreateIn(BaseModel):
     title: str = Field(min_length=3, max_length=150)
     description: str = Field(min_length=20, max_length=8000)
@@ -595,15 +604,15 @@ class JobCreateIn(BaseModel):
     min_cgpa: Optional[float] = Field(default=None, ge=0, le=10)
     eligible_branches: Optional[List[str]] = None
     eligible_batch_years: Optional[List[int]] = None
-    ctc_min: Optional[float] = None
-    ctc_max: Optional[float] = None
+    ctc_min: Optional[float] = Field(default=None, ge=0)
+    ctc_max: Optional[float] = Field(default=None, ge=0)
     ctc_currency: Optional[str] = "INR"
     # ── Internship offer detail (only meaningful when employment_type=='intern') ──
-    stipend_min: Optional[float] = None
-    stipend_max: Optional[float] = None
+    stipend_min: Optional[float] = Field(default=None, ge=0)
+    stipend_max: Optional[float] = Field(default=None, ge=0)
     internship_duration_months: Optional[int] = Field(default=None, ge=1, le=24)
-    ppo_ctc_min: Optional[float] = None
-    ppo_ctc_max: Optional[float] = None
+    ppo_ctc_min: Optional[float] = Field(default=None, ge=0)
+    ppo_ctc_max: Optional[float] = Field(default=None, ge=0)
     # ── Perks / benefits (any job) — free-form list ──
     perks: Optional[List[str]] = None
 
@@ -657,6 +666,11 @@ class JobCreateIn(BaseModel):
             self.visible_college_ids = []
         return self
 
+    @model_validator(mode="after")
+    def _pay_ranges(self) -> "JobCreateIn":
+        _check_money_ranges(self)
+        return self
+
 
 class JobUpdateIn(BaseModel):
     title: Optional[str] = Field(default=None, min_length=3, max_length=150)
@@ -680,14 +694,14 @@ class JobUpdateIn(BaseModel):
     min_cgpa: Optional[float] = Field(default=None, ge=0, le=10)
     eligible_branches: Optional[List[str]] = None
     eligible_batch_years: Optional[List[int]] = None
-    ctc_min: Optional[float] = None
-    ctc_max: Optional[float] = None
+    ctc_min: Optional[float] = Field(default=None, ge=0)
+    ctc_max: Optional[float] = Field(default=None, ge=0)
     ctc_currency: Optional[str] = None
-    stipend_min: Optional[float] = None
-    stipend_max: Optional[float] = None
+    stipend_min: Optional[float] = Field(default=None, ge=0)
+    stipend_max: Optional[float] = Field(default=None, ge=0)
     internship_duration_months: Optional[int] = Field(default=None, ge=1, le=24)
-    ppo_ctc_min: Optional[float] = None
-    ppo_ctc_max: Optional[float] = None
+    ppo_ctc_min: Optional[float] = Field(default=None, ge=0)
+    ppo_ctc_max: Optional[float] = Field(default=None, ge=0)
     perks: Optional[List[str]] = None
 
     @field_validator("employment_type")
@@ -731,6 +745,11 @@ class JobUpdateIn(BaseModel):
         if v is not None and v not in JOB_VISIBILITIES:
             raise ValueError(f"visibility must be one of {JOB_VISIBILITIES}.")
         return v
+
+    @model_validator(mode="after")
+    def _pay_ranges(self) -> "JobUpdateIn":
+        _check_money_ranges(self)
+        return self
 
 
 class JobOut(BaseModel):
