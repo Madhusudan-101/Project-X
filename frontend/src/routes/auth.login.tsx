@@ -12,6 +12,7 @@ import { authService } from "@/services/api/auth";
 import { useAuthStore } from "@/store/auth";
 import { dashboardPathForRole, onboardingPathForRole } from "@/lib/roles";
 import { GoogleSignInButton } from "@/components/auth/GoogleSignInButton";
+import { ExploreDemoCard } from "@/components/college/ExploreDemoCard";
 import type { UserRole } from "@/types";
 
 const schema = z.object({
@@ -59,17 +60,24 @@ function LoginPage() {
       <h1 className="font-display text-3xl font-bold">Welcome back</h1>
       <p className="mt-2 text-sm text-muted-foreground">Sign in to continue to Mirracle.</p>
 
-      <div className="mt-6">
-        <GoogleSignInButton role={role ?? "candidate"} />
-      </div>
+      {/* College (TPO) accounts are provisioned by an Admin and signed into with the
+          email + password set from the invitation link — no Google/social option, so
+          this page can never create an account for an unknown visitor. */}
+      {role !== "college" && (
+        <>
+          <div className="mt-6">
+            <GoogleSignInButton role={role ?? "candidate"} />
+          </div>
 
-      <div className="my-6 flex items-center gap-3">
-        <div className="h-px flex-1 bg-border/60" />
-        <span className="text-xs text-muted-foreground">or continue with email</span>
-        <div className="h-px flex-1 bg-border/60" />
-      </div>
+          <div className="my-6 flex items-center gap-3">
+            <div className="h-px flex-1 bg-border/60" />
+            <span className="text-xs text-muted-foreground">or continue with email</span>
+            <div className="h-px flex-1 bg-border/60" />
+          </div>
+        </>
+      )}
 
-      <form method="post" onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+      <form method="post" onSubmit={form.handleSubmit(onSubmit)} className={role === "college" ? "mt-6 space-y-4" : "space-y-4"}>
         <div className="space-y-2">
           <Label htmlFor="email">Email</Label>
           <Input id="email" type="email" placeholder="you@work.com" {...form.register("email")} />
@@ -102,7 +110,9 @@ function LoginPage() {
 
       {role === "admin" || role === "college" ? (
         <p className="mt-6 text-center text-sm text-muted-foreground">
-          {role === "admin" ? "Admin" : "College"} accounts are created by the Mirracle team.
+          {role === "admin"
+            ? "Admin accounts are created by the Mirracle team."
+            : "College (TPO) accounts are created by the Mirracle team. Use the link in your invitation email to set your password, or contact your administrator."}
         </p>
       ) : (
         <p className="mt-6 text-center text-sm text-muted-foreground">
@@ -112,6 +122,8 @@ function LoginPage() {
           </Link>
         </p>
       )}
+
+      {role === "college" && <ExploreDemoCard />}
     </div>
   );
 }

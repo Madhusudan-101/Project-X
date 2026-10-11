@@ -5,6 +5,7 @@
 
 import { useAuthStore } from "@/store/auth";
 import type { Session } from "@/types";
+import { assertLiveApiAllowed } from "@/lib/demo/college/mode";
 
 const BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "/api";
 
@@ -104,6 +105,8 @@ export function getApiBaseUrl(): string {
 /** Authorization header for services that bypass `request()` (FormData/blob calls).
  * Proactively refreshes first if the current access token has already expired. */
 export async function getAuthHeader(): Promise<Record<string, string>> {
+  // Demo pages never carry a real session token to anything (see lib/demo/college/mode.ts).
+  if (typeof window !== "undefined") assertLiveApiAllowed(window.location.pathname);
   const session = useAuthStore.getState().session;
   if (!session) return {};
 
@@ -129,6 +132,10 @@ export async function request<T>(
     await new Promise((r) => setTimeout(r, 350));
     return mockHandler();
   }
+
+  // Defence in depth: nothing on a /demo/college page may reach the live API or send a
+  // real Authorization header, even if a component bypassed the demo service layer.
+  if (typeof window !== "undefined") assertLiveApiAllowed(window.location.pathname);
 
   const isFormData = options.body instanceof FormData;
   const method = options.method ?? "GET";

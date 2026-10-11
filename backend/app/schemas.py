@@ -95,7 +95,8 @@ class OAuthSessionIn(BaseModel):
 
 class SetPasswordIn(BaseModel):
     """One-time password set for accounts created via Google OAuth, which
-    never have a password at all — Google never shares it, by design."""
+    never have a password at all — Google never shares it, by design.
+    The password policy is enforced by the route (auth._enforce_password_policy)."""
     password: str
 
 
@@ -110,6 +111,9 @@ class VerifyOtpIn(BaseModel):
 
 
 class ResetIn(BaseModel):
+    """Final step of both "forgot password" and a new TPO/Admin's set-password
+    email link. The password policy is enforced by the route
+    (auth._enforce_password_policy), not just in the form."""
     token: str
     password: str
 

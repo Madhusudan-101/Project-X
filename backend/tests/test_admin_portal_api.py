@@ -1222,6 +1222,71 @@ def main() -> int:
     check("...and the search RPC call itself carries the scope's college_ids, not an unrestricted search",
           search_call[1].get("p_college_ids") == [BETA_COLLEGE], search_call)
 
+    print("\n== TPO login-only: provisioning scope, password policy, no self-service ==")
+    seed_profiles(); install_rpc_defaults()
+    db.tables["profiles"].append({"id": "u-tpo-admin", "email": "tpoadmin@t.test", "role": "admin", "is_super_admin": False})
+    TOKENS["tok-tpo-admin"] = ("u-tpo-admin", {"role": "admin"})
+    H_SUPER, H_TPOADM = bearer("tok-admin"), bearer("tok-tpo-admin")
+    BETA, GAMMA = "11111111-1111-1111-1111-111111111111", "33333333-3333-3333-3333-333333333333"
+    tpo_body = lambda **kw: {"email": "tpo@beta.edu", "first_name": "Tia", "last_name": "Rao", "college_id": BETA, **kw}
+
+    r = client.post("/admin/colleges", json=tpo_body(), headers=H_TPOADM)
+    check("delegated admin with NO grant cannot create a TPO -> 403", r.status_code == 403, (r.status_code, r.text))
+    r = client.post("/admin/admin-users/u-tpo-admin/permissions",
+                     json={"permission": "colleges.create", "scope_type": "college", "scope_id": BETA}, headers=H_SUPER)
+    check("colleges.create can now be scoped to one college -> 201", r.status_code == 201, r.text)
+
+    n = len(db.created_auth_users)
+    r = client.post("/admin/colleges", json=tpo_body(college_id=GAMMA, email="tpo@gamma.edu"), headers=H_TPOADM)
+    check("scoped admin cannot attach a TPO to a college OUTSIDE their scope (by id) -> 403, nothing created",
+          r.status_code == 403 and len(db.created_auth_users) == n, (r.status_code, r.text))
+    r = client.post("/admin/colleges", json={"email": "tpo@gamma.edu", "first_name": "T", "last_name": "R", "college_name": "gamma COLLEGE"}, headers=H_TPOADM)
+    check("...nor by passing that college's NAME instead -> 403", r.status_code == 403 and len(db.created_auth_users) == n, (r.status_code, r.text))
+    ncol = len(db.tables["colleges"])
+    r = client.post("/admin/colleges", json={"email": "tpo@new.edu", "first_name": "T", "last_name": "R", "college_name": "Brand New Institute"}, headers=H_TPOADM)
+    check("scoped admin cannot create a NEW college -> 403, no directory row, no account",
+          r.status_code == 403 and len(db.tables["colleges"]) == ncol and len(db.created_auth_users) == n, (r.status_code, r.text))
+    r = client.post("/admin/colleges", json=tpo_body(), headers=H_TPOADM)
+    check("scoped admin CAN create a TPO for the college inside their scope -> 201", r.status_code == 201, (r.status_code, r.text))
+    made = next((p for p in db.tables["profiles"] if p.get("email") == "tpo@beta.edu"), None)
+    check("...and that TPO is role=college linked to exactly that college",
+          bool(made) and made["role"] == "college" and made["college_id"] == BETA, made)
+    r = client.post("/admin/colleges", json=tpo_body(college_id=str(uuid.uuid4()), email="tpo2@beta.edu"), headers=H_SUPER)
+    check("Super Admin: a college_id that does not exist -> 404, no account", r.status_code == 404, (r.status_code, r.text))
+    r = client.post("/admin/colleges", json=tpo_body(college_id=GAMMA, email="tpo@gamma.edu"), headers=H_SUPER)
+    check("Super Admin is not scope-limited -> 201 for any college", r.status_code == 201, (r.status_code, r.text))
+
+    print("\n-- No TPO / visitor can create or elevate accounts --")
+    H_TPO = bearer("tok-college")
+    n = len(db.created_auth_users)
+    r = client.post("/admin/colleges", json=tpo_body(email="x@beta.edu"), headers=H_TPO)
+    check("a TPO cannot call the provisioning endpoint -> 403", r.status_code == 403 and len(db.created_auth_users) == n, (r.status_code, r.text))
+    r = client.post("/admin/admin-users", json={"email": "x@y.zz", "first_name": "A", "last_name": "B"}, headers=H_TPO)
+    check("a TPO cannot create an Admin -> 403", r.status_code == 403, r.text)
+    r = client.post("/admin/admin-users/u-college/permissions", json={"permission": "colleges.create"}, headers=H_TPO)
+    check("a TPO cannot grant themselves a permission -> 403", r.status_code == 403, r.text)
+    r = client.post("/admin/colleges", json=tpo_body(email="x@beta.edu"))
+    check("an anonymous visitor cannot call the provisioning endpoint -> 401", r.status_code == 401, (r.status_code, r.text))
+    for body in ({"email": "v@x.edu", "password": "password123", "role": "college", "name": "V"},
+                 {"email": "v@x.edu", "password": "password123", "role": "admin", "name": "V"}):
+        r = client.post("/auth/signup", json=body)
+        check(f"public /auth/signup with role={body['role']} -> 403", r.status_code == 403 and len(db.created_auth_users) == n, (r.status_code, r.text))
+
+    print("\n-- Password policy on the set-password / reset endpoints --")
+    for path, body in (("/auth/reset", {"token": "tok-college", "password": "short"}),
+                       ("/auth/set-password", {"password": "short"})):
+        r = client.post(path, json=body, headers=H_TPO)
+        check(f"{path}: a 5-char password is rejected -> 400 (same contract as a Supabase weak-password)",
+              r.status_code == 400 and "8-128" in r.text, (r.status_code, r.text))
+    for path, key in (("/auth/reset", "token"), ("/auth/set-password", None)):
+        body = lambda pw: ({"token": "tok-college", "password": pw} if key else {"password": pw})
+        check(f"{path}: 7 chars rejected", client.post(path, json=body("a" * 7), headers=H_TPO).status_code == 400)
+        check(f"{path}: 129 chars rejected", client.post(path, json=body("a" * 129), headers=H_TPO).status_code == 400)
+        r = client.post(path, json=body("a" * 8), headers=H_TPO)
+        # The harness has no fake for the Supabase admin client, so the call fails AFTER the policy
+        # check; what matters here is that an 8-char password is not turned away by the policy.
+        check(f"{path}: exactly 8 chars is not rejected by the password policy", "8-128" not in r.text, (r.status_code, r.text))
+
     print(f"\n=== {passed}/{passed + failed} passed, {failed} failed ===")
     return 0 if failed == 0 else 1
 

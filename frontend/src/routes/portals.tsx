@@ -83,6 +83,11 @@ function PortalsPage() {
                       >
                         <Link to="/auth/login" search={{ role: p.role }}>Login</Link>
                       </Button>
+                      {p.role === "college" && (
+                        <Button asChild size="sm" variant="outline">
+                          <Link to="/demo/college">Explore demo</Link>
+                        </Button>
+                      )}
                       {p.publicSignup && (
                         <Button asChild size="sm" variant="outline">
                           <Link to="/auth/signup" search={{ role: p.role }}>Sign up</Link>

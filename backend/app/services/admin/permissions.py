@@ -56,6 +56,9 @@ ALL_PERMISSIONS = frozenset({
 # there is no single-resource meaning for "all users" or "the audit log".
 SCOPABLE: Dict[str, tuple] = {
     "colleges.view": ("college",), "colleges.export": ("college",),
+    # Scoped to a college, "create" means: add TPO accounts to THAT college only
+    # (never to another one, and never create a new college directory row).
+    "colleges.create": ("college",),
     "candidates.view": ("college",), "candidates.export": ("college",),
     "companies.view": ("company",), "companies.export": ("company",),
     "drives.view": ("college", "company"), "drives.export": ("college", "company"),

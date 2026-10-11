@@ -11,7 +11,8 @@
     "lint": "eslint .",
     "format": "prettier --write .",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "test:demo": "node --test \"src/**/*.test.ts\""
   },
   "dependencies": {
     "@formkit/auto-animate": "^0.10.0",
