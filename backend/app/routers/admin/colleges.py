@@ -7,7 +7,7 @@ POST provisions a College account (there is no public College signup).
 from __future__ import annotations
 
 import logging
-from typing import Optional, Tuple
+from typing import List, Optional, Tuple
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -127,12 +127,20 @@ def college_detail(
     return {"college": row, "accounts": accounts}
 
 
-def _resolve_college(payload: CollegeProvisionIn) -> Tuple[str, bool]:
+def _resolve_college(payload: CollegeProvisionIn, allowed_ids: Optional[List[str]] = None) -> Tuple[str, bool]:
     """(college_id, created_by_us). Existing colleges are found without being
-    written to; a new directory row is created only when none exists."""
+    written to; a new directory row is created only when none exists.
+
+    `allowed_ids` is the caller's college scope (None = unrestricted). A scoped
+    admin may only attach a TPO to a college inside that scope and may not
+    create new colleges — checked on the RESOLVED id, so passing a different
+    college's name instead of its id gets no way around it."""
+    scope_error = HTTPException(status_code=403, detail="Missing permission: colleges.create for this college")
     try:
         if payload.college_id:
             college_id = str(payload.college_id)
+            if allowed_ids is not None and college_id not in allowed_ids:
+                raise scope_error
             found = db_client.table("colleges").select("id").eq("id", college_id).limit(1).execute().data
             if not found:
                 raise HTTPException(status_code=404, detail="College not found.")
@@ -140,7 +148,11 @@ def _resolve_college(payload: CollegeProvisionIn) -> Tuple[str, bool]:
         name = (payload.college_name or "").strip()
         existing = find_college_id_by_name(name)
         if existing:
+            if allowed_ids is not None and str(existing) not in allowed_ids:
+                raise scope_error
             return existing, False
+        if allowed_ids is not None:
+            raise scope_error  # a scoped admin cannot create new colleges
         created = create_college(name)
         if not created:
             raise HTTPException(status_code=502, detail="Could not create the college record.")
@@ -184,7 +196,7 @@ def provision_college(payload: CollegeProvisionIn, admin: dict = Depends(require
     written, and a college row created only for this request is removed again
     if the account cannot be created, so a failure leaves nothing half-done.
     """
-    college_id, created_college = _resolve_college(payload)
+    college_id, created_college = _resolve_college(payload, scope_college_ids(admin))
     try:
         result = provision_account(
             email=payload.email, role="college",

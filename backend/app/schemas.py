@@ -95,8 +95,10 @@ class OAuthSessionIn(BaseModel):
 
 class SetPasswordIn(BaseModel):
     """One-time password set for accounts created via Google OAuth, which
-    never have a password at all — Google never shares it, by design."""
-    password: str
+    never have a password at all — Google never shares it, by design.
+    The minimum matches the sign-up / set-password forms; enforced here too so
+    the API can't be called directly with a weaker one."""
+    password: str = Field(min_length=8, max_length=128)
 
 
 # ── Misc payloads ─────────────────────────────────────────────────────
@@ -110,8 +112,10 @@ class VerifyOtpIn(BaseModel):
 
 
 class ResetIn(BaseModel):
+    """Final step of both "forgot password" and a new TPO/Admin's set-password
+    email link — the password policy is enforced here, not just in the form."""
     token: str
-    password: str
+    password: str = Field(min_length=8, max_length=128)
 
 
 class ProfileUpdateIn(BaseModel):

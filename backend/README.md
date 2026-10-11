@@ -79,6 +79,13 @@ Admin Portal
     college link is **replaced** (deleted and recreated), never adopted: whoever registered it
     still holds its password and sessions, so only the mailbox owner may control the new one.
     Accounts that are already linked to a college are never touched.
+- **TPO login-only hardening.** Apply `db/tpo_access_hardening_migration.sql` after the migrations
+  above (idempotent, no data touched). It makes the RLS helpers `current_college_id()` / `is_admin()`
+  ignore blocked accounts, so a disabled TPO cannot keep reading tenant tables straight from
+  Supabase REST with a still-valid JWT / refresh token. `db/profiles_rls_migration.sql` enables own-row
+  RLS on `public.profiles` (no earlier migration does) — run its two check queries first; skip it if the
+  live project already has RLS + own-row policies there. `colleges.create` can be scoped to one college:
+  such an admin can add TPOs to that college only and cannot create new colleges.
 - **Data sources — do not merge them.** Every Admin metric comes from the platform pipeline
   (jobs, `job_drives`, applications, round results). The College Portal keeps its own data:
   the roster (`students`, including TPO-marked placement) and manually entered Campus Drives
