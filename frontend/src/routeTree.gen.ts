@@ -53,6 +53,7 @@ import { Route as CompanyJobsIndexRouteImport } from './routes/company-jobs/inde
 import { Route as CompanyJobsJobIdRouteImport } from './routes/company-jobs/$jobId'
 import { Route as CompanyRolesIndexRouteImport } from './routes/company-roles/index'
 import { Route as CompanyRolesRoleIdRouteImport } from './routes/company-roles/$roleId'
+import { Route as DemoCollegeRouteImport } from './routes/demo.college'
 import { Route as ResumeTailorApplicationIdRouteImport } from './routes/resume-tailor/$applicationId'
 import { Route as AdminAdminUsersIndexRouteImport } from './routes/admin/admin-users/index'
 import { Route as AdminCollegesIndexRouteImport } from './routes/admin/colleges/index'
@@ -61,6 +62,13 @@ import { Route as AdminCompaniesIndexRouteImport } from './routes/admin/companie
 import { Route as AdminCompaniesCompanyIdRouteImport } from './routes/admin/companies/$companyId'
 import { Route as AdminUsersIndexRouteImport } from './routes/admin/users/index'
 import { Route as AdminUsersUserIdRouteImport } from './routes/admin/users/$userId'
+import { Route as DemoCollegeIndexRouteImport } from './routes/demo.college.index'
+import { Route as DemoCollegeAnalyticsRouteImport } from './routes/demo.college.analytics'
+import { Route as DemoCollegeDepartmentsRouteImport } from './routes/demo.college.departments'
+import { Route as DemoCollegeDrivesRouteImport } from './routes/demo.college.drives'
+import { Route as DemoCollegeReportsRouteImport } from './routes/demo.college.reports'
+import { Route as DemoCollegeShortlistRouteImport } from './routes/demo.college.shortlist'
+import { Route as DemoCollegeStudentsRouteImport } from './routes/demo.college.students'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -282,6 +290,11 @@ const CompanyRolesRoleIdRoute = CompanyRolesRoleIdRouteImport.update({
   path: '/company-roles/$roleId',
   getParentRoute: () => rootRouteImport,
 } as any)
+const DemoCollegeRoute = DemoCollegeRouteImport.update({
+  id: '/demo/college',
+  path: '/demo/college',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ResumeTailorApplicationIdRoute =
   ResumeTailorApplicationIdRouteImport.update({
     id: '/resume-tailor/$applicationId',
@@ -322,6 +335,41 @@ const AdminUsersUserIdRoute = AdminUsersUserIdRouteImport.update({
   id: '/users/$userId',
   path: '/users/$userId',
   getParentRoute: () => AdminRoute,
+} as any)
+const DemoCollegeIndexRoute = DemoCollegeIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => DemoCollegeRoute,
+} as any)
+const DemoCollegeAnalyticsRoute = DemoCollegeAnalyticsRouteImport.update({
+  id: '/analytics',
+  path: '/analytics',
+  getParentRoute: () => DemoCollegeRoute,
+} as any)
+const DemoCollegeDepartmentsRoute = DemoCollegeDepartmentsRouteImport.update({
+  id: '/departments',
+  path: '/departments',
+  getParentRoute: () => DemoCollegeRoute,
+} as any)
+const DemoCollegeDrivesRoute = DemoCollegeDrivesRouteImport.update({
+  id: '/drives',
+  path: '/drives',
+  getParentRoute: () => DemoCollegeRoute,
+} as any)
+const DemoCollegeReportsRoute = DemoCollegeReportsRouteImport.update({
+  id: '/reports',
+  path: '/reports',
+  getParentRoute: () => DemoCollegeRoute,
+} as any)
+const DemoCollegeShortlistRoute = DemoCollegeShortlistRouteImport.update({
+  id: '/shortlist',
+  path: '/shortlist',
+  getParentRoute: () => DemoCollegeRoute,
+} as any)
+const DemoCollegeStudentsRoute = DemoCollegeStudentsRouteImport.update({
+  id: '/students',
+  path: '/students',
+  getParentRoute: () => DemoCollegeRoute,
 } as any)
 
 export interface FileRoutesByFullPath {
@@ -365,6 +413,7 @@ export interface FileRoutesByFullPath {
   '/college/students': typeof CollegeStudentsRoute
   '/company-jobs/$jobId': typeof CompanyJobsJobIdRoute
   '/company-roles/$roleId': typeof CompanyRolesRoleIdRoute
+  '/demo/college': typeof DemoCollegeRouteWithChildren
   '/resume-tailor/$applicationId': typeof ResumeTailorApplicationIdRoute
   '/admin/': typeof AdminIndexRoute
   '/college/': typeof CollegeIndexRoute
@@ -373,10 +422,17 @@ export interface FileRoutesByFullPath {
   '/admin/colleges/$collegeId': typeof AdminCollegesCollegeIdRoute
   '/admin/companies/$companyId': typeof AdminCompaniesCompanyIdRoute
   '/admin/users/$userId': typeof AdminUsersUserIdRoute
+  '/demo/college/analytics': typeof DemoCollegeAnalyticsRoute
+  '/demo/college/departments': typeof DemoCollegeDepartmentsRoute
+  '/demo/college/drives': typeof DemoCollegeDrivesRoute
+  '/demo/college/reports': typeof DemoCollegeReportsRoute
+  '/demo/college/shortlist': typeof DemoCollegeShortlistRoute
+  '/demo/college/students': typeof DemoCollegeStudentsRoute
   '/admin/admin-users/': typeof AdminAdminUsersIndexRoute
   '/admin/colleges/': typeof AdminCollegesIndexRoute
   '/admin/companies/': typeof AdminCompaniesIndexRoute
   '/admin/users/': typeof AdminUsersIndexRoute
+  '/demo/college/': typeof DemoCollegeIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -425,10 +481,17 @@ export interface FileRoutesByTo {
   '/admin/colleges/$collegeId': typeof AdminCollegesCollegeIdRoute
   '/admin/companies/$companyId': typeof AdminCompaniesCompanyIdRoute
   '/admin/users/$userId': typeof AdminUsersUserIdRoute
+  '/demo/college/analytics': typeof DemoCollegeAnalyticsRoute
+  '/demo/college/departments': typeof DemoCollegeDepartmentsRoute
+  '/demo/college/drives': typeof DemoCollegeDrivesRoute
+  '/demo/college/reports': typeof DemoCollegeReportsRoute
+  '/demo/college/shortlist': typeof DemoCollegeShortlistRoute
+  '/demo/college/students': typeof DemoCollegeStudentsRoute
   '/admin/admin-users': typeof AdminAdminUsersIndexRoute
   '/admin/colleges': typeof AdminCollegesIndexRoute
   '/admin/companies': typeof AdminCompaniesIndexRoute
   '/admin/users': typeof AdminUsersIndexRoute
+  '/demo/college': typeof DemoCollegeIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -472,6 +535,7 @@ export interface FileRoutesById {
   '/college/students': typeof CollegeStudentsRoute
   '/company-jobs/$jobId': typeof CompanyJobsJobIdRoute
   '/company-roles/$roleId': typeof CompanyRolesRoleIdRoute
+  '/demo/college': typeof DemoCollegeRouteWithChildren
   '/resume-tailor/$applicationId': typeof ResumeTailorApplicationIdRoute
   '/admin/': typeof AdminIndexRoute
   '/college/': typeof CollegeIndexRoute
@@ -480,10 +544,17 @@ export interface FileRoutesById {
   '/admin/colleges/$collegeId': typeof AdminCollegesCollegeIdRoute
   '/admin/companies/$companyId': typeof AdminCompaniesCompanyIdRoute
   '/admin/users/$userId': typeof AdminUsersUserIdRoute
+  '/demo/college/analytics': typeof DemoCollegeAnalyticsRoute
+  '/demo/college/departments': typeof DemoCollegeDepartmentsRoute
+  '/demo/college/drives': typeof DemoCollegeDrivesRoute
+  '/demo/college/reports': typeof DemoCollegeReportsRoute
+  '/demo/college/shortlist': typeof DemoCollegeShortlistRoute
+  '/demo/college/students': typeof DemoCollegeStudentsRoute
   '/admin/admin-users/': typeof AdminAdminUsersIndexRoute
   '/admin/colleges/': typeof AdminCollegesIndexRoute
   '/admin/companies/': typeof AdminCompaniesIndexRoute
   '/admin/users/': typeof AdminUsersIndexRoute
+  '/demo/college/': typeof DemoCollegeIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -528,6 +599,7 @@ export interface FileRouteTypes {
     | '/college/students'
     | '/company-jobs/$jobId'
     | '/company-roles/$roleId'
+    | '/demo/college'
     | '/resume-tailor/$applicationId'
     | '/admin/'
     | '/college/'
@@ -536,10 +608,17 @@ export interface FileRouteTypes {
     | '/admin/colleges/$collegeId'
     | '/admin/companies/$companyId'
     | '/admin/users/$userId'
+    | '/demo/college/analytics'
+    | '/demo/college/departments'
+    | '/demo/college/drives'
+    | '/demo/college/reports'
+    | '/demo/college/shortlist'
+    | '/demo/college/students'
     | '/admin/admin-users/'
     | '/admin/colleges/'
     | '/admin/companies/'
     | '/admin/users/'
+    | '/demo/college/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -588,10 +667,17 @@ export interface FileRouteTypes {
     | '/admin/colleges/$collegeId'
     | '/admin/companies/$companyId'
     | '/admin/users/$userId'
+    | '/demo/college/analytics'
+    | '/demo/college/departments'
+    | '/demo/college/drives'
+    | '/demo/college/reports'
+    | '/demo/college/shortlist'
+    | '/demo/college/students'
     | '/admin/admin-users'
     | '/admin/colleges'
     | '/admin/companies'
     | '/admin/users'
+    | '/demo/college'
   id:
     | '__root__'
     | '/'
@@ -634,6 +720,7 @@ export interface FileRouteTypes {
     | '/college/students'
     | '/company-jobs/$jobId'
     | '/company-roles/$roleId'
+    | '/demo/college'
     | '/resume-tailor/$applicationId'
     | '/admin/'
     | '/college/'
@@ -642,10 +729,17 @@ export interface FileRouteTypes {
     | '/admin/colleges/$collegeId'
     | '/admin/companies/$companyId'
     | '/admin/users/$userId'
+    | '/demo/college/analytics'
+    | '/demo/college/departments'
+    | '/demo/college/drives'
+    | '/demo/college/reports'
+    | '/demo/college/shortlist'
+    | '/demo/college/students'
     | '/admin/admin-users/'
     | '/admin/colleges/'
     | '/admin/companies/'
     | '/admin/users/'
+    | '/demo/college/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -660,6 +754,7 @@ export interface RootRouteChildren {
   CandidateJobsJobIdRoute: typeof CandidateJobsJobIdRoute
   CompanyJobsJobIdRoute: typeof CompanyJobsJobIdRoute
   CompanyRolesRoleIdRoute: typeof CompanyRolesRoleIdRoute
+  DemoCollegeRoute: typeof DemoCollegeRouteWithChildren
   ResumeTailorApplicationIdRoute: typeof ResumeTailorApplicationIdRoute
   CompanyJobsIndexRoute: typeof CompanyJobsIndexRoute
   CompanyRolesIndexRoute: typeof CompanyRolesIndexRoute
@@ -975,6 +1070,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof CompanyRolesRoleIdRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/demo/college': {
+      id: '/demo/college'
+      path: '/demo/college'
+      fullPath: '/demo/college'
+      preLoaderRoute: typeof DemoCollegeRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/resume-tailor/$applicationId': {
       id: '/resume-tailor/$applicationId'
       path: '/resume-tailor/$applicationId'
@@ -1030,6 +1132,55 @@ declare module '@tanstack/react-router' {
       fullPath: '/admin/users/$userId'
       preLoaderRoute: typeof AdminUsersUserIdRouteImport
       parentRoute: typeof AdminRoute
+    }
+    '/demo/college/': {
+      id: '/demo/college/'
+      path: '/'
+      fullPath: '/demo/college/'
+      preLoaderRoute: typeof DemoCollegeIndexRouteImport
+      parentRoute: typeof DemoCollegeRoute
+    }
+    '/demo/college/analytics': {
+      id: '/demo/college/analytics'
+      path: '/analytics'
+      fullPath: '/demo/college/analytics'
+      preLoaderRoute: typeof DemoCollegeAnalyticsRouteImport
+      parentRoute: typeof DemoCollegeRoute
+    }
+    '/demo/college/departments': {
+      id: '/demo/college/departments'
+      path: '/departments'
+      fullPath: '/demo/college/departments'
+      preLoaderRoute: typeof DemoCollegeDepartmentsRouteImport
+      parentRoute: typeof DemoCollegeRoute
+    }
+    '/demo/college/drives': {
+      id: '/demo/college/drives'
+      path: '/drives'
+      fullPath: '/demo/college/drives'
+      preLoaderRoute: typeof DemoCollegeDrivesRouteImport
+      parentRoute: typeof DemoCollegeRoute
+    }
+    '/demo/college/reports': {
+      id: '/demo/college/reports'
+      path: '/reports'
+      fullPath: '/demo/college/reports'
+      preLoaderRoute: typeof DemoCollegeReportsRouteImport
+      parentRoute: typeof DemoCollegeRoute
+    }
+    '/demo/college/shortlist': {
+      id: '/demo/college/shortlist'
+      path: '/shortlist'
+      fullPath: '/demo/college/shortlist'
+      preLoaderRoute: typeof DemoCollegeShortlistRouteImport
+      parentRoute: typeof DemoCollegeRoute
+    }
+    '/demo/college/students': {
+      id: '/demo/college/students'
+      path: '/students'
+      fullPath: '/demo/college/students'
+      preLoaderRoute: typeof DemoCollegeStudentsRouteImport
+      parentRoute: typeof DemoCollegeRoute
     }
   }
 }
@@ -1135,6 +1286,30 @@ const CollegeRouteChildren: CollegeRouteChildren = {
 const CollegeRouteWithChildren =
   CollegeRoute._addFileChildren(CollegeRouteChildren)
 
+interface DemoCollegeRouteChildren {
+  DemoCollegeAnalyticsRoute: typeof DemoCollegeAnalyticsRoute
+  DemoCollegeDepartmentsRoute: typeof DemoCollegeDepartmentsRoute
+  DemoCollegeDrivesRoute: typeof DemoCollegeDrivesRoute
+  DemoCollegeReportsRoute: typeof DemoCollegeReportsRoute
+  DemoCollegeShortlistRoute: typeof DemoCollegeShortlistRoute
+  DemoCollegeStudentsRoute: typeof DemoCollegeStudentsRoute
+  DemoCollegeIndexRoute: typeof DemoCollegeIndexRoute
+}
+
+const DemoCollegeRouteChildren: DemoCollegeRouteChildren = {
+  DemoCollegeAnalyticsRoute: DemoCollegeAnalyticsRoute,
+  DemoCollegeDepartmentsRoute: DemoCollegeDepartmentsRoute,
+  DemoCollegeDrivesRoute: DemoCollegeDrivesRoute,
+  DemoCollegeReportsRoute: DemoCollegeReportsRoute,
+  DemoCollegeShortlistRoute: DemoCollegeShortlistRoute,
+  DemoCollegeStudentsRoute: DemoCollegeStudentsRoute,
+  DemoCollegeIndexRoute: DemoCollegeIndexRoute,
+}
+
+const DemoCollegeRouteWithChildren = DemoCollegeRoute._addFileChildren(
+  DemoCollegeRouteChildren,
+)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AdminRoute: AdminRouteWithChildren,
@@ -1147,6 +1322,7 @@ const rootRouteChildren: RootRouteChildren = {
   CandidateJobsJobIdRoute: CandidateJobsJobIdRoute,
   CompanyJobsJobIdRoute: CompanyJobsJobIdRoute,
   CompanyRolesRoleIdRoute: CompanyRolesRoleIdRoute,
+  DemoCollegeRoute: DemoCollegeRouteWithChildren,
   ResumeTailorApplicationIdRoute: ResumeTailorApplicationIdRoute,
   CompanyJobsIndexRoute: CompanyJobsIndexRoute,
   CompanyRolesIndexRoute: CompanyRolesIndexRoute,

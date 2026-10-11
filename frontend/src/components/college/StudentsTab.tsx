@@ -486,7 +486,7 @@ export function StudentsTab() {
 
       {totalPages > 1 && (
         <Pagination>
-          <PaginationContent>
+          <PaginationContent className="flex-wrap justify-center">
             <PaginationItem>
               <PaginationPrevious
                 onClick={(e) => {

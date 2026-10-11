@@ -14,8 +14,10 @@ import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { dashboardService, downloadCsvBlob, shortlistService } from "@/services/api/college/college";
 import type { DashboardStats, ScoreDistribution } from "@/types/college/college";
+import { useCollegeBase } from "@/hooks/college/use-college-base";
 
 export function ReportsTab() {
+  const { isDemo } = useCollegeBase();
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [distribution, setDistribution] = useState<ScoreDistribution | null>(null);
   const [loading, setLoading] = useState(true);
@@ -118,8 +120,8 @@ export function ReportsTab() {
           <div>
             <h2 className="font-display text-lg font-semibold">Score distribution report</h2>
             <p className="text-xs text-muted-foreground">
-              For NAAC/NIRF-style readiness reporting. Sourced from
-              /api/dashboard/score-distribution.
+              For NAAC/NIRF-style readiness reporting.{" "}
+              {isDemo ? "Calculated from the sample roster." : "Sourced from /api/dashboard/score-distribution."}
             </p>
           </div>
           <FileBarChart className="h-5 w-5 text-primary" />

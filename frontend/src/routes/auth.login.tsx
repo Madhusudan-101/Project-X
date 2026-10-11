@@ -12,6 +12,7 @@ import { authService } from "@/services/api/auth";
 import { useAuthStore } from "@/store/auth";
 import { dashboardPathForRole, onboardingPathForRole } from "@/lib/roles";
 import { GoogleSignInButton } from "@/components/auth/GoogleSignInButton";
+import { ExploreDemoCard } from "@/components/college/ExploreDemoCard";
 import type { UserRole } from "@/types";
 
 const schema = z.object({
@@ -121,6 +122,8 @@ function LoginPage() {
           </Link>
         </p>
       )}
+
+      {role === "college" && <ExploreDemoCard />}
     </div>
   );
 }
