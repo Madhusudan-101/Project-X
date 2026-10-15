@@ -50,6 +50,9 @@ function OAuthCallbackPage() {
           navigate({ to: dashboardPathForRole(session.user.role) });
         }
       } catch (err) {
+        // Rejected (e.g. a Google account with no provisioned College/Admin
+        // profile): don't leave a half-signed-in Supabase session in this browser.
+        await getSupabase().auth.signOut().catch(() => undefined);
         toast.error(err instanceof Error ? err.message : "Could not complete sign-in.");
         navigate({ to: "/portals" });
       }

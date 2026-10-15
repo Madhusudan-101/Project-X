@@ -233,7 +233,7 @@ function CompanyPortal() {
         </div>
 
         {/* Tab navigation */}
-        <div className="mx-auto max-w-7xl px-4 md:px-8">
+        <div className="mx-auto max-w-7xl overflow-x-auto px-4 md:px-8">
           <Tabs value={tab} onValueChange={setTab}>
             <TabsList className="h-11 gap-1 bg-transparent p-0" role="tablist">
               {[

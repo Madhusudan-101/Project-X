@@ -43,9 +43,11 @@ if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser(description="Create a test user bypassing email limits.")
     parser.add_argument("--email", default="testuser@gmail.com", help="User email")
-    parser.add_argument("--password", default="password123", help="User password")
+    parser.add_argument("--password", required=True, help="User password (no default: a shared known password is a standing backdoor)")
     parser.add_argument("--name", default="Test User", help="User name")
-    parser.add_argument("--role", default="candidate", help="User role")
+    # College (TPO) and Admin accounts are provisioned only — Admin Portal /
+    # provision_admin.py — so this convenience script can't mint them.
+    parser.add_argument("--role", default="candidate", choices=["candidate", "company"], help="User role")
     
     args = parser.parse_args()
     create_admin_user(args.email, args.password, args.name, args.role)

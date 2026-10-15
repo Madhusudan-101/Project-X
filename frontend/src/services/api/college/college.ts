@@ -3,9 +3,23 @@
  * Phase 4 (backend/app/routers/{dashboard,students,drives,shortlist}.py).
  *
  * Only wrap real backend routes here.
+ *
+ * Every service below is exported through `withDemo`: on /demo/college pages the call goes
+ * to the fictional in-browser dataset (services/demo/collegeDemoService.ts) instead, and the
+ * live implementation is never invoked. Anywhere else it is the live API, unchanged.
  */
 
 import { ApiClientError, buildQuery, getApiBaseUrl, getAuthHeader, request } from "../client";
+import { withDemo } from "@/lib/demo/college/dispatch";
+import { DemoCsvError } from "@/lib/demo/college/engine";
+import { isDemoLocation } from "@/lib/demo/college/mode";
+import {
+  demoDashboardService,
+  demoDepartmentsService,
+  demoDrivesService,
+  demoShortlistService,
+  demoStudentsService,
+} from "@/services/demo/collegeDemoService";
 import type {
   CsvUploadInvalidRow,
   CsvUploadResult,
@@ -38,13 +52,13 @@ export class CsvUploadError extends ApiClientError {
 }
 
 // ── Dashboard — GET /api/dashboard/stats, GET /api/dashboard/score-distribution ──
-export const dashboardService = {
+const liveDashboardService = {
   stats: () => request<DashboardStats>("/api/dashboard/stats"),
   scoreDistribution: () => request<ScoreDistribution>("/api/dashboard/score-distribution"),
 };
 
 // ── Students — GET /api/students/, POST /api/students/, GET/PUT/DELETE /api/students/{id}, POST /api/students/upload, GET /api/students/export ──
-export const studentsService = {
+const liveStudentsService = {
   list: (filters: StudentListFilters = {}) =>
     request<Student[]>(
       `/api/students/${buildQuery({
@@ -145,7 +159,7 @@ export const studentsService = {
 };
 
 // ── Drives — GET /api/drives/, POST /api/drives/, PUT/DELETE /api/drives/{id}, GET /api/drives/{id}/eligible ──
-export const drivesService = {
+const liveDrivesService = {
   list: () => request<Drive[]>("/api/drives/"),
 
   create: (payload: DriveCreateInput) =>
@@ -170,7 +184,7 @@ export const drivesService = {
 };
 
 // ── Shortlist — POST /api/shortlist/filter, GET /api/shortlist/export ──
-export const shortlistService = {
+const liveShortlistService = {
   filter: (filters: ShortlistFilters) =>
     request<ShortlistResult>("/api/shortlist/filter", {
       method: "POST",
@@ -199,7 +213,7 @@ export const shortlistService = {
 export { downloadCsvBlob } from "../client";
 
 // ── Departments — GET/POST /api/departments/, GET/PUT/DELETE /api/departments/{id} ──
-export const departmentsService = {
+const liveDepartmentsService = {
   list: () => request<Department[]>("/api/departments/"),
 
   get: (departmentId: string) => request<DepartmentDetail>(`/api/departments/${departmentId}`),
@@ -221,3 +235,24 @@ export const departmentsService = {
       method: "DELETE",
     }),
 };
+
+// ── Demo Mode dispatch (see header) ──
+// Routing happens per call, from the current URL. The demo CSV parser raises its own error
+// type (it must not import this module); convert it here so the UI sees the usual CsvUploadError.
+const demoStudentsWithCsvError: typeof liveStudentsService = {
+  ...demoStudentsService,
+  uploadCsv: async (file) => {
+    try {
+      return await demoStudentsService.uploadCsv(file);
+    } catch (err) {
+      if (err instanceof DemoCsvError) throw new CsvUploadError(err.message, err.status, err.invalidRows);
+      throw err;
+    }
+  },
+};
+
+export const dashboardService = withDemo(liveDashboardService, demoDashboardService, isDemoLocation);
+export const studentsService = withDemo(liveStudentsService, demoStudentsWithCsvError, isDemoLocation);
+export const drivesService = withDemo(liveDrivesService, demoDrivesService, isDemoLocation);
+export const shortlistService = withDemo(liveShortlistService, demoShortlistService, isDemoLocation);
+export const departmentsService = withDemo(liveDepartmentsService, demoDepartmentsService, isDemoLocation);

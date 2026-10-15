@@ -138,6 +138,21 @@ def _reject_if_blocked_and_log(profile: Optional[dict], role: str) -> None:
     raise HTTPException(status_code=403, detail=block_message(profile))
 
 
+PASSWORD_MIN_LENGTH = 8
+PASSWORD_MAX_LENGTH = 128
+
+
+def _enforce_password_policy(password: str) -> None:
+    """Server-side password policy for the set-password / reset endpoints (the last step of a
+    TPO or Admin invitation link), so the API cannot be called directly with a weaker one than
+    the forms allow. 400, like the existing weak-password responses."""
+    if not (PASSWORD_MIN_LENGTH <= len(password) <= PASSWORD_MAX_LENGTH):
+        raise HTTPException(
+            status_code=400,
+            detail=f"Password must be {PASSWORD_MIN_LENGTH}-{PASSWORD_MAX_LENGTH} characters.",
+        )
+
+
 def _set_password_with_retry(user_id: str, password: str) -> None:
     """Set a user's password via the service-role admin API.
 
@@ -550,6 +565,7 @@ def resend_otp(payload: ForgotIn):
 
 @router.post("/reset")
 def reset_password(payload: ResetIn):
+    _enforce_password_policy(payload.password)
     # Verify the recovery token the same way get_current_user does — a real
     # signature/expiry check against Supabase. The old code just decoded the
     # JWT payload segment for `sub` without verifying anything, so any
@@ -582,6 +598,7 @@ def set_password_route(
     """One-time password set for the currently authenticated account —
     used right after Google sign-in, since OAuth accounts never have a
     password at all until this runs."""
+    _enforce_password_policy(payload.password)
     try:
         _set_password_with_retry(current_user["id"], payload.password)
     except AuthWeakPasswordError as e:

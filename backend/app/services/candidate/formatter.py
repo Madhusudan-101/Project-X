@@ -160,9 +160,19 @@ class FormattedMetrics(BaseModel):
 _DOW_NAMES = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
 
 
-def _iso_to_date(iso: str) -> Optional[date]:
-    """Parse an ISO-8601 timestamp to a ``date``; return *None* on failure."""
+def _iso_to_date(iso: Any) -> Optional[date]:
+    """Parse an ISO-8601 timestamp to a ``date``; return *None* on failure.
+
+    A bare number is taken as UNIX epoch seconds (what the Codeforces API
+    returns for ``ratingUpdateTimeSeconds`` before normalisation)."""
     if not iso:
+        return None
+    if isinstance(iso, (int, float)) and not isinstance(iso, bool):
+        try:
+            return datetime.fromtimestamp(iso, tz=timezone.utc).date()
+        except (OverflowError, OSError, ValueError):
+            return None
+    if not isinstance(iso, str):
         return None
     try:
         return datetime.fromisoformat(iso.replace("Z", "+00:00")).date()

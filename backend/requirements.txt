@@ -13,3 +13,6 @@ pyjwt
 # The /render-pdf route degrades to a 503 with a clear message if this
 # (or its system deps) is missing, so the rest of the feature still works.
 weasyprint
+
+# AI voice interview (LiveKit agent). See /ai-interviewer.
+livekit-api>=1.0,<2

@@ -1,0 +1,267 @@
+{
+  "id": "20261006-003806-8490",
+  "task": "linkedin",
+  "created": 1791227286.2788243,
+  "status": "done",
+  "input_mode": "text",
+  "config": {
+    "target_role": "Software Engineer",
+    "temperature": 0.2,
+    "weights": {
+      "resume_weight": 30,
+      "github_weight": 25,
+      "leetcode_weight": 25,
+      "interview_weight": 10,
+      "assessment_weight": 10
+    },
+    "resume_file": "new_resume-1.pdf",
+    "linkedin_file": "Profile-1.pdf",
+    "job_title": ""
+  },
+  "results": [
+    {
+      "provider": "gemini",
+      "model": "gemini-3.5-flash",
+      "status": "error",
+      "started": 1791227286.2794259,
+      "input_mode": "extracted text",
+      "error": "ServerError: 503 UNAVAILABLE. {'error': {'code': 503, 'message': 'This model is currently experiencing high demand. Spikes in demand are usually temporary. Please try again later.', 'status': 'UNAVAILABLE'}}",
+      "latency_s": 12.04
+    },
+    {
+      "provider": "gemini",
+      "model": "gemini-3.1-flash-lite",
+      "status": "done",
+      "started": 1791227298.323136,
+      "input_mode": "extracted text",
+      "latency_s": 8.17,
+      "input_tokens": 2519,
+      "output_tokens": 1771,
+      "finish_reason": "FinishReason.STOP",
+      "raw": "{\n  \"is_valid_linkedin_export\": true,\n  \"invalid_reason\": \"\",\n  \"headline\": \"CSE Student @IIITH | Undergraduate Researcher @Cyber Manthan Center IIITH\",\n  \"experience\": [\n    {\n      \"company\": \"International Institute of Information Technology Hyderabad (IIITH)\",\n      \"role\": \"Apex Mentor\",\n      \"duration\": \"July 2025 - June 2026 (1 year)\",\n      \"description\": \"\"\n    },\n    {\n      \"company\": \"Felicity, IIIT Hyderabad\",\n      \"role\": \"Events Team Member\",\n      \"duration\": \"September 2025 - April 2026 (8 months)\",\n      \"description\": \"\"\n    },\n    {\n      \"company\": \"IIIT Hyderabad\",\n      \"role\": \"Design Team Member\",\n      \"duration\": \"September 2025 - April 2026 (8 months)\",\n      \"description\": \"\"\n    }\n  ],\n  \"education\": [\n    {\n      \"institution\": \"International Institute of Information Technology Hyderabad (IIITH)\",\n      \"degree\": \"\",\n      \"duration\": \"2024\"\n    },\n    {\n      \"institution\": \"St. Xavier's School, Bathinda\",\n      \"degree\": \"\",\n      \"duration\": \"\"\n    }\n  ],\n  \"skills\": [\n    \"MERN Stack\",\n    \"Full-Stack Development\",\n    \"Operating Systems\"\n  ],\n  \"certifications\": [],\n  \"sections\": [\n    {\n      \"section\": \"Headline\",\n      \"present\": true,\n      \"rating\": \"Strong\",\n      \"current_summary\": \"Headline reads: \\\"CSE Student @IIITH | Undergraduate Researcher @Cyber Manthan Center IIITH\\\".\",\n      \"gap_reason\": \"\",\n      \"suggestions\": []\n    },\n    {\n      \"section\": \"About\",\n      \"present\": false,\n      \"rating\": \"Missing\",\n      \"current_summary\": \"Not filled in.\",\n      \"gap_reason\": \"Recruiters lose the chance to see your narrative, technical interests, and career goals beyond just a list of titles.\",\n      \"suggestions\": [\n        \"Write a 3-4 sentence summary highlighting your focus on MERN stack and AI/ML research.\",\n        \"Mention your specific interest in Software Engineering roles to align with your target.\",\n        \"Include a 'Tech Stack' section at the bottom of the summary for keyword optimization.\"\n      ]\n    },\n    {\n      \"section\": \"Experience\",\n      \"present\": true,\n      \"rating\": \"Needs Work\",\n      \"current_summary\": \"Lists roles as Apex Mentor, Events Team Member, and Design Team Member without descriptions.\",\n      \"gap_reason\": \"The lack of bullet points makes it impossible for recruiters to understand your actual contributions or technical impact.\",\n      \"suggestions\": [\n        \"Add 2-3 bullet points for each role describing specific responsibilities and outcomes.\",\n        \"Include your 'Project Intern' role from your resume, which is currently missing from LinkedIn.\",\n        \"Quantify your impact (e.g., 'Mentored X number of students' or 'Designed assets for an event with Y attendees').\"\n      ]\n    },\n    {\n      \"section\": \"Education\",\n      \"present\": true,\n      \"rating\": \"Needs Work\",\n      \"current_summary\": \"Lists IIITH and St. Xavier's School without degree titles or relevant coursework.\",\n      \"gap_reason\": \"Missing degree titles and graduation dates make it harder for automated systems to parse your profile correctly.\",\n      \"suggestions\": [\n        \"Add 'B.Tech in Computer Science and Engineering' to your IIITH entry.\",\n        \"Include your current CGPA and relevant coursework (e.g., Data Structures, Algorithms) to showcase academic rigor.\",\n        \"Add expected graduation year to provide clarity on your availability for internships/full-time roles.\"\n      ]\n    },\n    {\n      \"section\": \"Skills\",\n      \"present\": true,\n      \"rating\": \"Needs Work\",\n      \"current_summary\": \"Lists MERN Stack, Full-Stack Development, and Operating Systems.\",\n      \"gap_reason\": \"The list is too short and misses critical technical keywords found in your resume like C++, Python, and TensorFlow.\",\n      \"suggestions\": [\n        \"Add your core languages: C++, C, Python, SQL, and JavaScript.\",\n        \"Include technical tools like Git, MongoDB, and FastAPI.\",\n        \"Add AI/ML specific skills like TensorFlow and scikit-learn to match your research experience.\"\n      ]\n    },\n    {\n      \"section\": \"Projects\",\n      \"present\": false,\n      \"rating\": \"Missing\",\n      \"current_summary\": \"Not filled in.\",\n      \"gap_reason\": \"Projects are the strongest evidence of your technical ability as a student; missing them hides your best work.\",\n      \"suggestions\": [\n        \"Add your 'Distributed Collaborative Editor' and 'On-Device AI Tutor' projects.\",\n        \"Include links to your GitHub repositories for each project.\",\n        \"Use the 'Projects' section to highlight the tech stack used for each (e.g., C++, Llama 3.2).\"\n      ]\n    },\n    {\n      \"section\": \"Licenses & Certifications\",\n      \"present\": false,\n      \"rating\": \"Missing\",\n      \"current_summary\": \"Not filled in.\",\n      \"gap_reason\": \"You have relevant certifications mentioned in your resume that should be displayed to build credibility.\",\n      \"suggestions\": [\n        \"Add your 'Data Science in Python' certification from Finlatics.\",\n        \"Add your 'Introduction to Statistics' certification from Stanford/Coursera.\",\n        \"Ensure the issuing organization and credential IDs are included for verification.\"\n      ]\n    },\n    {\n      \"section\": \"Recommendations\",\n      \"present\": false,\n      \"rating\": \"Missing\",\n      \"current_summary\": \"Not filled in.\",\n      \"gap_reason\": \"Social proof is missing, which is a missed opportunity to validate your teamwork and technical skills.\",\n      \"suggestions\": [\n        \"Request a recommendation from a professor or a supervisor from your internship.\",\n        \"Offer to write a recommendation for a peer in exchange for one to kickstart the process.\"\n      ]\n    },\n    {\n      \"section\": \"Featured\",\n      \"present\": false,\n      \"rating\": \"Missing\",\n      \"current_summary\": \"Not filled in.\",\n      \"gap_reason\": \"You have no visual or high-impact content pinned to the top of your profile.\",\n      \"suggestions\": [\n        \"Pin your best project demo or GitHub repository link here.\",\n        \"Feature a link to your resume or a technical blog post if you have one.\"\n      ]\n    }\n  ],\n  \"cross_check_flags\": [\n    {\n      \"field\": \"Experience\",\n      \"linkedin_value\": \"Missing Innorize Enterprises internship\",\n      \"resume_value\": \"Project Intern at Innorize Enterprises (Jan-Apr 2026)\",\n      \"note\": \"The internship is a significant professional experience that should be added to LinkedIn.\"\n    }\n  ],\n  \"green_flags\": [\n    \"Headline is professional and clearly states current status and research focus.\",\n    \"Education details are accurate regarding the institution name.\"\n  ],\n  \"red_flags\": [\n    \"Significant discrepancy between resume and LinkedIn regarding professional experience (missing internship).\",\n    \"Profile is currently incomplete, lacking descriptions for roles and missing key sections like Projects and About.\"\n  ],\n  \"overall_rating_score\": 35,\n  \"overall_rating_summary\": \"The profile is currently a placeholder and does not reflect the depth of your technical projects or professional experience found in your resume. It requires significant updates to include your internship, project portfolio, and a professional summary to be effective for recruiters.\"\n}",
+      "valid": true,
+      "output": {
+        "is_valid_linkedin_export": true,
+        "invalid_reason": "",
+        "headline": "CSE Student @IIITH | Undergraduate Researcher @Cyber Manthan Center IIITH",
+        "experience": [
+          {
+            "company": "International Institute of Information Technology Hyderabad (IIITH)",
+            "role": "Apex Mentor",
+            "duration": "July 2025 - June 2026 (1 year)",
+            "description": ""
+          },
+          {
+            "company": "Felicity, IIIT Hyderabad",
+            "role": "Events Team Member",
+            "duration": "September 2025 - April 2026 (8 months)",
+            "description": ""
+          },
+          {
+            "company": "IIIT Hyderabad",
+            "role": "Design Team Member",
+            "duration": "September 2025 - April 2026 (8 months)",
+            "description": ""
+          }
+        ],
+        "education": [
+          {
+            "institution": "International Institute of Information Technology Hyderabad (IIITH)",
+            "degree": "",
+            "duration": "2024"
+          },
+          {
+            "institution": "St. Xavier's School, Bathinda",
+            "degree": "",
+            "duration": ""
+          }
+        ],
+        "skills": [
+          "MERN Stack",
+          "Full-Stack Development",
+          "Operating Systems"
+        ],
+        "certifications": [],
+        "sections": [
+          {
+            "section": "Headline",
+            "present": true,
+            "rating": "Strong",
+            "current_summary": "Headline reads: \"CSE Student @IIITH | Undergraduate Researcher @Cyber Manthan Center IIITH\".",
+            "gap_reason": "",
+            "suggestions": []
+          },
+          {
+            "section": "About",
+            "present": false,
+            "rating": "Missing",
+            "current_summary": "Not filled in.",
+            "gap_reason": "Recruiters lose the chance to see your narrative, technical interests, and career goals beyond just a list of titles.",
+            "suggestions": [
+              "Write a 3-4 sentence summary highlighting your focus on MERN stack and AI/ML research.",
+              "Mention your specific interest in Software Engineering roles to align with your target.",
+              "Include a 'Tech Stack' section at the bottom of the summary for keyword optimization."
+            ]
+          },
+          {
+            "section": "Experience",
+            "present": true,
+            "rating": "Needs Work",
+            "current_summary": "Lists roles as Apex Mentor, Events Team Member, and Design Team Member without descriptions.",
+            "gap_reason": "The lack of bullet points makes it impossible for recruiters to understand your actual contributions or technical impact.",
+            "suggestions": [
+              "Add 2-3 bullet points for each role describing specific responsibilities and outcomes.",
+              "Include your 'Project Intern' role from your resume, which is currently missing from LinkedIn.",
+              "Quantify your impact (e.g., 'Mentored X number of students' or 'Designed assets for an event with Y attendees')."
+            ]
+          },
+          {
+            "section": "Education",
+            "present": true,
+            "rating": "Needs Work",
+            "current_summary": "Lists IIITH and St. Xavier's School without degree titles or relevant coursework.",
+            "gap_reason": "Missing degree titles and graduation dates make it harder for automated systems to parse your profile correctly.",
+            "suggestions": [
+              "Add 'B.Tech in Computer Science and Engineering' to your IIITH entry.",
+              "Include your current CGPA and relevant coursework (e.g., Data Structures, Algorithms) to showcase academic rigor.",
+              "Add expected graduation year to provide clarity on your availability for internships/full-time roles."
+            ]
+          },
+          {
+            "section": "Skills",
+            "present": true,
+            "rating": "Needs Work",
+            "current_summary": "Lists MERN Stack, Full-Stack Development, and Operating Systems.",
+            "gap_reason": "The list is too short and misses critical technical keywords found in your resume like C++, Python, and TensorFlow.",
+            "suggestions": [
+              "Add your core languages: C++, C, Python, SQL, and JavaScript.",
+              "Include technical tools like Git, MongoDB, and FastAPI.",
+              "Add AI/ML specific skills like TensorFlow and scikit-learn to match your research experience."
+            ]
+          },
+          {
+            "section": "Projects",
+            "present": false,
+            "rating": "Missing",
+            "current_summary": "Not filled in.",
+            "gap_reason": "Projects are the strongest evidence of your technical ability as a student; missing them hides your best work.",
+            "suggestions": [
+              "Add your 'Distributed Collaborative Editor' and 'On-Device AI Tutor' projects.",
+              "Include links to your GitHub repositories for each project.",
+              "Use the 'Projects' section to highlight the tech stack used for each (e.g., C++, Llama 3.2)."
+            ]
+          },
+          {
+            "section": "Licenses & Certifications",
+            "present": false,
+            "rating": "Missing",
+            "current_summary": "Not filled in.",
+            "gap_reason": "You have relevant certifications mentioned in your resume that should be displayed to build credibility.",
+            "suggestions": [
+              "Add your 'Data Science in Python' certification from Finlatics.",
+              "Add your 'Introduction to Statistics' certification from Stanford/Coursera.",
+              "Ensure the issuing organization and credential IDs are included for verification."
+            ]
+          },
+          {
+            "section": "Recommendations",
+            "present": false,
+            "rating": "Missing",
+            "current_summary": "Not filled in.",
+            "gap_reason": "Social proof is missing, which is a missed opportunity to validate your teamwork and technical skills.",
+            "suggestions": [
+              "Request a recommendation from a professor or a supervisor from your internship.",
+              "Offer to write a recommendation for a peer in exchange for one to kickstart the process."
+            ]
+          },
+          {
+            "section": "Featured",
+            "present": false,
+            "rating": "Missing",
+            "current_summary": "Not filled in.",
+            "gap_reason": "You have no visual or high-impact content pinned to the top of your profile.",
+            "suggestions": [
+              "Pin your best project demo or GitHub repository link here.",
+              "Feature a link to your resume or a technical blog post if you have one."
+            ]
+          }
+        ],
+        "cross_check_flags": [
+          {
+            "field": "Experience",
+            "linkedin_value": "Missing Innorize Enterprises internship",
+            "resume_value": "Project Intern at Innorize Enterprises (Jan-Apr 2026)",
+            "note": "The internship is a significant professional experience that should be added to LinkedIn."
+          }
+        ],
+        "green_flags": [
+          "Headline is professional and clearly states current status and research focus.",
+          "Education details are accurate regarding the institution name."
+        ],
+        "red_flags": [
+          "Significant discrepancy between resume and LinkedIn regarding professional experience (missing internship).",
+          "Profile is currently incomplete, lacking descriptions for roles and missing key sections like Projects and About."
+        ],
+        "overall_rating_score": 35,
+        "overall_rating_summary": "The profile is currently a placeholder and does not reflect the depth of your technical projects or professional experience found in your resume. It requires significant updates to include your internship, project portfolio, and a professional summary to be effective for recruiters."
+      },
+      "headline": {
+        "score": 11,
+        "verdict": "1/9 sections Strong",
+        "cross_check_flags": 1
+      }
+    },
+    {
+      "provider": "gemini",
+      "model": "gemini-2.0-flash",
+      "status": "error",
+      "started": 1791227314.2339911,
+      "input_mode": "extracted text",
+      "error": "ClientError: 404 NOT_FOUND. {'error': {'code': 404, 'message': 'This model models/gemini-2.0-flash is no longer available. Please update your code to use models/gemini-3.8-flash for the latest features and improvements. We recommend you to use the Interactions API (https://ai.google.dev/gemini-api/docs/get-started).', 'status': 'NOT_FOUND'}}",
+      "latency_s": 0.74
+    },
+    {
+      "provider": "groq",
+      "model": "llama-3.3-70b-versatile",
+      "status": "error",
+      "started": 1791227314.9726079,
+      "input_mode": "extracted text",
+      "error": "ProviderError: HTTP 404: {\"error\":{\"message\":\"The model `llama-3.3-70b-versatile` does not exist or you do not have access to it.\",\"type\":\"invalid_request_error\",\"code\":\"model_not_found\"}}\n",
+      "latency_s": 0.41
+    },
+    {
+      "provider": "openrouter",
+      "model": "nvidia/nemotron-3-super-120b-a12b:free",
+      "status": "done",
+      "started": 1791227315.3828592,
+      "input_mode": "extracted text",
+      "latency_s": 72.4,
+      "input_tokens": 3182,
+      "output_tokens": 8192,
+      "finish_reason": "length",
+      "raw": "{\"is_valid_linkedin_export\": true, \"invalid_reason\": \"\", \"headline\": \"CSE Student @IIITH | Undergraduate Researcher @Cyber Manthan\", \"experience\": [{\"company\": \"International Institute of Information Technology Hyderabad (IIITH)\", \"role\": \"Apex Mentor\", \"duration\": \"July 2025 - June 2026 (1 year)\", \"description\": \"\"}, {\"company\": \"IIIT Hyderabad\", \"role\": \"Events Team Member\", \"duration\": \"September 2025 - April 2026 (8 months)\", \"description\": \"Felicity, IIIT Hyderabad\"}, {\"company\": \"IIIT Hyderabad\", \"role\": \"Design Team Member\", \"duration\": \"September 2025 - April 2026 (8 months)\", \"description\": \"\"}], \"education\": [{\"institution\": \"International Institute of Information Technology Hyderabad (IIITH)\", \"degree\": \"\", \"duration\": \"(2024)\"}, {\"institution\": \"St. Xavier's School, Bathinda\", \"degree\": \"\", \"duration\": \"\"}], \"skills\": [\"MERN Stack\", \"Full-Stack Development\", \"Operating Systems\"], \"certifications\": [], \"sections\": [{\"section\": \"Headline\", \"present\": true, \"rating\": \"Needs Work\", \"current_summary\": \"Headline reads: \\\"CSE Student @IIITH | Undergraduate Researcher @Cyber Manthan\\\".\", \"gap_reason\": \"Headline lacks target role keywords (e.g., Software Engineer) and a recruiter\u2011optimized formula, reducing discoverability in searches.\", \"suggestions\": [\"Add a target role keyword at the start, e.g., \\\"Aspiring Software Engineer | CSE Student @IIITH | Undergraduate Researcher @Cyber Manthan\\\".\", \"Use the formula: [Role] | [Key Skills] | [Value Proposition] to improve recruiter visibility.\", \"Include relevant technologies like MERN Stack or Operating Systems to attract specific recruiters.\"]}, {\"section\": \"About\", \"present\": false, \"rating\": \"Missing\", \"current_summary\": \"Not filled in.\", \"gap_reason\": \"About section is missing; recruiters use it to understand candidate's motivation, career goals, and personal brand.\", \"suggestions\": [\"Write a 2\u20113 sentence summary highlighting your passion for full\u2011stack development, research experience, and goal to become a Software Engineer.\", \"Mention key skills (MERN, OS, C++) and notable achievements (e.g., research project, hackathon wins).\", \"Keep it concise, recruiter\u2011focused, and free of buzzwords.\"]}, {\"section\": \"Experience\", \"present\": true, \"rating\": \"Needs Work\", \"current_summary\": \"Experience lists three roles: Apex Mentor at IIITH (Jul 2025\u2011Jun 2026), Events Team Member at IIIT Hyderabad (Sep 2025\u2011Apr 2026), and Design Team Member at IIIT Hyderabad (Sep 2025\u2011Apr 2026).\", \"gap_reason\": \"Experience entries lack descriptions of responsibilities, technologies used, and measurable achievements, making it hard for recruiters to assess impact.\", \"suggestions\": [\"Add bullet\u2011point descriptions for each role, specifying tasks, tools (e.g., mentored 30+ students, organized events for 500+ participants), and any quantifiable outcomes.\", \"Use strong action verbs and include relevant technologies (e.g., MERN Stack, Git, Figma) to align with target Software Engineer roles.\", \"Ensure dates are consistent and avoid overlapping roles unless they truly occurred simultaneously.\"]}, {\"section\": \"Education\", \"present\": true, \"rating\": \"Needs Work\", \"current_summary\": \"Education shows IIITH (2024) and St. Xavier's School, Bathinda (no dates or degree).\", \"gap_reason\": \"Education section is missing degree names, graduation dates, and relevant details, leaving recruiters unsure of academic qualifications.\", \"suggestions\": [\"Add your degree (e.g., B.Tech in Computer Science and Engineering) and expected graduation date (e.g., July 2027) for IIITH.\", \"Include your high school details with graduation year and any notable achievements (e.g., GPA, relevant coursework).\", \"Optionally list relevant coursework, CGPA, or academic projects to strengthen the section.\"]}, {\"section\": \"Skills\", \"present\": true, \"rating\": \"Needs Work\", \"current_summary\": \"Skills list includes MERN Stack, Full-Stack Development, and Operating Systems.\", \"gap_reason\": \"Skills section is limited to only three items, missing many technical tools and languages that recruiters search for (e.g., specific languages, frameworks, cloud platforms).\", \"suggestions\": [\"Add specific programming languages you know (e.g., Python, Java, C++, SQL) and tools (Git, Docker, AWS) to expand the list.\", \"Order skills by proficiency and group them (Languages, Frameworks, Tools) for easier scanning.\", \"Seek endorsements from peers or colleagues to boost credibility of listed skills.\"]}, {\"section\": \"Projects\", \"present\": false, \"rating\": \"Missing\", \"current_summary\": \"Not filled in.\", \"gap_reason\": \"Projects section is missing; recruiters look for concrete evidence of coding ability and problem\u2011solving skills.\", \"suggestions\": [\"Add key projects from your resume (e.g., Distributed Collaborative Editor, On\u2011Device AI Tutor) with brief descriptions, technologies used, and outcomes.\", \"Include links to GitHub repositories and, if possible, live demos or screenshots.\", \"Highlight impact, such as performance improvements, user counts, or awards/hackathon placements.\"]}, {\"section\": \"Licenses & Certifications\", \"present\": false, \"rating\": \"Missing\", \"current_summary\": \"Not filled in.\", \"gap_reason\": \"Licenses & Certifications section is missing; certifications can validate specialized knowledge and commitment to learning.\", \"suggestions\": [\"Add any relevant certifications you have (e.g., Coursera Introduction to Statistics, Finlatics Data Science in Python) with issuing organization and date.\", \"If you lack formal certifications, consider completing free courses (e.g., Google IT Support, AWS Cloud Practitioner) and adding them.\", \"Keep the section up to date as you earn new credentials.\"]}, {\"section\": \"Recommendations\", \"present\": false, \"rating\": \"Missing\", \"current_summary\": \"Not filled in.\", \"gap_reason\": \"Recommendations section is missing; third\u2011party endorsements add social proof of your skills and work ethic.\", \"suggestions\": [\"Request recommendations from professors, project mentors, or internship supervisors highlighting specific strengths.\", \"Guide recommenders to focus on technical skills, teamwork, and achievements relevant to a Software Engineer role.\", \"Display at least two strong recommendations to build credibility.\"]}, {\"section\": \"Featured\", \"present\": false, \"rating\": \"Missing\", \"current_summary\": \"Not filled in.\", \"gap_reason\": \"Featured section is missing; this area lets you showcase top posts, articles, or media that demonstrate expertise.\", \"suggestions\": [\"Add links to your GitHub profile, research paper, or blog posts about your projects.\", \"Upload a short video or presentation explaining a key project (e.g., the agentic LLM pipeline for CIS remediation).\", \"Use the Featured section to highlight accomplishments that recruiters might otherwise overlook.\"]}, {\"section\": \"Licenses & Certifications\", \"present\": false, \"rating\": \"Missing\", \"current_summary\": \"Not filled in.\", \"gap_reason\": \"Licenses & Certifications section is missing; certifications can validate specialized knowledge and commitment to learning.\", \"suggestions\": [\"Add any relevant certifications you have (e.g., Coursera Introduction to Statistics, Finlatics Data Science in Python) with issuing organization and date.\", \"If you lack formal certifications, consider completing free courses (e.g., Google IT Support, AWS Cloud Practitioner) and adding them.\", \"Keep the section up to date as you earn new credentials.\"]}, {\"section\": \"Recommendations\", \"present\": false, \"rating\": \"Missing\", \"current_summary\": \"Not filled in.\", \"gap_reason\": \"Recommendations section is missing; third\u2011party endorsements add social proof of your skills and work ethic.\", \"suggestions\": [\"Request recommendations from professors, project mentors, or internship supervisors highlighting specific strengths.\", \"Guide recommenders to focus on technical skills, teamwork, and achievements relevant to a Software Engineer role.\", \"Display at least two strong recommendations to build credibility.\"]}, {\"section\": \"Featured\", \"present\": false, \"rating\": \"Missing\", \"current_summary\": \"Not filled in.\", \"gap_reason\": \"Featured section is missing; this area lets you showcase top posts, articles, or media that demonstrate expertise.\", \"suggestions\": [\"Add links to your GitHub profile, research paper, or blog posts about your projects.\", \"Upload a short video or presentation explaining a key project (e.g., the agentic LLM pipeline for CIS remediation).\", \"Use the Featured section to highlight accomplishments that recruiters might otherwise overlook.\"]}, {\"section\": \"Licenses & Certifications\", \"present\": false, \"rating\": \"Missing\", \"current_summary\": \"Not filled in.\", \"gap_reason\": \"Licenses & Certifications section is missing; certifications can validate specialized knowledge and commitment to learning.\", \"suggestions\": [\"Add any relevant certifications you have (e.g., Coursera Introduction to Statistics, Finlatics Data Science in Python) with issuing organization and date.\", \"If you lack formal certifications, consider completing free courses (e.g., Google IT Support, AWS Cloud Practitioner) and adding them.\", \"Keep the section up to date as you earn new credentials.\"]}, {\"section\": \"Recommendations\", \"present\": false, \"rating\": \"Missing\", \"current_summary\": \"Not filled in.\", \"gap_reason\": \"Recommendations section is missing; third\u2011party endorsements add social proof of your skills and work ethic.\", \"suggestions\": [\"Request recommendations from professors, project mentors, or internship supervisors highlighting specific strengths.\", \"Guide recommenders to focus on technical skills, teamwork, and achievements relevant to a Software Engineer role.\", \"Display at least two strong recommendations to build credibility.\"]}, {\"section\": \"Featured\", \"present\": false, \"rating\": \"Missing\", \"current_summary\": \"Not filled in.\", \"gap_reason\": \"Featured section is missing; this area lets you showcase top posts, articles, or media that demonstrate expertise.\", \"suggestions\": [\"Add links to your GitHub profile, research paper, or blog posts about your projects.\", \"Upload a short video or presentation explaining a key project (e.g., the agentic LLM pipeline for CIS remediation).\", \"Use the Featured section to highlight accomplishments that recruiters might otherwise overlook.\"]}, {\"section\": \"Licenses & Certifications\", \"present\": false, \"rating\": \"Missing\", \"current_summary\": \"Not filled in.\", \"gap_reason\": \"Licenses & Certifications section is missing; certifications can validate specialized knowledge and commitment to learning.\", \"suggestions\": [\"Add any relevant certifications you have (e.g., Coursera Introduction to Statistics, Finlatics Data Science in Python) with issuing organization and date.\", \"If you lack formal certifications, consider completing free courses (e.g., Google IT Support, AWS Cloud Practitioner) and adding them.\", \"Keep the section up to date as you earn new credentials.\"]}, {\"section\": \"Recommendations\", \"present\": false, \"rating\": \"Missing\", \"current_summary\": \"Not filled in.\", \"gap_reason\": \"Recommendations section is missing; third\u2011party endorsements add social proof of your skills and work ethic.\", \"suggestions\": [\"Request recommendations from professors, project mentors, or internship supervisors highlighting specific strengths.\", \"Guide recommenders to focus on technical skills, teamwork, and achievements relevant to a Software Engineer role.\", \"Display at least two strong recommendations to build credibility.\"]}, {\"section\": \"Featured\", \"present\": false, \"rating\": \"Missing\", \"current_summary\": \"Not filled in.\", \"gap_reason\": \"Featured section is missing; this area lets you showcase top posts, articles, or media that demonstrate expertise.\", \"suggestions\": [\"Add links to your GitHub profile, research paper, or blog posts about your projects.\", \"Upload a short video or presentation explaining a key project (e.g., the agentic LLM pipeline for CIS remediation).\", \"Use the Featured section to highlight accomplishments that recruiters might otherwise overlook.\"]}, {\"section\": \"Licenses & Certifications\", \"present\": false, \"rating\": \"Missing\", \"current_summary\": \"Not filled in.\", \"gap_reason\": \"Licenses & Certifications section is missing; certifications can validate specialized knowledge and commitment to learning.\", \"suggestions\": [\"Add any relevant certifications you have (e.g., Coursera Introduction to Statistics, Finlatics Data Science in Python) with issuing organization and date.\", \"If you lack formal certifications, consider completing free courses (e.g., Google IT Support, AWS Cloud Practitioner) and adding them.\", \"Keep the section up to date as you earn new credentials.\"]}, {\"section\": \"Recommendations\", \"present\": false, \"rating\": \"Missing\", \"current_summary\": \"Not filled in.\", \"gap_reason\": \"Recommendations section is missing; third\u2011party endorsements add social proof of your skills and work ethic.\",",
+      "cost_usd": 0.0,
+      "valid": false,
+      "parse_error": "Unparseable JSON: Expecting ',' delimiter: line 1 column 12639 (char 12638)"
+    },
+    {
+      "provider": "openai",
+      "model": "gpt-5-mini",
+      "status": "error",
+      "started": 1791227387.8508177,
+      "input_mode": "extracted text",
+      "error": "ProviderError: HTTP 429: {\n    \"error\": {\n        \"message\": \"You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.\",\n        \"type\": \"insufficient_quota\",\n        \"param\": null,\n        \"code\": \"credit_balance_exhausted\"\n    }\n}\n",
+      "latency_s": 7.2
+    },
+    {
+      "provider": "groq",
+      "model": "1",
+      "status": "error",
+      "started": 1791227395.0494118,
+      "input_mode": "extracted text",
+      "error": "ProviderError: HTTP 404: {\"error\":{\"message\":\"The model `1` does not exist or you do not have access to it.\",\"type\":\"invalid_request_error\",\"code\":\"model_not_found\"}}\n",
+      "latency_s": 0.47
+    }
+  ],
+  "best": null
+}

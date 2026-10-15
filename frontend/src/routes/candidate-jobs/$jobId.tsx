@@ -319,6 +319,15 @@ function CandidateJobDetailPage() {
                       <p className="text-muted-foreground">
                         {fmtWindow(job.oaWindowStart, job.oaWindowEnd)}
                       </p>
+                      {job.applicationId && (
+                        <Link
+                          to="/candidate-oa/$applicationId"
+                          params={{ applicationId: job.applicationId }}
+                          className="mt-1 inline-block text-xs font-medium text-primary hover:underline"
+                        >
+                          Instructions &amp; start →
+                        </Link>
+                      )}
                     </div>
                   </li>
                 )}

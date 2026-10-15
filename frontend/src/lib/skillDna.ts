@@ -32,9 +32,41 @@ const DIMENSION_KEYWORDS: Record<DnaDimension, string[]> = {
 /** Points per skill mapping into a dimension, capped at 100. Tuned so 3–4 relevant skills read as strong. */
 const POINTS_PER_SKILL = 30;
 
+/**
+ * Keywords that are deliberate word *stems* (match "scalable"/"scalability",
+ * "PostgreSQL", "ReactJS", "Node.js" …). Every other keyword must match as a
+ * whole word (optionally pluralised) so short keywords don't fire inside
+ * unrelated words — "java" in "JavaScript", "rest" in "Interest", "api" in
+ * "Capital".
+ */
+const STEM_KEYWORDS = new Set([
+  "scalab",
+  "postgres",
+  "react",
+  "node",
+  "vue",
+  "angular",
+  "svelte",
+  "tailwind",
+]);
+
+const escapeRegExp = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+const keywordPatterns = Object.fromEntries(
+  DNA_DIMENSIONS.map((dim) => [
+    dim,
+    DIMENSION_KEYWORDS[dim].map(
+      (kw) =>
+        new RegExp(
+          `(?<![a-z0-9])${escapeRegExp(kw)}${STEM_KEYWORDS.has(kw) ? "" : "(?:s|es)?(?![a-z0-9])"}`,
+        ),
+    ),
+  ]),
+) as Record<DnaDimension, RegExp[]>;
+
 function dimensionsForSkill(skill: string): DnaDimension[] {
-  const lower = ` ${skill.toLowerCase()} `;
-  return DNA_DIMENSIONS.filter((dim) => DIMENSION_KEYWORDS[dim].some((kw) => lower.includes(kw)));
+  const lower = skill.toLowerCase();
+  return DNA_DIMENSIONS.filter((dim) => keywordPatterns[dim].some((re) => re.test(lower)));
 }
 
 function bucketSkills(matchedSkills: string[]): Map<DnaDimension, string[]> {

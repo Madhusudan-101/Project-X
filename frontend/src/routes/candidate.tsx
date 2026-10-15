@@ -18,6 +18,7 @@ import {
   Loader2,
   LogIn,
   LogOut,
+  Mic,
   Play,
   Search,
   Settings,
@@ -61,6 +62,7 @@ import { practiceService } from "@/services/api/candidate/practice";
 import { peerService, type PeerReport } from "@/services/api/candidate/peer";
 import { reservePeerMeetTab } from "@/lib/peerMeetTab";
 import { toast } from "sonner";
+import { AiInterviewTab } from "@/components/candidate/ai-interview/AiInterviewTab";
 import { PeerInterviewMatchModal } from "@/components/candidate/PeerInterviewMatchModal";
 import { ScheduledMeetingsList } from "@/components/candidate/ScheduledMeetingsList";
 import { UpcomingMeetings } from "@/components/candidate/UpcomingMeetings";
@@ -73,6 +75,7 @@ import { candidateJobsService } from "@/services/api/candidate/jobs";
 import { ProfileSettingsDialog } from "@/components/candidate/ProfileSettingsDialog";
 import { PrepPlanDialog } from "@/components/candidate/PrepPlanDialog";
 import { ApplicationFormModal } from "@/components/candidate/ApplicationFormModal";
+import { OnlineAssessmentsPanel } from "@/components/candidate/OnlineAssessmentsPanel";
 import {
   APPLICATION_STATUS_LABELS,
   EXPERIENCE_LEVEL_LABELS,
@@ -171,6 +174,7 @@ function derivePeerStats(reports: PeerReport[]): PeerStats {
 
 function CandidatePortal() {
   const [tab, setTab] = useState("overview");
+  const hideForAi = tab === "ai-interview" ? "mt-0 hidden" : "mt-0";
   const [settingsOpen, setSettingsOpen] = useState(false);
   const navigate = useNavigate();
   useCandidateGuard();
@@ -282,7 +286,7 @@ function CandidatePortal() {
         </div>
 
         {/* Section tabs live in the header — the three sections the user asked for */}
-        <div className="mx-auto max-w-7xl px-4 md:px-8">
+        <div className="mx-auto max-w-7xl overflow-x-auto px-4 md:px-8">
           <Tabs value={tab} onValueChange={setTab}>
             <TabsList className="h-11 gap-1 bg-transparent p-0">
               {[
@@ -290,6 +294,7 @@ function CandidatePortal() {
                 { v: "jobs", label: "Jobs", icon: Briefcase },
                 { v: "analyzer", label: "Analyzer", icon: Zap },
                 { v: "practice", label: "Practice", icon: TerminalSquare },
+                { v: "ai-interview", label: "AI Interview", icon: Mic },
                 { v: "dna", label: "Skill DNA", icon: Dna },
               ].map((t) => {
                 const Icon = t.icon;
@@ -313,19 +318,25 @@ function CandidatePortal() {
 
             {/* Tab bodies */}
             <div className="pt-6 pb-12">
-              <TabsContent value="overview" className="mt-0" forceMount>
-                <OverviewTab />
+              {/* forceMount keeps these sections visible even when inactive, which would bury the AI
+                  Interview tab at the bottom of the page. Hide them only while it is open. */}
+              <TabsContent value="overview" className={hideForAi} forceMount>
+                <OverviewTab onOpenAiInterview={() => setTab("ai-interview")} />
               </TabsContent>
               <TabsContent value="jobs" className="mt-0">
                 <JobsTab />
               </TabsContent>
-              <TabsContent value="analyzer" className="mt-0" forceMount>
+              <TabsContent value="analyzer" className={hideForAi} forceMount>
                 <AnalyzerTab />
               </TabsContent>
-              <TabsContent value="practice" className="mt-0" forceMount>
+              <TabsContent value="practice" className={hideForAi} forceMount>
                 <PracticeTab />
               </TabsContent>
-              <TabsContent value="dna" className="mt-0" forceMount>
+              {/* No forceMount: unmounting an inactive tab tears down the live room. */}
+              <TabsContent value="ai-interview" className="mt-0">
+                <AiInterviewTab />
+              </TabsContent>
+              <TabsContent value="dna" className={hideForAi} forceMount>
                 <TechDnaTab />
               </TabsContent>
             </div>
@@ -340,7 +351,7 @@ function CandidatePortal() {
 
 // ---------- Overview ----------
 
-function OverviewTab() {
+function OverviewTab({ onOpenAiInterview }: { onOpenAiInterview: () => void }) {
   const session = useAuthStore((s) => s.session);
   const [peerModalOpen, setPeerModalOpen] = useState(false);
   // Shares the ["candidate-applications"] cache with the Jobs tab — react-query
@@ -458,6 +469,7 @@ function OverviewTab() {
               title="AI Interview"
               body="Adaptive mocks, honest feedback."
               status="Live"
+              onClick={onOpenAiInterview}
             />
             {activePeerRoom ? (
               <ActivePeerRoomCard
@@ -1300,6 +1312,8 @@ function JobsTab() {
 
   return (
     <div className="space-y-8">
+      <OnlineAssessmentsPanel />
+
       {/* Board */}
       <section className="space-y-4">
         <div>

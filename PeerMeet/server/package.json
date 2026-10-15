@@ -5,7 +5,9 @@
   "main": "src/index.js",
   "scripts": {
     "start": "node src/index.js",
-    "dev": "nodemon src/index.js"
+    "dev": "nodemon src/index.js",
+    "test": "node --test tests/roomManager.test.js && node tests/peermeet-integration.test.js",
+    "test:unit": "node --test tests/roomManager.test.js"
   },
   "dependencies": {
     "@deepgram/sdk": "^3.11.2",

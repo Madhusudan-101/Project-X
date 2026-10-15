@@ -79,6 +79,13 @@ Admin Portal
     college link is **replaced** (deleted and recreated), never adopted: whoever registered it
     still holds its password and sessions, so only the mailbox owner may control the new one.
     Accounts that are already linked to a college are never touched.
+- **TPO login-only hardening.** Apply `db/tpo_access_hardening_migration.sql` after the migrations
+  above (idempotent, no data touched). It makes the RLS helpers `current_college_id()` / `is_admin()`
+  ignore blocked accounts, so a disabled TPO cannot keep reading tenant tables straight from
+  Supabase REST with a still-valid JWT / refresh token. `db/profiles_rls_migration.sql` enables own-row
+  RLS on `public.profiles` (no earlier migration does) — run its two check queries first; skip it if the
+  live project already has RLS + own-row policies there. `colleges.create` can be scoped to one college:
+  such an admin can add TPOs to that college only and cannot create new colleges.
 - **Data sources — do not merge them.** Every Admin metric comes from the platform pipeline
   (jobs, `job_drives`, applications, round results). The College Portal keeps its own data:
   the roster (`students`, including TPO-marked placement) and manually entered Campus Drives
@@ -104,6 +111,24 @@ Admin Portal
     database `admin_portal_test`; it refuses any URL containing "supabase") and checks each
     metric against a hand-computed fixture, plus EXECUTE grants, the profile role guard and
     the application-college snapshot trigger.
+
+- Online Assessment (timed one-way sections, library coding problems graded on the server, company
+  builder / invites / results). Run, in order, **after** `db/job_drives_migration.sql`:
+
+  1. `db/online_assessment_migration.sql`
+  2. `db/online_assessment_coding_migration.sql`  (additive; safe to re-run)
+  3. Load the problem library: `python scripts/oa_import/seed_problems.py`
+     (reads `db/seed/oa_problems.json` — 198 problems, 196 validated; idempotent).
+  4. Code execution: set `OA_JUDGE_BACKEND=piston` + `OA_PISTON_URL` (see `deploy/piston/README.md`),
+     then `python scripts/check_judge.py`. Without it candidates can open the OA but can't Run/Submit.
+  5. Optional email: `RESEND_API_KEY`, `OA_EMAIL_FROM`, `APP_BASE_URL`.
+
+  Tests: `python tests/test_candidate_oa.py` and `python tests/test_oa_coding_and_company.py`
+  (the latter runs the real judge, so it needs `python3` and `node` on PATH).
+
+  Regenerating the library from the leetcode_OA clone: `scripts/oa_import/` —
+  `extract_problems.mjs` (handler → plain tests) then `build_seed.py` (sanitise + validate against
+  the independent solutions in `scripts/oa_import/solutions/`). See the docstrings there.
 
 Frontend
 --------

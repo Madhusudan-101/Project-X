@@ -18,7 +18,7 @@ from typing import List, Optional
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from postgrest.exceptions import APIError
 
-from ...deps import db_client, require_candidate_role
+from ...deps import _parse_ts, db_client, require_candidate_role
 from ...schemas import (
     ApplicationAnalysisOut,
     ApplicationDraftOut,
@@ -261,6 +261,19 @@ def _visible_job_and_drive(job_id: str, current_user: dict) -> tuple[dict, dict]
     return job, drive
 
 
+def _ensure_applications_open(drive: dict) -> None:
+    """The board hides a drive once its apply_deadline passes, but the detail
+    and apply endpoints are reachable by id (stale tab, bookmark, direct API
+    call) — so the deadline has to be enforced here too, not just filtered."""
+    deadline = _parse_ts(drive.get("apply_deadline"))
+    if deadline is None:
+        return
+    if deadline.tzinfo is None:
+        deadline = deadline.replace(tzinfo=timezone.utc)
+    if deadline <= datetime.now(timezone.utc):
+        raise HTTPException(status_code=403, detail="Applications for this drive have closed.")
+
+
 def _drive_rounds_out(drive_id: str) -> List[JobDriveRoundOut]:
     return [
         JobDriveRoundOut(
@@ -501,6 +514,7 @@ async def application_drafts_route(
     current_user: dict = Depends(require_candidate_role),
 ) -> ApplicationDraftOut:
     job, drive = _visible_job_and_drive(job_id, current_user)
+    _ensure_applications_open(drive)
 
     profile = get_profile_eligibility_fields(current_user["id"])
     eligible, reason = compute_eligibility(drive, profile)
@@ -565,6 +579,7 @@ def apply_route(
     current_user: dict = Depends(require_candidate_role),
 ) -> ApplicationOut:
     job, drive = _visible_job_and_drive(job_id, current_user)
+    _ensure_applications_open(drive)
 
     # Hard eligibility gate — never let an ineligible application through
     # only to reject it later.

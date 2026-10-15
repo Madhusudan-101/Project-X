@@ -81,7 +81,7 @@ function ForgotPasswordPage() {
             Enter your email and we'll send you a link to reset your password.
           </p>
 
-          <form onSubmit={form.handleSubmit(onSubmit)} className="mt-8 space-y-4">
+          <form method="post" onSubmit={form.handleSubmit(onSubmit)} className="mt-8 space-y-4">
             <div className="space-y-2">
               <Label htmlFor="email">Email</Label>
               <Input

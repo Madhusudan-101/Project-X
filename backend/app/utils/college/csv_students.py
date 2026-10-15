@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import csv
 import io
+import math
 from typing import Iterable, List, Tuple
 
 
@@ -23,6 +24,8 @@ _NUMERIC_FIELDS = (
     "assessmentScore",
 )
 
+_MIN_GRAD_YEAR, _MAX_GRAD_YEAR = 1950, 2100
+
 _VALID_STATUSES = {"pending", "verified", "rejected"}
 _VALID_PLACEMENT_STATUSES = {"not_placed", "placed", "offer_declined"}
 
@@ -31,9 +34,12 @@ def _to_number(value: str, default: float = 0.0) -> float:
     if value is None:
         return default
     try:
-        return float(str(value).strip())
+        number = float(str(value).strip())
     except (ValueError, TypeError):
         return default
+    # "nan"/"inf" parse as floats but are not valid JSON numbers and would
+    # poison the roster insert (and overflow int() below).
+    return number if math.isfinite(number) else default
 
 
 def parse_students_csv(raw: bytes) -> Tuple[List[dict], List[dict]]:
@@ -70,9 +76,10 @@ def parse_students_csv(raw: bytes) -> Tuple[List[dict], List[dict]]:
         if placement_status not in _VALID_PLACEMENT_STATUSES:
             placement_status = "not_placed"
 
-        try:
-            grad = int(_to_number(row.get("graduationYear"), 0))
-        except (ValueError, TypeError):
+        # A graduation year that is not a real year is an invalid row, not
+        # a student silently stored as graduating in year 0.
+        grad = int(_to_number(row.get("graduationYear"), 0))
+        if not _MIN_GRAD_YEAR <= grad <= _MAX_GRAD_YEAR:
             invalid.append({"line": idx, "missing": ["graduationYear"], "row": row})
             continue
 

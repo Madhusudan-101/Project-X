@@ -20,6 +20,7 @@ import { cn } from "@/lib/utils";
 import { drivesService } from "@/services/api/company/drives";
 import { jobsService } from "@/services/api/company/jobs";
 import { ApplicantAnalysisPanel } from "./ApplicantAnalysisPanel";
+import { DriveAssessmentCard } from "../assessment/DriveAssessmentCard";
 import {
   ROUND_MODE_LABELS,
   ROUND_TYPE_LABELS,
@@ -121,6 +122,8 @@ function DrivePanel({ jobId, drive }: { jobId: string; drive: JobDrive }) {
           ` · OA ${fmt(drive.oaWindowStart)} → ${fmt(drive.oaWindowEnd)}`} · {drive.applicantCount}{" "}
         applicant{drive.applicantCount === 1 ? "" : "s"}
       </p>
+
+      <DriveAssessmentCard jobId={jobId} drive={drive} />
 
       {rounds.length === 0 ? (
         <p className="rounded-lg border border-dashed border-border/70 p-6 text-center text-xs text-muted-foreground">

@@ -1,0 +1,231 @@
+{
+  "id": "20261006-003349-69dd",
+  "task": "resume",
+  "created": 1791227029.6194954,
+  "status": "done",
+  "input_mode": "text",
+  "config": {
+    "target_role": "Software Engineer",
+    "temperature": 0.2,
+    "weights": {
+      "resume_weight": 30,
+      "github_weight": 25,
+      "leetcode_weight": 25,
+      "interview_weight": 10,
+      "assessment_weight": 10
+    },
+    "resume_file": "new_resume-1.pdf",
+    "linkedin_file": null,
+    "job_title": ""
+  },
+  "results": [
+    {
+      "provider": "gemini",
+      "model": "gemini-3.5-flash",
+      "status": "error",
+      "started": 1791227029.6201603,
+      "input_mode": "extracted text",
+      "error": "ServerError: 503 UNAVAILABLE. {'error': {'code': 503, 'message': 'This model is currently experiencing high demand. Spikes in demand are usually temporary. Please try again later.', 'status': 'UNAVAILABLE'}}",
+      "latency_s": 24.34
+    },
+    {
+      "provider": "gemini",
+      "model": "gemini-3.1-flash-lite",
+      "status": "done",
+      "started": 1791227053.964732,
+      "input_mode": "extracted text",
+      "latency_s": 7.71,
+      "input_tokens": 3408,
+      "output_tokens": 838,
+      "finish_reason": "FinishReason.STOP",
+      "raw": "{\n  \"detected_discrepancies\": [],\n  \"role_fit\": {\n    \"matched_skills\": [\n      \"Python\",\n      \"C++\",\n      \"C\",\n      \"MERN Stack\",\n      \"System Design\",\n      \"API Development\",\n      \"Database Management (SQL/NoSQL)\",\n      \"Testing/QA\"\n    ],\n    \"missing_skills\": [\n      \"Cloud Infrastructure (AWS/GCP/Azure)\",\n      \"CI/CD Pipeline implementation\",\n      \"Containerization (Docker/Kubernetes)\"\n    ],\n    \"fit_summary\": \"The candidate is a highly competitive applicant for a Software Engineer role. They demonstrate strong technical breadth across systems programming, AI/ML, and full-stack development. Their academic background and project-based evidence suggest a high level of proficiency in core engineering principles.\"\n  },\n  \"strengths\": [\n    \"Strong academic performance (JEE Main 2024 AIR 2818, 99.8 percentile).\",\n    \"Demonstrated ability to deliver complex systems (e.g., On-Device AI Tutor, Distributed Editor).\",\n    \"Proven experience in high-stakes environments (Qualcomm presentation, research at IIIT Hyderabad).\",\n    \"Strong technical documentation and testing rigor (150+ test cases, root-cause analysis).\"\n  ],\n  \"weaknesses\": [\n    \"The resume is currently formatted with some minor character encoding issues (e.g., '/envel\u2322peg', 'T utor').\",\n    \"The resume lacks a clear, unified GitHub portfolio link that is easily accessible; while links are present in the PDF, the overall presentation of the portfolio could be more cohesive.\",\n    \"The resume is dense; ensure that the layout remains clean and readable on a single page.\"\n  ],\n  \"resume_corrections\": [\n    \"Fix character encoding issues in the header (e.g., replace 'envel\u2322peg' with 'Email').\",\n    \"Correct typos in section headers (e.g., 'T utor' to 'Tutor', 'T echnical' to 'Technical').\",\n    \"Ensure consistent spacing and font usage throughout the document to improve professional appearance.\"\n  ],\n  \"next_week_action_plan\": [\n    \"Day 1: Containerize the 'Movie Recommender System' using Docker and write a Dockerfile to improve deployment portability.\",\n    \"Day 2: Implement a basic CI/CD pipeline using GitHub Actions for the 'Backend Test Suite' repository to automate testing on push.\",\n    \"Day 3: Deploy the 'Aarogya Connect' or 'Movie Recommender' backend to a free-tier cloud provider (e.g., Render or Fly.io) to demonstrate cloud-readiness.\",\n    \"Day 4: Add a 'System Architecture' diagram (using Mermaid.js or Draw.io) to the README of the 'Distributed Collaborative Editor' to better explain the concurrency model.\",\n    \"Day 5: Refactor the 'C-Shark' packet sniffer to include a basic unit test suite using GoogleTest to demonstrate C++ testing proficiency.\",\n    \"Day 6: Explore Kubernetes basics by creating a local Minikube cluster and deploying a simple microservice to understand orchestration.\",\n    \"Day 7: Audit all GitHub repository READMEs to ensure they include clear 'How to Run' instructions and a summary of the technical challenges solved.\"\n  ],\n  \"overall_rating\": {\n    \"score\": 88,\n    \"verdict\": \"Highly Competitive\",\n    \"summary\": \"The candidate shows exceptional technical depth and a strong track record of project-based learning. Despite minor formatting artifacts, the quality of their work and their ability to handle complex engineering tasks make them a top-tier candidate for a Software Engineer role.\"\n  }\n}",
+      "valid": true,
+      "output": {
+        "detected_discrepancies": [],
+        "role_fit": {
+          "matched_skills": [
+            "Python",
+            "C++",
+            "C",
+            "MERN Stack",
+            "System Design",
+            "API Development",
+            "Database Management (SQL/NoSQL)",
+            "Testing/QA"
+          ],
+          "missing_skills": [
+            "Cloud Infrastructure (AWS/GCP/Azure)",
+            "CI/CD Pipeline implementation",
+            "Containerization (Docker/Kubernetes)"
+          ],
+          "fit_summary": "The candidate is a highly competitive applicant for a Software Engineer role. They demonstrate strong technical breadth across systems programming, AI/ML, and full-stack development. Their academic background and project-based evidence suggest a high level of proficiency in core engineering principles."
+        },
+        "strengths": [
+          "Strong academic performance (JEE Main 2024 AIR 2818, 99.8 percentile).",
+          "Demonstrated ability to deliver complex systems (e.g., On-Device AI Tutor, Distributed Editor).",
+          "Proven experience in high-stakes environments (Qualcomm presentation, research at IIIT Hyderabad).",
+          "Strong technical documentation and testing rigor (150+ test cases, root-cause analysis)."
+        ],
+        "weaknesses": [
+          "The resume is currently formatted with some minor character encoding issues (e.g., '/envel\u2322peg', 'T utor').",
+          "The resume lacks a clear, unified GitHub portfolio link that is easily accessible; while links are present in the PDF, the overall presentation of the portfolio could be more cohesive.",
+          "The resume is dense; ensure that the layout remains clean and readable on a single page."
+        ],
+        "resume_corrections": [
+          "Fix character encoding issues in the header (e.g., replace 'envel\u2322peg' with 'Email').",
+          "Correct typos in section headers (e.g., 'T utor' to 'Tutor', 'T echnical' to 'Technical').",
+          "Ensure consistent spacing and font usage throughout the document to improve professional appearance."
+        ],
+        "next_week_action_plan": [
+          "Day 1: Containerize the 'Movie Recommender System' using Docker and write a Dockerfile to improve deployment portability.",
+          "Day 2: Implement a basic CI/CD pipeline using GitHub Actions for the 'Backend Test Suite' repository to automate testing on push.",
+          "Day 3: Deploy the 'Aarogya Connect' or 'Movie Recommender' backend to a free-tier cloud provider (e.g., Render or Fly.io) to demonstrate cloud-readiness.",
+          "Day 4: Add a 'System Architecture' diagram (using Mermaid.js or Draw.io) to the README of the 'Distributed Collaborative Editor' to better explain the concurrency model.",
+          "Day 5: Refactor the 'C-Shark' packet sniffer to include a basic unit test suite using GoogleTest to demonstrate C++ testing proficiency.",
+          "Day 6: Explore Kubernetes basics by creating a local Minikube cluster and deploying a simple microservice to understand orchestration.",
+          "Day 7: Audit all GitHub repository READMEs to ensure they include clear 'How to Run' instructions and a summary of the technical challenges solved."
+        ],
+        "overall_rating": {
+          "score": 88,
+          "verdict": "Highly Competitive",
+          "summary": "The candidate shows exceptional technical depth and a strong track record of project-based learning. Despite minor formatting artifacts, the quality of their work and their ability to handle complex engineering tasks make them a top-tier candidate for a Software Engineer role."
+        }
+      },
+      "headline": {
+        "score": 88,
+        "verdict": "Highly Competitive",
+        "discrepancies": 0,
+        "strengths": 4,
+        "weaknesses": 3
+      }
+    },
+    {
+      "provider": "gemini",
+      "model": "gemini-2.0-flash",
+      "status": "error",
+      "started": 1791227061.7496095,
+      "input_mode": "extracted text",
+      "error": "ClientError: 404 NOT_FOUND. {'error': {'code': 404, 'message': 'This model models/gemini-2.0-flash is no longer available. Please update your code to use models/gemini-3.8-flash for the latest features and improvements. We recommend you to use the Interactions API (https://ai.google.dev/gemini-api/docs/get-started).', 'status': 'NOT_FOUND'}}",
+      "latency_s": 0.7
+    },
+    {
+      "provider": "groq",
+      "model": "llama-3.3-70b-versatile",
+      "status": "error",
+      "started": 1791227062.455554,
+      "input_mode": "extracted text",
+      "error": "ProviderError: HTTP 404: {\"error\":{\"message\":\"The model `llama-3.3-70b-versatile` does not exist or you do not have access to it.\",\"type\":\"invalid_request_error\",\"code\":\"model_not_found\"}}\n",
+      "latency_s": 0.38
+    },
+    {
+      "provider": "openrouter",
+      "model": "nvidia/nemotron-3-super-120b-a12b:free",
+      "status": "done",
+      "started": 1791227062.8360338,
+      "input_mode": "extracted text",
+      "latency_s": 64.08,
+      "input_tokens": 4143,
+      "output_tokens": 5987,
+      "finish_reason": "stop",
+      "raw": "{\"detected_discrepancies\": [], \"role_fit\": {\"matched_skills\": [\"C++\", \"C\", \"Python\", \"JavaScript/React/Node.js\", \"MongoDB\", \"SQLite\", \"REST APIs\", \"Git\", \"PyTest\", \"Mutex/Semaphore concurrency\", \"Low\u2011latency systems\", \"TensorFlow\", \"INT8 quantization (HVX/Hexagon NPU)\", \"FastAPI\", \"React\", \"TailwindCSS\", \"Kotlin/Jetpack Compose\", \"Android app development\", \"Linux/Shell\", \"Network programming (libpcap, BPF)\", \"Data structures & algorithms (coursework)\", \"System design (distributed editor)\", \"Test authoring (150+ cases)\", \"Bug root\u2011cause analysis\", \"Leadership/Positions of responsibility\", \"Technical presentation (Top\u20116 Qualcomm team)\"], \"missing_skills\": [\"Cloud platform experience (AWS/Azure/GCP)\", \"Containerization (Docker)\", \"CI/CD pipeline automation\", \"Microservices architecture\", \"Kubernetes orchestration\"], \"fit_summary\": \"The candidate demonstrates solid full\u2011stack and systems programming strengths, with strong project outcomes and leadership evidence, but lacks verified DevOps/cloud exposure that is often expected for a Software Engineer role at mid\u2011size tech firms.\"}, \"strengths\": [\"JEE Main 2024 AIR 2818 (99.8 percentile) \u2013 top 0.2% nationwide, indicating strong problem\u2011solving ability.\", \"Top\u20116 team selected to present at Qualcomm for the On\u2011Device AI Tutor project \u2013 external recognition of innovation.\", \"Research project: Agentic LLM pipeline for CIS/OpenSCAP remediation benchmarked 8 LLMs, identified Qwen\u202f2.5 (7B) as top performer, closed an 11\u202f% compliance gap via automated rollback and human\u2011in\u2011the\u2011loop escalation.\", \"Distributed Collaborative Editor in C++ achieved sub\u20111\u202fms latency and 59\u202fMB/s peak throughput using fine\u2011grained mutex/semaphore synchronization.\", \"On\u2011Device AI Tutor: INT8 quantization + HVX vectorization on Hexagon NPU delivered 10\u00d7 speedup (23\u202ftok/sec) while retaining 98\u202f% accuracy.\", \"Movie Recommender System: Two\u2011stage retrieval\u2011then\u2011ranking pipeline improved RMSE from 1.15 to 1.01 (12\u202f% gain) and served via FastAPI under 30\u202fms.\", \"Backend Test Suite: Authored 150+ white\u2011box and black\u2011box test cases, uncovering 40+ bugs across two codebases with root\u2011cause analysis and fixes.\", \"Aarogya Connect hackathon: Full\u2011stack healthcare system with role\u2011based JWT auth and searchable 248K+ medicine inventory.\", \"Institute Management System Android app: Offline\u2011first Clean Architecture app with 15+ screens, normalized 8+ table SQLite schema, constraint\u2011based timetable scheduler with stack\u2011based undo/redo.\", \"Positions of responsibility: Design Team member for IIIT\u2011H\u2019s Felicity fest and Apex Mentor, showing leadership and teamwork.\"], \"weaknesses\": [\"Resume likely exceeds one page for a candidate with ~1.5\u202fyears of experience; should be condensed to a single page.\", \"Sloppy\u2011editing artifacts: garbled contact line (\u2642phone\u2026), missing spaces after numbers/units (e.g., \\\"benchmarking8 LLMs\\\", \\\"Qwen 2.5 (7B)emerged\\\", \\\"an11% compliance gapvia\\\"), inconsistent date formats (mix of \\\"Jan. 2026 \u2013 Apr. 2026\\\", \\\"May 2026 \u2013 Present\\\", \\\"Aug.\u2013Nov. 2025\\\"), and stray en\u2011dash bullets without spacing.\", \"No verifiable public code portfolio (GitHub/LeetCode/Codeforces) provided to substantiate claimed project contributions; resume relies on self\u2011reported links without independent verification.\", \"Some project descriptions contain dense claims for short timeframes (e.g., 3\u2011month internship claiming end\u2011to\u2011end data ingestion pipeline across multiple modules) that may benefit from interview verification.\"], \"resume_corrections\": [\"Replace the garbled contact line with clean icons: \\\"\ud83d\udcde +91-9877415759 | \u2709\ufe0f gpranjal724@gmail.com | \ud83d\udd17 linkedin.com/in/pranjal-garg-419ba235a | \ud83d\udc19 github.com/Pranjal-Garg-21 | \ud83d\udcbb leetcode.com/u/K4mYXKOzX3/\\\".\", \"Fix missing spaces: change \\\"benchmarking8 LLMs\\\" to \\\"benchmarking 8 LLMs\\\", \\\"Qwen 2.5 (7B)emerged\\\" to \\\"Qwen 2.5 (7B) emerged\\\", \\\"an11% compliance gapvia\\\" to \\\"an 11% compliance gap via\\\".\", \"Standardize all date ranges to the format \\\"MMM YYYY \u2013 MMM YYYY\\\" (e.g., \\\"Jan 2026 \u2013 Apr 2026\\\", \\\"May 2026 \u2013 Present\\\", \\\"Nov 2025\\\", \\\"Aug 2025 \u2013 Nov 2025\\\").\", \"Condense the resume to one page: combine similar project bullets, keep only the highest\u2011impact metrics, and merge the Positions of Responsibility into a single line; shorten the Experience bullet to focus on the outcome (e.g., \\\"Built a real\u2011time data ingestion pipeline that normalised news, marketplace and survey data using optimized MongoDB schemas\\\" ).\"], \"next_week_action_plan\": [\"Day 1: Deploy the Movie Recommender System to AWS Elastic Beanstalk (or EC2) and provision a basic RDS PostgreSQL instance for user ratings; document the deployment steps and estimate monthly cost.\", \"Day 2: Dockerize the FastAPI backend and React frontend of the Movie Recommender System using multi\u2011stage Dockerfiles, push the images to Docker Hub, and run the stack locally with docker\u2011compose.\", \"Day 3: Set up a GitHub Actions workflow that triggers on push, runs the existing PyTest suite, builds the Docker images, and pushes them to Docker Hub.\", \"Day 4: Create a simple Kubernetes manifest (Deployment, Service) for the Dockerized backend and deploy it to a local kind cluster; verify horizontal pod autoscaling based on CPU utilization.\", \"Day 5: Refactor the monolithic Movie Recommender System backend into two microservices (Recommendation Service and User Service) communicating via REST/gRPC, and update the docker\u2011compose/k8s manifests accordingly.\", \"Day 6: Design a scalable URL\u2011shortener system (write API specs, choose storage (Redis + DB), sketch sharding and caching strategy) and produce a two\u2011page design document.\", \"Day 7: Solve three LeetCode medium\u2011difficulty problems per day focusing on dynamic programming and graph algorithms; track accuracy and aim to exceed 80% correct over the week.\"], \"overall_rating\": {\"score\": 78, \"verdict\": \"Strong Contender\", \"summary\": \"The candidate\u2019s resume shows impressive technical depth \u2014 strong academic rank, recognized research and project outcomes, and solid full\u2011stack/system\u2011programming skills \u2014 but is hampered by length, sloppy formatting, and a lack of verifiable public code or DevOps/cloud experience. Addressing these weaknesses would make the profile far more competitive for a Software Engineer role.\"}}",
+      "cost_usd": 0.0,
+      "valid": true,
+      "output": {
+        "detected_discrepancies": [],
+        "role_fit": {
+          "matched_skills": [
+            "C++",
+            "C",
+            "Python",
+            "JavaScript/React/Node.js",
+            "MongoDB",
+            "SQLite",
+            "REST APIs",
+            "Git",
+            "PyTest",
+            "Mutex/Semaphore concurrency",
+            "Low\u2011latency systems",
+            "TensorFlow",
+            "INT8 quantization (HVX/Hexagon NPU)",
+            "FastAPI",
+            "React",
+            "TailwindCSS",
+            "Kotlin/Jetpack Compose",
+            "Android app development",
+            "Linux/Shell",
+            "Network programming (libpcap, BPF)",
+            "Data structures & algorithms (coursework)",
+            "System design (distributed editor)",
+            "Test authoring (150+ cases)",
+            "Bug root\u2011cause analysis",
+            "Leadership/Positions of responsibility",
+            "Technical presentation (Top\u20116 Qualcomm team)"
+          ],
+          "missing_skills": [
+            "Cloud platform experience (AWS/Azure/GCP)",
+            "Containerization (Docker)",
+            "CI/CD pipeline automation",
+            "Microservices architecture",
+            "Kubernetes orchestration"
+          ],
+          "fit_summary": "The candidate demonstrates solid full\u2011stack and systems programming strengths, with strong project outcomes and leadership evidence, but lacks verified DevOps/cloud exposure that is often expected for a Software Engineer role at mid\u2011size tech firms."
+        },
+        "strengths": [
+          "JEE Main 2024 AIR 2818 (99.8 percentile) \u2013 top 0.2% nationwide, indicating strong problem\u2011solving ability.",
+          "Top\u20116 team selected to present at Qualcomm for the On\u2011Device AI Tutor project \u2013 external recognition of innovation.",
+          "Research project: Agentic LLM pipeline for CIS/OpenSCAP remediation benchmarked 8 LLMs, identified Qwen\u202f2.5 (7B) as top performer, closed an 11\u202f% compliance gap via automated rollback and human\u2011in\u2011the\u2011loop escalation.",
+          "Distributed Collaborative Editor in C++ achieved sub\u20111\u202fms latency and 59\u202fMB/s peak throughput using fine\u2011grained mutex/semaphore synchronization.",
+          "On\u2011Device AI Tutor: INT8 quantization + HVX vectorization on Hexagon NPU delivered 10\u00d7 speedup (23\u202ftok/sec) while retaining 98\u202f% accuracy.",
+          "Movie Recommender System: Two\u2011stage retrieval\u2011then\u2011ranking pipeline improved RMSE from 1.15 to 1.01 (12\u202f% gain) and served via FastAPI under 30\u202fms.",
+          "Backend Test Suite: Authored 150+ white\u2011box and black\u2011box test cases, uncovering 40+ bugs across two codebases with root\u2011cause analysis and fixes.",
+          "Aarogya Connect hackathon: Full\u2011stack healthcare system with role\u2011based JWT auth and searchable 248K+ medicine inventory.",
+          "Institute Management System Android app: Offline\u2011first Clean Architecture app with 15+ screens, normalized 8+ table SQLite schema, constraint\u2011based timetable scheduler with stack\u2011based undo/redo.",
+          "Positions of responsibility: Design Team member for IIIT\u2011H\u2019s Felicity fest and Apex Mentor, showing leadership and teamwork."
+        ],
+        "weaknesses": [
+          "Resume likely exceeds one page for a candidate with ~1.5\u202fyears of experience; should be condensed to a single page.",
+          "Sloppy\u2011editing artifacts: garbled contact line (\u2642phone\u2026), missing spaces after numbers/units (e.g., \"benchmarking8 LLMs\", \"Qwen 2.5 (7B)emerged\", \"an11% compliance gapvia\"), inconsistent date formats (mix of \"Jan. 2026 \u2013 Apr. 2026\", \"May 2026 \u2013 Present\", \"Aug.\u2013Nov. 2025\"), and stray en\u2011dash bullets without spacing.",
+          "No verifiable public code portfolio (GitHub/LeetCode/Codeforces) provided to substantiate claimed project contributions; resume relies on self\u2011reported links without independent verification.",
+          "Some project descriptions contain dense claims for short timeframes (e.g., 3\u2011month internship claiming end\u2011to\u2011end data ingestion pipeline across multiple modules) that may benefit from interview verification."
+        ],
+        "resume_corrections": [
+          "Replace the garbled contact line with clean icons: \"\ud83d\udcde +91-9877415759 | \u2709\ufe0f gpranjal724@gmail.com | \ud83d\udd17 linkedin.com/in/pranjal-garg-419ba235a | \ud83d\udc19 github.com/Pranjal-Garg-21 | \ud83d\udcbb leetcode.com/u/K4mYXKOzX3/\".",
+          "Fix missing spaces: change \"benchmarking8 LLMs\" to \"benchmarking 8 LLMs\", \"Qwen 2.5 (7B)emerged\" to \"Qwen 2.5 (7B) emerged\", \"an11% compliance gapvia\" to \"an 11% compliance gap via\".",
+          "Standardize all date ranges to the format \"MMM YYYY \u2013 MMM YYYY\" (e.g., \"Jan 2026 \u2013 Apr 2026\", \"May 2026 \u2013 Present\", \"Nov 2025\", \"Aug 2025 \u2013 Nov 2025\").",
+          "Condense the resume to one page: combine similar project bullets, keep only the highest\u2011impact metrics, and merge the Positions of Responsibility into a single line; shorten the Experience bullet to focus on the outcome (e.g., \"Built a real\u2011time data ingestion pipeline that normalised news, marketplace and survey data using optimized MongoDB schemas\" )."
+        ],
+        "next_week_action_plan": [
+          "Day 1: Deploy the Movie Recommender System to AWS Elastic Beanstalk (or EC2) and provision a basic RDS PostgreSQL instance for user ratings; document the deployment steps and estimate monthly cost.",
+          "Day 2: Dockerize the FastAPI backend and React frontend of the Movie Recommender System using multi\u2011stage Dockerfiles, push the images to Docker Hub, and run the stack locally with docker\u2011compose.",
+          "Day 3: Set up a GitHub Actions workflow that triggers on push, runs the existing PyTest suite, builds the Docker images, and pushes them to Docker Hub.",
+          "Day 4: Create a simple Kubernetes manifest (Deployment, Service) for the Dockerized backend and deploy it to a local kind cluster; verify horizontal pod autoscaling based on CPU utilization.",
+          "Day 5: Refactor the monolithic Movie Recommender System backend into two microservices (Recommendation Service and User Service) communicating via REST/gRPC, and update the docker\u2011compose/k8s manifests accordingly.",
+          "Day 6: Design a scalable URL\u2011shortener system (write API specs, choose storage (Redis + DB), sketch sharding and caching strategy) and produce a two\u2011page design document.",
+          "Day 7: Solve three LeetCode medium\u2011difficulty problems per day focusing on dynamic programming and graph algorithms; track accuracy and aim to exceed 80% correct over the week."
+        ],
+        "overall_rating": {
+          "score": 78,
+          "verdict": "Strong Contender",
+          "summary": "The candidate\u2019s resume shows impressive technical depth \u2014 strong academic rank, recognized research and project outcomes, and solid full\u2011stack/system\u2011programming skills \u2014 but is hampered by length, sloppy formatting, and a lack of verifiable public code or DevOps/cloud experience. Addressing these weaknesses would make the profile far more competitive for a Software Engineer role."
+        }
+      },
+      "headline": {
+        "score": 78,
+        "verdict": "Strong Contender",
+        "discrepancies": 0,
+        "strengths": 10,
+        "weaknesses": 4
+      }
+    },
+    {
+      "provider": "openai",
+      "model": "gpt-5-mini",
+      "status": "error",
+      "started": 1791227127.0015795,
+      "input_mode": "extracted text",
+      "error": "ProviderError: HTTP 429: {\n    \"error\": {\n        \"message\": \"You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.\",\n        \"type\": \"insufficient_quota\",\n        \"param\": null,\n        \"code\": \"credit_balance_exhausted\"\n    }\n}\n",
+      "latency_s": 9.59
+    }
+  ],
+  "best": null
+}
