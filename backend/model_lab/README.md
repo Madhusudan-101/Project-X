@@ -31,6 +31,17 @@ Keys are read from `backend/.env` (or pasted in the UI for the session only):
    (git-ignored; summary table + every model's answer as sections and bullets). The raw state used to
    reload a run in the dashboard sits in `results/.data/`.
 
+## Saved reports (automatic)
+
+When a run finishes (or is cancelled), Model Lab writes `model_lab/results/<run_id>/` with one
+human-readable **Markdown + PDF file per model** (`01_<provider>_<model>.md/.pdf`, ...) and a
+`00_summary` comparing all models. Each file has the run metadata (score, verdict, time, tokens,
+schema validity), the model's full output as readable sections, and the portfolio verification.
+Failed models get a file with the exact error. Works for all three tasks. PDFs need WeasyPrint's
+system libs (see `requirements.txt`); without them you still get the Markdown files and `reports.pdf_error`
+in the run JSON says why. Regenerate for an old run: `python -m model_lab.report <run_id>`.
+`results/` is git-ignored because it holds resume data.
+
 ## Portfolio verification (resume + job scoring)
 
 Like production, Model Lab finds the GitHub / LeetCode / Codeforces links in the resume (PDF link

@@ -34,3 +34,6 @@ npm-debug.log*
 
 # ── Misc ──────────────────────────────────────────────────
 package-lock.json
+
+# ── Model Lab run outputs (contain resume data) ───────────
+backend/model_lab/results/

@@ -30,7 +30,8 @@ load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 from .catalog import PROVIDERS, native_pdf, price_for, seed_models  # noqa: E402
 from .providers import api_key_for, call_model, discover_models  # noqa: E402
 from .portfolio import build_portfolio  # noqa: E402
-from .report import build_report  # noqa: E402
+from .report import write_reports  # noqa: E402
+from .textreport import build_report  # noqa: E402
 from .tasks import TASKS, Inputs, extract_pdf_text, parse_json  # noqa: E402
 
 HERE = Path(__file__).resolve().parent
@@ -197,6 +198,8 @@ async def _execute(run, spec, inp: Inputs, keys: Dict[str, str], input_mode: str
         run["status"] = "failed"
         run["error"] = str(exc)
     finally:
+        # Human-readable per-model files (Markdown + PDF) in results/<run_id>/ — see report.py.
+        run["reports"] = await asyncio.to_thread(write_reports, run)
         _save(run)
 
 

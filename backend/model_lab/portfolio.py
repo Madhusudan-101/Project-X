@@ -48,6 +48,20 @@ def _urls_from_text(text: str) -> List[str]:
     return out
 
 
+def _http_hint(platform: str, resp: httpx.Response) -> str:
+    """Say why a 403/429 happened: only call it a rate limit when GitHub says so; otherwise show its message."""
+    code = resp.status_code
+    if platform != "github" or code not in (403, 429):
+        return ""
+    try:
+        msg = str(resp.json().get("message", "")).strip()
+    except Exception:  # noqa: BLE001
+        msg = ""
+    if code == 429 or resp.headers.get("x-ratelimit-remaining") == "0" or "rate limit" in msg.lower():
+        return " (rate limited — set GITHUB_PAT in backend/.env)"
+    return f" (access denied, not a rate limit: {msg[:200]})" if msg else " (access denied, not a rate limit)"
+
+
 async def _fetch(platform: str, user: str) -> tuple[Optional[dict], Optional[str]]:
     fn = {
         "github": fetch_github_raw_for_analysis,
@@ -60,8 +74,7 @@ async def _fetch(platform: str, user: str) -> tuple[Optional[dict], Optional[str
         return None, f"{_LABEL[platform]} user '{user}' not found"
     except httpx.HTTPStatusError as exc:
         code = exc.response.status_code
-        hint = " (rate limited — set GITHUB_PAT in backend/.env)" if platform == "github" and code in (403, 429) else ""
-        return None, f"{_LABEL[platform]} API error {code}{hint}"
+        return None, f"{_LABEL[platform]} API error {code}{_http_hint(platform, exc.response)}"
     except httpx.TimeoutException:
         return None, f"{_LABEL[platform]} API timed out"
     except Exception as exc:  # noqa: BLE001
