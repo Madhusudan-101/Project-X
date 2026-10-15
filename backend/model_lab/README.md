@@ -27,8 +27,9 @@ Keys are read from `backend/.env` (or pasted in the UI for the session only):
 1. Pick a task, upload the PDF(s), tick models. Ones marked **in app** are what production uses today.
 2. **Run comparison** — models run strictly one after another on identical input.
 3. Compare the table (score, latency, tokens, ~cost, schema validity), read the side-by-side outputs,
-   star each one and mark the **best**. Runs are saved to `model_lab/results/` (git-ignored) and
-   reloadable from "Past runs".
+   star each one and mark the **best**. Each run is saved as a clean, readable report `model_lab/results/<run-id>.txt`
+   (git-ignored; summary table + every model's answer as sections and bullets). The raw state used to
+   reload a run in the dashboard sits in `results/.data/`.
 
 ## Portfolio verification (resume + job scoring)
 

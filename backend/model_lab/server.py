@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import time
 import uuid
 from dataclasses import asdict
@@ -29,11 +30,14 @@ load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 from .catalog import PROVIDERS, native_pdf, price_for, seed_models  # noqa: E402
 from .providers import api_key_for, call_model, discover_models  # noqa: E402
 from .portfolio import build_portfolio  # noqa: E402
+from .report import build_report  # noqa: E402
 from .tasks import TASKS, Inputs, extract_pdf_text, parse_json  # noqa: E402
 
 HERE = Path(__file__).resolve().parent
 RESULTS_DIR = HERE / "results"
 RESULTS_DIR.mkdir(exist_ok=True)
+DATA_DIR = RESULTS_DIR / ".data"  # raw run state for reloading in the dashboard; the .txt report is the deliverable
+DATA_DIR.mkdir(exist_ok=True)
 
 app = FastAPI(title="Model Lab")
 RUNS: Dict[str, Dict[str, Any]] = {}
@@ -43,7 +47,11 @@ TRANSIENT = ("429", "500", "502", "503", "504", "UNAVAILABLE", "RESOURCE_EXHAUST
 
 
 def _save(run: Dict[str, Any]) -> None:
-    (RESULTS_DIR / f"{run['id']}.json").write_text(json.dumps(run, indent=2, default=str))
+    (DATA_DIR / f"{run['id']}.json").write_text(json.dumps(run, indent=2, default=str))
+    try:
+        (RESULTS_DIR / f"{run['id']}.txt").write_text(build_report(run), encoding="utf-8")
+    except Exception:  # noqa: BLE001 — a report formatting bug must never lose the run
+        logging.getLogger(__name__).exception("Failed to write text report")
 
 
 # ── Static + metadata ────────────────────────────────────────────────
@@ -254,7 +262,7 @@ def _short_errors(exc: ValidationError) -> str:
 @app.get("/api/runs")
 async def list_runs():
     items = []
-    for f in sorted(RESULTS_DIR.glob("*.json"), reverse=True)[:50]:
+    for f in sorted(DATA_DIR.glob("*.json"), reverse=True)[:50]:
         try:
             r = json.loads(f.read_text())
             items.append({
@@ -270,7 +278,7 @@ async def list_runs():
 async def get_run(run_id: str):
     if run_id in RUNS:
         return RUNS[run_id]
-    f = RESULTS_DIR / f"{run_id}.json"
+    f = DATA_DIR / f"{run_id}.json"
     if not f.exists() or not run_id.replace("-", "").isalnum():
         raise HTTPException(404, "run not found")
     run = json.loads(f.read_text())

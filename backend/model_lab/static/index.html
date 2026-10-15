@@ -40,7 +40,14 @@ table{width:100%;border-collapse:collapse;font-size:13px}th,td{padding:7px 8px;b
 th{font-size:11px;text-transform:uppercase;color:var(--mute);letter-spacing:.04em;cursor:pointer}
 td.n{text-align:right;font-variant-numeric:tabular-nums}.tw{overflow:auto}
 .best{outline:2px solid var(--ok)}
-.cols{display:grid;grid-auto-flow:column;grid-auto-columns:minmax(380px,1fr);gap:12px;overflow-x:auto;padding-bottom:8px;align-items:start}
+.cols{display:flex;flex-direction:column;gap:14px}
+.cols.side{display:grid;grid-auto-flow:column;grid-auto-columns:minmax(520px,1fr);overflow-x:auto;padding-bottom:8px;align-items:start}
+.cols:not(.side) .card{padding:16px 18px}
+.cols:not(.side) .card .tree{max-height:none;overflow:visible;display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:4px 28px;align-items:start}
+.cols:not(.side) .card .tree>.sec{min-width:0}
+.cols:not(.side) .card .tree>.sec.wide{grid-column:1/-1}
+.tree .sec{margin-bottom:10px}.tree .sec>.k{font-size:12px;color:var(--accent);font-weight:600;margin-top:0;border-bottom:1px solid var(--line);padding-bottom:3px;margin-bottom:5px}
+.tree{line-height:1.55}.tree li{margin:3px 0}
 .card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:12px;min-width:0}
 .card h3{margin:0;font-size:14px;word-break:break-all}.card .sub{color:var(--mute);font-size:12px;margin-bottom:8px}
 .chips{display:flex;gap:6px;flex-wrap:wrap;margin:8px 0}
@@ -123,7 +130,7 @@ pre{background:var(--code);padding:8px;border-radius:7px;overflow:auto;max-heigh
   <div id="results" style="display:none">
     <div class="row" style="margin-bottom:8px">
       <div id="runTitle" style="font-weight:600;flex:3"></div>
-      <div style="flex:0 0 auto;display:flex;gap:6px"><button id="cancel" style="display:none">Stop after current</button><button id="export">Export JSON</button></div>
+      <div style="flex:0 0 auto;display:flex;gap:6px"><button id="cancel" style="display:none">Stop after current</button><button id="layout">Layout: stacked</button><button id="export">Export JSON</button></div>
     </div>
     <div id="phase" class="warn" style="display:none"></div>
     <div id="pf" class="panel" style="margin-bottom:12px;display:none"></div>
@@ -349,10 +356,19 @@ function tree(v, depth = 0) {
       ? `<ul>${v.map(x => `<li>${esc(x)}</li>`).join('')}</ul>`
       : v.map(x => `<div class="obj">${tree(x, depth + 1)}</div>`).join('');
   }
-  if (typeof v === 'object') return Object.entries(v).map(([k, x]) => `<div><div class="k">${esc(k.replace(/_/g, ' '))}</div>${tree(x, depth + 1)}</div>`).join('');
+  if (typeof v === 'object') return Object.entries(v).map(([k, x]) => {
+    const wide = depth === 0 && (Array.isArray(x) ? x.length > 6 || x.some(i => typeof i === 'string' && i.length > 110) : typeof x === 'string' && x.length > 160);
+    return `<div class="${depth === 0 ? 'sec' + (wide ? ' wide' : '') : ''}"><div class="k">${esc(k.replace(/_/g, ' '))}</div>${tree(x, depth + 1)}</div>`;
+  }).join('');
   return `<div>${esc(v)}</div>`;
 }
 
+$('#layout').onclick = () => {
+  const side = $('#cols').classList.toggle('side');
+  $('#layout').textContent = 'Layout: ' + (side ? 'side by side' : 'stacked');
+  try { localStorage.setItem('mlLayout', side ? 'side' : 'stack'); } catch (e) {}
+};
+try { if (localStorage.getItem('mlLayout') === 'side') { $('#cols').classList.add('side'); $('#layout').textContent = 'Layout: side by side'; } } catch (e) {}
 $('#cancel').onclick = () => api(`/api/runs/${RUN_ID}/cancel`, { method: 'POST' });
 $('#export').onclick = () => {
   const a = document.createElement('a');
