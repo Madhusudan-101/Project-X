@@ -64,6 +64,8 @@ export interface JoinScheduledOut {
   token: string;
   keep_private: boolean;
   starts_at: string;
+  ends_at: string;
+  duration_minutes: number;
   is_ready: boolean;
   status: ScheduledMeetingStatus;
 }

@@ -48,7 +48,42 @@ function createRoom(roomId, participantId, socketId, identity = null, keepPrivat
     // late-joining participant resync the SAME transcript everyone else
     // already sees, instead of starting with a blank panel.
     transcriptHistory: [],
+    // Text chat for the call (capped), replayed to someone who reconnects.
+    chatHistory: [],
   });
+}
+
+const MAX_CHAT_HISTORY = 200;
+const MAX_CHAT_LENGTH = 500;
+
+/**
+ * Add a chat message from `participantId` and return it, or null when it is empty, too long to be sane,
+ * or the sender is not in the room. Text is plain text: it is trimmed, control characters removed and
+ * capped; the client must render it as text, never as HTML.
+ */
+function addChatMessage(roomId, participantId, text) {
+  const room = rooms.get(roomId);
+  if (!room || !room.participants.some((p) => p.participantId === participantId)) return null;
+  const clean = String(text ?? '')
+    .replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/g, '')
+    .trim()
+    .slice(0, MAX_CHAT_LENGTH);
+  if (!clean) return null;
+  const message = {
+    id: `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
+    fromParticipantId: participantId,
+    text: clean,
+    at: Date.now(),
+  };
+  room.chatHistory.push(message);
+  if (room.chatHistory.length > MAX_CHAT_HISTORY) {
+    room.chatHistory.splice(0, room.chatHistory.length - MAX_CHAT_HISTORY);
+  }
+  return message;
+}
+
+function getChatHistory(roomId) {
+  return rooms.get(roomId)?.chatHistory || [];
 }
 
 const MAX_TRANSCRIPT_HISTORY = 500;
@@ -720,6 +755,8 @@ module.exports = {
   getParticipantIdForSocket,
   getIdentityForParticipant,
   getPublicDisplayName,
+  addChatMessage,
+  getChatHistory,
   getHostParticipantId,
   holdsSlotWithIdentity,
   hasTranscriptionConsent,

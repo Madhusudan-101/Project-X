@@ -68,6 +68,8 @@ const {
   getParticipantIdForSocket,
   getIdentityForParticipant,
   getPublicDisplayName,
+  addChatMessage,
+  getChatHistory,
   getHostParticipantId,
   holdsSlotWithIdentity,
   hasTranscriptionConsent,
@@ -790,6 +792,19 @@ const transcriptionManager = createDeepgramTranscriptionManager({
 // never grows unbounded across the life of the server.
 const rateLimitState = new Map(); // socket.id -> Map(eventName -> lastCallTimestamp)
 
+const chatTimes = new Map(); // socket.id -> recent message timestamps
+function isChatLimited(socket) {
+  const now = Date.now();
+  const recent = (chatTimes.get(socket.id) || []).filter((t) => now - t < 5000);
+  if (recent.length >= 10) {
+    chatTimes.set(socket.id, recent);
+    return true;
+  }
+  recent.push(now);
+  chatTimes.set(socket.id, recent);
+  return false;
+}
+
 function isRateLimited(socket, eventName, minIntervalMs) {
   let events = rateLimitState.get(socket.id);
   if (!events) {
@@ -930,6 +945,17 @@ io.on('connection', (socket) => {
     const history = getTranscriptHistory(roomId);
     if (history.length) {
       socket.emit('transcription:history', { entries: history });
+    }
+    const chat = getChatHistory(roomId);
+    if (chat.length) {
+      socket.emit('chat:history', {
+        messages: chat.map((m) => ({
+          id: m.id,
+          text: m.text,
+          at: m.at,
+          mine: m.fromParticipantId === participantId,
+        })),
+      });
     }
 
     // Public display names respect each participant's "keep private" flag
@@ -1313,6 +1339,44 @@ io.on('connection', (socket) => {
   });
 
   /**
+   * CHAT:MESSAGE
+   * A text message to the other person in the room. Relayed only to the sender's partner.
+   */
+  socket.on('chat:message', ({ roomId, text } = {}, ack) => {
+    const reply = typeof ack === 'function' ? ack : () => {};
+    if (!roomId || !socket.rooms.has(roomId)) return reply({ ok: false, error: 'not-in-room' });
+    // 10 messages every 5 seconds, per person: a conversation, not a flood.
+    if (isChatLimited(socket)) return reply({ ok: false, error: 'slow-down' });
+    const pid = getParticipantIdForSocket(roomId, socket.id);
+    const message = addChatMessage(roomId, pid, text);
+    if (!message) return reply({ ok: false, error: 'empty' });
+    const partnerSocket = getPartner(roomId, socket.id);
+    if (partnerSocket) {
+      io.to(partnerSocket).emit('chat:message', {
+        id: message.id,
+        text: message.text,
+        at: message.at,
+        from: getPublicDisplayName(roomId, pid),
+        mine: false,
+      });
+    }
+    reply({ ok: true, message: { id: message.id, text: message.text, at: message.at, mine: true } });
+  });
+
+  /**
+   * MEDIA-STATE
+   * Tell the partner whether my microphone and camera are on, so their screen can show it.
+   */
+  socket.on('media-state', ({ roomId, audio, video } = {}) => {
+    if (!roomId || !socket.rooms.has(roomId)) return;
+    if (isRateLimited(socket, 'media-state', 100)) return;
+    const partnerSocket = getPartner(roomId, socket.id);
+    if (partnerSocket) {
+      io.to(partnerSocket).emit('media-state', { audio: audio !== false, video: video !== false });
+    }
+  });
+
+  /**
    * REPORT-USER
    * Report the other person from inside the meeting. The reporter's identity comes from their verified
    * token (never from this payload), the transcript evidence is captured here on the server, and the
@@ -1331,6 +1395,10 @@ io.on('connection', (socket) => {
     const transcript = getTranscriptHistory(roomId)
       .slice(-200)
       .map((l) => `${l.speakerParticipantId === myParticipantId ? 'Reporter' : 'Other person'}: ${String(l.text || '').slice(0, 300)}`);
+    const chatLines = getChatHistory(roomId)
+      .slice(-50)
+      .map((m) => `Chat, ${m.fromParticipantId === myParticipantId ? 'Reporter' : 'Other person'}: ${m.text.slice(0, 300)}`);
+    transcript.push(...chatLines);
     try {
       await postSigned('/internal/peer-safety/report', {
         room_id: roomId,
@@ -1368,6 +1436,7 @@ io.on('connection', (socket) => {
     console.log(`[Socket] Disconnected: ${socket.id} | reason=${reason}`);
 
     rateLimitState.delete(socket.id);
+    chatTimes.delete(socket.id);
     transcriptionManager.stop(socket.id);
 
     // leaveRoom() marks this participant's slot as disconnected but keeps

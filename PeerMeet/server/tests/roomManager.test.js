@@ -340,3 +340,20 @@ test('transcription consent is per person and everyone must agree for the AI int
   assert.equal(rm.hasTranscriptionConsent(r, 'nobody'), false);
   assert.equal(rm.everyoneConsentedToTranscription('no-such-room'), false);
 });
+
+test('chat messages: trimmed plain text, capped, only from people in the room, history bounded', () => {
+  const r = newRoom();
+  rm.createRoom(r, 'pA', 'sA', null, false);
+  const m = rm.addChatMessage(r, 'pA', '  hi \u0007there  ');
+  assert.equal(m.text, 'hi there');
+  assert.equal(m.fromParticipantId, 'pA');
+  assert.equal(rm.addChatMessage(r, 'pA', '   '), null);
+  assert.equal(rm.addChatMessage(r, 'pA', null), null);
+  assert.equal(rm.addChatMessage(r, 'stranger', 'hello'), null);
+  assert.equal(rm.addChatMessage('no-such-room', 'pA', 'hello'), null);
+  assert.equal(rm.addChatMessage(r, 'pA', 'x'.repeat(900)).text.length, 500);
+  for (let i = 0; i < 300; i++) rm.addChatMessage(r, 'pA', `m${i}`);
+  assert.equal(rm.getChatHistory(r).length, 200);
+  assert.equal(rm.getChatHistory(r)[199].text, 'm299');
+  assert.deepEqual(rm.getChatHistory('no-such-room'), []);
+});

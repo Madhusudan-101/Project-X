@@ -29,3 +29,14 @@ describe("peerService contract with the backend", () => {
     ]);
   });
 });
+
+describe("untilParam (the meeting's scheduled end handed to PeerMeet)", () => {
+  it("is milliseconds since the epoch, or nothing when unusable", async () => {
+    const { untilParam } = await import("@/lib/peerMeetTab");
+    expect(untilParam("2030-01-01T12:30:00Z")).toBe(String(Date.UTC(2030, 0, 1, 12, 30)));
+    expect(untilParam("not a date")).toBeNull();
+    expect(untilParam(null)).toBeNull();
+    expect(untilParam(undefined)).toBeNull();
+    expect(untilParam("")).toBeNull();
+  });
+});

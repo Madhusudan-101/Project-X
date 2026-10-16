@@ -17,6 +17,12 @@ import { useParams, useSearchParams, useNavigate } from 'react-router-dom';
 import Navbar from '../components/Navbar.jsx';
 import VideoPlayer from '../components/VideoPlayer.jsx';
 import ReportDialog from '../components/ReportDialog.jsx';
+import SidePanel from '../components/SidePanel.jsx';
+import ChatPanel from '../components/ChatPanel.jsx';
+import ParticipantsPanel from '../components/ParticipantsPanel.jsx';
+import ConfirmDialog from '../components/ConfirmDialog.jsx';
+import { useChat } from '../hooks/useChat.js';
+import { endCountdown, nextWarning, parseUntil } from '../utils/scheduledEnd.js';
 import Controls from '../components/Controls.jsx';
 import WaitingScreen from '../components/WaitingScreen.jsx';
 import Loader from '../components/Loader.jsx';
@@ -89,62 +95,56 @@ function StatusBadge({ status }) {
   );
 }
 
-function TranscriptPanel({
+/** Live captions, shown in the side panel. Auto-scrolls, keeps only the latest lines. */
+function CaptionsView({
   finalTranscripts,
   interimTranscript,
   transcriptionError,
   isTranscribing,
+  canTranscribe,
   participantId,
+  partnerName,
 }) {
-  const hasTranscripts = finalTranscripts.length > 0 || interimTranscript;
+  const endRef = useRef(null);
+  const lines = finalTranscripts.slice(-200);
+  useEffect(() => {
+    endRef.current?.scrollIntoView?.({ block: 'end' });
+  }, [lines.length, interimTranscript]);
 
-  if (!hasTranscripts && !transcriptionError && !isTranscribing) {
-    return null;
+  if (!canTranscribe) {
+    return (
+      <p className="p-4 text-sm text-slate-400">
+        Live captions are off for this meeting. You can turn them on next time in the lobby before you join.
+      </p>
+    );
   }
-
   return (
-    <section className="w-full max-w-6xl mx-auto px-4 pb-3">
-      <div className="glass rounded-2xl border border-white/10 p-4">
-        <div className="flex items-center justify-between gap-3 mb-3">
-          <h2 className="text-sm font-semibold text-white/90">Live transcript</h2>
-          <span
-            className={`
-              text-[11px] px-2 py-1 rounded-full border
-              ${isTranscribing
-                ? 'text-emerald-300 border-emerald-500/30 bg-emerald-500/10'
-                : 'text-slate-400 border-white/10 bg-white/5'
-              }
-            `}
-          >
-            {isTranscribing ? 'Listening' : 'Paused'}
-          </span>
-        </div>
-
-        {transcriptionError && (
-          <p className="text-xs text-red-300 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2 mb-3">
-            {transcriptionError}
-          </p>
-        )}
-
-        <div className="max-h-36 overflow-y-auto space-y-2 pr-1">
-          {finalTranscripts.map((item, index) => (
-            <p key={item.id || `${item.speakerId}-${item.timestamp}-${index}`} className="text-sm text-slate-200">
-              <span className="font-semibold text-violet-300">
-                {item.speakerParticipantId === participantId ? 'You' : 'Participant'}:
-              </span>{' '}
-              {item.text}
-            </p>
-          ))}
-
-          {interimTranscript && (
-            <p className="text-sm text-slate-400 italic">
-              <span className="font-semibold text-violet-300 not-italic">You:</span>{' '}
-              {interimTranscript}
-            </p>
-          )}
-        </div>
+    <div className="p-3 space-y-2" aria-live="polite">
+      <div className="flex items-center justify-between">
+        <h3 className="text-sm font-semibold text-white/90">Live captions</h3>
+        <span className={`text-[11px] px-2 py-1 rounded-full border ${isTranscribing ? 'text-emerald-300 border-emerald-500/30 bg-emerald-500/10' : 'text-slate-400 border-white/10 bg-white/5'}`}>
+          {isTranscribing ? 'Listening' : 'Paused'}
+        </span>
       </div>
-    </section>
+      {transcriptionError && (
+        <p className="text-xs text-red-300 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">{transcriptionError}</p>
+      )}
+      {lines.length === 0 && !interimTranscript && <p className="text-sm text-slate-500">Captions appear here as people speak.</p>}
+      {lines.map((item, index) => (
+        <p key={item.id || `${item.speakerId}-${item.timestamp}-${index}`} className="text-sm text-slate-200">
+          <span className="font-semibold text-violet-300">
+            {item.speakerParticipantId === participantId ? 'You' : partnerName || 'Participant'}:
+          </span>{' '}
+          {item.text}
+        </p>
+      ))}
+      {interimTranscript && (
+        <p className="text-sm text-slate-400 italic">
+          <span className="font-semibold text-violet-300 not-italic">You:</span> {interimTranscript}
+        </p>
+      )}
+      <div ref={endRef} aria-hidden="true" />
+    </div>
   );
 }
 
@@ -194,6 +194,15 @@ function MeetingRoom({ lobby = {} }) {
 
   // Room rejection states
   const [showReport, setShowReport] = useState(false);
+  const [panel, setPanel] = useState(null); // null | 'chat' | 'people' | 'captions'
+  const [confirmLeave, setConfirmLeave] = useState(false);
+  // Which video is large: the partner (default) or yourself.
+  const [pinned, setPinned] = useState('remote');
+  const [remoteMedia, setRemoteMedia] = useState({ audio: true, video: true });
+  // Dashboard meetings pass their scheduled end (?until=<ms>); we show the time left and warn, never cut off.
+  const until = useMemo(() => parseUntil(searchParams.get('until')), [searchParams]);
+  const [now, setNow] = useState(() => Date.now());
+  const lastWarningRef = useRef(null);
   const [roomError, setRoomError] = useState(null); // 'full' | 'not-found'
   const [remoteJoined, setRemoteJoined] = useState(false);
   const [canTranscribe, setCanTranscribe] = useState(false);
@@ -233,6 +242,34 @@ function MeetingRoom({ lobby = {} }) {
     replaceVideoTrack,
     destroyPeer,
   } = useWebRTC({ localStream, roomId, isInitiator });
+
+  const chat = useChat(socket, roomId, panel === 'chat');
+
+  // Tell the partner whether my mic/camera are on (and again when they arrive), and learn theirs.
+  useEffect(() => {
+    if (!remoteJoined) return;
+    socket.emit('media-state', { roomId, audio: isAudioEnabled, video: isVideoEnabled });
+  }, [remoteJoined, roomId, isAudioEnabled, isVideoEnabled]);
+  useEffect(() => {
+    const onState = ({ audio, video } = {}) => setRemoteMedia({ audio: audio !== false, video: video !== false });
+    socket.on('media-state', onState);
+    return () => socket.off('media-state', onState);
+  }, []);
+
+  // Scheduled end: tick every 15 seconds, warn once at 5 min, 1 min and when over.
+  useEffect(() => {
+    if (!until) return undefined;
+    const id = setInterval(() => setNow(Date.now()), 15000);
+    return () => clearInterval(id);
+  }, [until]);
+  useEffect(() => {
+    const w = nextWarning(until, now, lastWarningRef.current);
+    if (w) {
+      lastWarningRef.current = w.key;
+      addToast(w.text, 'warning', 8000);
+    }
+  }, [until, now, addToast]);
+  const countdown = endCountdown(until, now);
 
   // When the browser's own "Stop sharing" button ends a share, swap the camera back into the call.
   useEffect(() => {
@@ -533,8 +570,8 @@ function MeetingRoom({ lobby = {} }) {
     //    disconnect. A bare disconnect is treated as a dropped connection and keeps the slot reserved.
     socket.emit('leave-room', { roomId });
     socket.disconnect();
-    // 4. Navigate home
-    navigate('/');
+    // 4. Show the "you left" screen (feedback, rejoin) instead of dropping straight to the home page
+    navigate(`/left/${encodeURIComponent(roomId)}`);
   }, [destroyPeer, stopStream, navigate, roomId]);
 
   // Reconnect socket on next visit (in case we disconnected)
@@ -660,6 +697,18 @@ function MeetingRoom({ lobby = {} }) {
           </div>
         )}
 
+        {countdown && (
+          <div className="flex justify-center pb-1">
+            <span
+              className={`text-xs px-3 py-1 rounded-full border ${countdown.over ? 'text-amber-200 border-amber-500/40 bg-amber-500/10' : countdown.minutesLeft <= 5 ? 'text-amber-200 border-amber-500/30 bg-amber-500/10' : 'text-slate-300 border-white/10 bg-white/5'}`}
+              role="timer"
+              aria-label={`Scheduled time: ${countdown.label}`}
+            >
+              {countdown.label}
+            </span>
+          </div>
+        )}
+
         {/* ── AI disclosure banner (both participants) ───────────────────── */}
         {aiAssisted && <DisclosureBanner role={role} phase={phase} />}
 
@@ -670,75 +719,73 @@ function MeetingRoom({ lobby = {} }) {
           </div>
         )}
 
-        {/* ── Video grid (+ interviewer assistant panel) ─────────────────── */}
+        {/* ── Stage: the big video, your picture-in-picture, and the side panel ───────── */}
         <div className="flex-1 flex flex-col lg:flex-row items-center lg:items-start justify-center gap-4 px-4 pb-2">
           {mediaLoading ? (
-            // Loading spinner while acquiring media
             <div className="glass-strong rounded-3xl p-12">
               <Loader />
             </div>
           ) : (
-            <div
-              className={`
-                w-full max-w-6xl
-                ${remoteStream
-                  ? 'grid grid-cols-1 md:grid-cols-2 gap-4'
-                  : 'flex items-center justify-center'
-                }
-              `}
-            >
-              {/* ── Remote video ──────────────────────────────────────── */}
-              {remoteStream ? (
-                <div className="relative w-full">
+            <div className="relative w-full max-w-5xl" data-testid="stage">
+              {(() => {
+                const remoteTile = (
                   <VideoPlayer
                     stream={remoteStream}
                     muted={false}
                     label={partnerDisplayName || 'Participant'}
-                    isAudioEnabled={true}
-                    isVideoEnabled={true}
+                    isAudioEnabled={remoteMedia.audio}
+                    isVideoEnabled={remoteMedia.video}
                     isLocal={false}
                     animate={true}
                     className="w-full"
                   />
-                </div>
-              ) : null}
-
-              {/* ── Local video ───────────────────────────────────────── */}
-              <div
-                className={`
-                  relative
-                  ${!remoteStream ? 'w-full max-w-2xl' : 'w-full'}
-                `}
-              >
-                <VideoPlayer
-                  stream={localStream}
-                  muted={true}
-                  label="You"
-                  isAudioEnabled={isAudioEnabled}
-                  isVideoEnabled={isVideoEnabled}
-                  isLocal={true}
-                  isScreenShare={isScreenSharing}
-                  className="w-full"
-                />
-
-                {/* Waiting overlay — shown whenever the peer is not in the
-                    room (initial wait OR partner-left / rejoin wait). The
-                    meeting timer stays at 00:00 while this is visible. */}
-                {!remoteJoined && (
-                  <WaitingScreen roomId={roomId} reconnecting={everPaired} />
-                )}
-
-                {/* Disconnected overlay */}
-                {connectionStatus === ConnectionStatus.DISCONNECTED && remoteJoined && (
-                  <div className="absolute inset-0 flex items-center justify-center glass-dark rounded-2xl">
-                    <div className="text-center p-6">
-                      <HiSignalSlash className="text-5xl text-red-400 mx-auto mb-3" />
-                      <p className="text-white font-semibold">Participant disconnected</p>
-                      <p className="text-slate-400 text-sm mt-1">They may rejoin using the same link</p>
+                );
+                const localTile = (
+                  <VideoPlayer
+                    stream={localStream}
+                    muted={true}
+                    label="You"
+                    isAudioEnabled={isAudioEnabled}
+                    isVideoEnabled={isVideoEnabled}
+                    isLocal={true}
+                    isScreenShare={isScreenSharing}
+                    className="w-full"
+                  />
+                );
+                // Alone in the room, or the partner's video has not arrived yet: you are the big tile.
+                const showRemote = Boolean(remoteStream);
+                const bigIsRemote = showRemote && pinned === 'remote';
+                return (
+                  <>
+                    <div className="relative w-full">
+                      {bigIsRemote ? remoteTile : localTile}
+                      {!remoteJoined && <WaitingScreen roomId={roomId} reconnecting={everPaired} />}
+                      {connectionStatus === ConnectionStatus.DISCONNECTED && remoteJoined && (
+                        <div className="absolute inset-0 flex items-center justify-center glass-dark rounded-2xl">
+                          <div className="text-center p-6">
+                            <HiSignalSlash className="text-5xl text-red-400 mx-auto mb-3" />
+                            <p className="text-white font-semibold">Participant disconnected</p>
+                            <p className="text-slate-400 text-sm mt-1">They may rejoin using the same link</p>
+                          </div>
+                        </div>
+                      )}
                     </div>
-                  </div>
-                )}
-              </div>
+                    {showRemote && (
+                      <div className="absolute bottom-3 right-3 z-10 w-36 sm:w-52 shadow-xl">
+                        <button
+                          type="button"
+                          onClick={() => setPinned(bigIsRemote ? 'local' : 'remote')}
+                          aria-label={bigIsRemote ? 'Make your video the large one' : 'Make your partner the large video'}
+                          className="absolute top-1 left-1 z-20 rounded-md bg-black/60 px-1.5 py-0.5 text-[10px] text-white hover:bg-black/80"
+                        >
+                          Swap
+                        </button>
+                        {bigIsRemote ? localTile : remoteTile}
+                      </div>
+                    )}
+                  </>
+                );
+              })()}
             </div>
           )}
 
@@ -754,16 +801,41 @@ function MeetingRoom({ lobby = {} }) {
               onEndInterview={endInterview}
             />
           )}
-        </div>
 
-        {/* ── Controls bar ──────────────────────────────────────────────── */}
-        <TranscriptPanel
-          finalTranscripts={finalTranscripts}
-          interimTranscript={interimTranscript}
-          transcriptionError={transcriptionError}
-          isTranscribing={isTranscribing}
-          participantId={participantId}
-        />
+          {panel && !mediaLoading && (
+            <SidePanel tab={panel} onTab={setPanel} onClose={() => setPanel(null)} unreadChat={chat.unread}>
+              {panel === 'chat' && (
+                <ChatPanel messages={chat.messages} onSend={chat.send} partnerName={partnerDisplayName} />
+              )}
+              {panel === 'people' && (
+                <ParticipantsPanel
+                  me={{ role: role ? (role === 'interviewer' ? 'Interviewer' : 'Candidate') : null, audio: isAudioEnabled, video: isVideoEnabled }}
+                  partner={
+                    remoteJoined
+                      ? {
+                          name: partnerDisplayName || 'Participant',
+                          role: role ? (role === 'interviewer' ? 'Candidate' : 'Interviewer') : null,
+                          audio: remoteMedia.audio,
+                          video: remoteMedia.video,
+                        }
+                      : null
+                  }
+                />
+              )}
+              {panel === 'captions' && (
+                <CaptionsView
+                  finalTranscripts={finalTranscripts}
+                  interimTranscript={interimTranscript}
+                  transcriptionError={transcriptionError}
+                  isTranscribing={isTranscribing}
+                  canTranscribe={transcriptionConsent}
+                  participantId={participantId}
+                  partnerName={partnerDisplayName}
+                />
+              )}
+            </SidePanel>
+          )}
+        </div>
 
         {!mediaLoading && (
           <div className="sticky bottom-0 glass-dark border-t border-white/5 px-4">
@@ -775,11 +847,34 @@ function MeetingRoom({ lobby = {} }) {
               onToggleVideo={toggleVideo}
               onToggleScreenShare={handleToggleScreenShare}
               onReport={remoteJoined ? () => setShowReport(true) : undefined}
-              onLeave={handleLeave}
+              onLeave={() => setConfirmLeave(true)}
+              onToggleChat={() => setPanel((p) => (p === 'chat' ? null : 'chat'))}
+              onTogglePeople={() => setPanel((p) => (p === 'people' ? null : 'people'))}
+              panel={panel}
+              chatUnread={chat.unread}
             />
           </div>
         )}
       </main>
+
+      {/* ── Leave? ──────────────────────────────────────────────────────── */}
+      {confirmLeave && (
+        <ConfirmDialog
+          title="Leave this meeting?"
+          confirmLabel="Leave"
+          cancelLabel="Stay"
+          danger
+          onCancel={() => setConfirmLeave(false)}
+          onConfirm={() => {
+            setConfirmLeave(false);
+            handleLeave();
+          }}
+        >
+          {aiAssisted && !ended
+            ? 'An AI-assisted interview is in progress. If you leave now, your partner will not be able to finish it with you.'
+            : 'Your partner will be told that you left. You can come back from the same link while the meeting is open.'}
+        </ConfirmDialog>
+      )}
 
       {/* ── Report the other person ─────────────────────────────────────── */}
       {showReport && (

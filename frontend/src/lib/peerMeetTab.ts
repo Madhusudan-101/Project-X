@@ -203,3 +203,11 @@ export function reservePeerMeetTab(options: ReserveOptions = {}): PeerMeetTabHan
     },
   };
 }
+
+
+/** The scheduled end of a meeting as the `until` link parameter (milliseconds), or null if unusable. */
+export function untilParam(endsAt: string | null | undefined): string | null {
+  if (!endsAt) return null;
+  const ms = new Date(endsAt).getTime();
+  return Number.isFinite(ms) && ms > 0 ? String(ms) : null;
+}

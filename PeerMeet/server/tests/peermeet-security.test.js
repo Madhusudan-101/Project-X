@@ -309,6 +309,67 @@ async function testOnlyTheHostConfiguresTheInterview() {
   await sleep(80);
 }
 
+// ── chat and media state ─────────────────────────────────────────────────────
+async function testChatStaysBetweenThePair() {
+  const roomId = `chat-${uid()}`;
+  const A = connect();
+  await waitConnect(A);
+  A.emit('create-room', { roomId, participantId: 'p-ch-a', keepPrivate: true });
+  await waitEvent(A, 'room-created');
+  const B = connect();
+  await waitConnect(B);
+  const ready = waitEvent(B, 'ready');
+  B.emit('join-room', { roomId, participantId: 'p-ch-b' });
+  await ready;
+  const outsider = connect();
+  await waitConnect(outsider);
+
+  const gotB = waitEvent(B, 'chat:message');
+  const ackA = await emitAck(A, 'chat:message', { roomId, text: '  <img src=x onerror=alert(1)> hello \u0000  ' });
+  const msg = await gotB;
+  record('A message reaches the partner, trimmed, as plain text', ackA.ok === true && msg.text === '<img src=x onerror=alert(1)> hello' && msg.mine === false);
+  record('The sender is shown by their public name (anonymous stays anonymous)', msg.from === 'Anonymous Candidate');
+
+  const leak = never(outsider, 'chat:message');
+  const sneaky = await emitAck(outsider, 'chat:message', { roomId, text: 'hi' });
+  record('An outsider cannot post into the room', sneaky.ok === false && sneaky.error === 'not-in-room' && (await leak));
+
+  const empty = await emitAck(A, 'chat:message', { roomId, text: '   ' });
+  record('An empty message is refused', empty.ok === false && empty.error === 'empty');
+  const long = await emitAck(A, 'chat:message', { roomId, text: 'x'.repeat(5000) });
+  record('A very long message is cut to 500 characters', long.ok === true && long.message.text.length === 500);
+
+  // rate limit: 10 per 5 seconds
+  let limited = 0;
+  for (let i = 0; i < 15; i++) {
+    const r = await emitAck(A, 'chat:message', { roomId, text: `m${i}` });
+    if (r.error === 'slow-down') limited += 1;
+  }
+  record('Flooding the chat is slowed down', limited >= 1, `limited=${limited}`);
+
+  // history is replayed to someone who reconnects, with "mine" resolved for THEM
+  B.disconnect();
+  await sleep(200);
+  const B2 = connect();
+  await waitConnect(B2);
+  const hist = waitEvent(B2, 'chat:history');
+  B2.emit('join-room', { roomId, participantId: 'p-ch-b' });
+  const h = await hist;
+  record('A reconnecting person gets the chat back', h.messages.length >= 2 && h.messages[0].text.startsWith('<img') && h.messages.every((m) => m.mine === false));
+
+  // media state goes to the partner only
+  const state = waitEvent(A, 'media-state');
+  B2.emit('media-state', { roomId, audio: false, video: true });
+  const st = await state;
+  record('Mic and camera state reach the partner', st.audio === false && st.video === true);
+  const none = never(outsider, 'media-state');
+  outsider.emit('media-state', { roomId, audio: false });
+  record('...and nobody else', await none);
+
+  [A, B2, outsider].forEach((x) => x.disconnect());
+  await sleep(80);
+}
+
 // ── consent ──────────────────────────────────────────────────────────────────
 async function testNothingStartsWithoutConsent() {
   const roomId = `cons-${uid()}`;
@@ -377,6 +438,7 @@ async function testInMeetingReport() {
     });
   }
 
+  roomManager.addChatMessage(roomId, 'p-rep-a', 'a chat line in the evidence');
   // B reports. B tries to pose as someone else in the payload: it must be ignored.
   const res = await emitAck(B, 'report-user', {
     roomId, reason: 'harassment', details: 'rude', block: true, reporter_student_id: 'student-A', reporterStudentId: 'student-A',
@@ -387,7 +449,10 @@ async function testInMeetingReport() {
   record('The report goes to the safety endpoint, signed', Boolean(call && call.headers['x-peer-signature'] && call.headers['x-peer-timestamp']));
   record('The reporter comes from the verified token, not the browser payload', payload && payload.reporter_student_id === 'student-B');
   record('Block and reason are passed along', payload && payload.block === true && payload.reason === 'harassment');
-  record('Evidence is the last 200 transcript lines captured on the server', payload && payload.evidence.transcript.length === 200 && payload.evidence.transcript[199].endsWith('line 249'));
+  const spoken = payload ? payload.evidence.transcript.filter((l) => !l.startsWith('Chat,')) : [];
+  const chat = payload ? payload.evidence.transcript.filter((l) => l.startsWith('Chat,')) : [];
+  record('Evidence is the last 200 transcript lines captured on the server', spoken.length === 200 && spoken[199].endsWith('line 249'));
+  record('Chat messages are part of the evidence', chat.length === 1 && chat[0] === 'Chat, Other person: a chat line in the evidence');
   record('Evidence labels who said what without names', payload && /^(Reporter|Other person): /.test(payload.evidence.transcript[0]) && !payload.evidence.transcript.join('').includes('Ann') && !payload.evidence.transcript.join('').includes('Bob'));
 
   // a second report within 10s is slowed down
@@ -553,6 +618,7 @@ async function testSwitchRolesReportIsNotFinalAndOnlyOnce() {
     await testSignalRelayStaysInsideTheRoom();
     await testOnlyTheHostConfiguresTheInterview();
     await testLeavingFreesTheSlotButDroppingDoesNot();
+    await testChatStaysBetweenThePair();
     await testNothingStartsWithoutConsent();
     await testInMeetingReport();
     await testWebhookIsSignedAndRetried();

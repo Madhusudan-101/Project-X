@@ -15,6 +15,8 @@ import {
   HiMicrophone,
   HiSpeakerXMark,
   HiFlag,
+  HiChatBubbleLeftRight,
+  HiUsers,
 } from 'react-icons/hi2';
 import {
   MdVideocam,
@@ -48,6 +50,10 @@ function Controls({
   onToggleVideo,
   onToggleScreenShare,
   onReport,
+  onToggleChat,
+  onTogglePeople,
+  panel,
+  chatUnread = 0,
   onLeave,
 }) {
   return (
@@ -102,6 +108,37 @@ function Controls({
         label={isScreenSharing ? 'Stop Share' : 'Share Screen'}
         title={isScreenSharing ? 'Stop screen sharing' : 'Share your screen'}
       />
+
+      {/* ── Chat + people ───────────────────────────────────────────────────── */}
+      {onToggleChat && (
+        <div className="relative">
+          <ControlButton
+            id="btn-chat"
+            onClick={onToggleChat}
+            isActive={panel === 'chat'}
+            activeClass="!bg-cyan-500/20 !text-cyan-400 !border-cyan-500/30"
+            icon={<HiChatBubbleLeftRight />}
+            label="Chat"
+            title="Open chat"
+          />
+          {chatUnread > 0 && (
+            <span className="absolute -top-1 -right-1 rounded-full bg-primary-500 px-1.5 text-[10px] text-white" aria-label={`${chatUnread} unread messages`}>
+              {chatUnread}
+            </span>
+          )}
+        </div>
+      )}
+      {onTogglePeople && (
+        <ControlButton
+          id="btn-people"
+          onClick={onTogglePeople}
+          isActive={panel === 'people'}
+          activeClass="!bg-cyan-500/20 !text-cyan-400 !border-cyan-500/30"
+          icon={<HiUsers />}
+          label="People"
+          title="Show who is in the meeting"
+        />
+      )}
 
       {/* ── Report ──────────────────────────────────────────────────────────── */}
       {onReport && (

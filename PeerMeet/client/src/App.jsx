@@ -9,6 +9,7 @@ import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import Home from './pages/Home.jsx';
 import RoomEntry from './pages/RoomEntry.jsx';
+import EndedScreen from './pages/EndedScreen.jsx';
 import { ToastProvider } from './context/ToastContext.jsx';
 import Toast from './components/Toast.jsx';
 import ErrorBoundary from './components/ErrorBoundary.jsx';
@@ -24,6 +25,7 @@ function App() {
           <Routes>
             <Route path="/" element={<Home />} />
             <Route path="/room/:roomId" element={<RoomEntry />} />
+            <Route path="/left/:roomId" element={<EndedScreen />} />
             {/* Catch-all redirect */}
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>

@@ -39,7 +39,7 @@ import {
 } from "@/services/api/candidate/peer";
 import { usePeerInterviewStore } from "@/store/candidate/peerInterview";
 import { ApiClientError } from "@/services/api/client";
-import { reservePeerMeetTab } from "@/lib/peerMeetTab";
+import { reservePeerMeetTab, untilParam } from "@/lib/peerMeetTab";
 
 const POLL_INTERVAL_MS = 15_000;
 const JOIN_WINDOW_BEFORE_MS = 5 * 60 * 1000;
@@ -173,6 +173,8 @@ export function UpcomingMeetings() {
         url.searchParams.set("room", res.room_id);
         url.searchParams.set("init", "1");
         url.searchParams.set("private", res.keep_private ? "1" : "0");
+        const until = untilParam(res.ends_at);
+        if (until) url.searchParams.set("until", until);
         // Identity token in the fragment — never leaks via Referer / logs
         // / history (see PeerInterviewMatchModal for full rationale).
         url.hash = `token=${encodeURIComponent(res.token)}`;

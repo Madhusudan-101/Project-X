@@ -318,3 +318,11 @@ def test_cancelling_a_scheduled_meeting_still_works(peer):
     m = _meeting(peer)
     assert peer.client.delete(f"/candidate/peer-meetings/{m['id']}", headers=peer.h[ALICE]).status_code == 204
     assert peer.db.one("peer_scheduled_meetings", id=m["id"])["status"] == "cancelled"
+
+
+def test_join_tells_the_client_when_the_scheduled_slot_ends(peer):
+    m = _meeting(peer, duration_minutes=45)
+    j = peer.client.post(f"/candidate/peer-meetings/{m['id']}/join", headers=peer.h[ALICE]).json()
+    start = datetime.fromisoformat(j["starts_at"].replace("Z", "+00:00"))
+    end = datetime.fromisoformat(j["ends_at"].replace("Z", "+00:00"))
+    assert j["duration_minutes"] == 45 and end - start == timedelta(minutes=45)

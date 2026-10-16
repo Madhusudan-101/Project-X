@@ -22,7 +22,7 @@ import { Card } from "@/components/ui/card";
 import { peerService, type ScheduledMeeting, type ScheduledMeetingStatus } from "@/services/api/candidate/peer";
 import { usePeerInterviewStore } from "@/store/candidate/peerInterview";
 import { ApiClientError } from "@/services/api/client";
-import { reservePeerMeetTab } from "@/lib/peerMeetTab";
+import { reservePeerMeetTab, untilParam } from "@/lib/peerMeetTab";
 
 const JOIN_WINDOW_BEFORE_MS = 5 * 60 * 1000; // matches backend JOIN_GRACE_MINUTES_BEFORE
 
@@ -118,6 +118,8 @@ export function ScheduledMeetingsList({ refreshKey = 0 }: { refreshKey?: number 
         url.searchParams.set("room", res.room_id);
         url.searchParams.set("init", "1");
         url.searchParams.set("private", res.keep_private ? "1" : "0");
+        const until = untilParam(res.ends_at);
+        if (until) url.searchParams.set("until", until);
         // Identity token goes in the URL fragment so it never leaks via
         // Referer / access logs / browser history (see PeerInterviewMatchModal
         // for the full rationale).

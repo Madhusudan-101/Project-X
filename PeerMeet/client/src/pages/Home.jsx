@@ -54,6 +54,7 @@ function Home() {
   useEffect(() => {
     let autoRoom = null;
     let autoInit = false;
+    let autoUntil = null;
     // Dashboard opens this tab via `window.open` without `noopener` on
     // purpose (that would return a null Window handle in Chromium/Firefox
     // and break the reserved-tab pattern that keeps the flow at exactly
@@ -81,6 +82,9 @@ function Home() {
       );
       const token = hashParams.get('token') || url.searchParams.get('token');
       autoRoom = url.searchParams.get('room');
+      // A room id is used in a URL path and as a server-side room name: only accept a boring one.
+      if (autoRoom && !/^[A-Za-z0-9_-]{3,64}$/.test(autoRoom)) autoRoom = null;
+      autoUntil = url.searchParams.get('until');
       autoInit = url.searchParams.get('init') === '1';
       const privateFlag = url.searchParams.get('private') === '1';
       let touched = false;
@@ -100,6 +104,10 @@ function Home() {
         url.searchParams.delete('init');
         touched = true;
       }
+      if (url.searchParams.has('until')) {
+        url.searchParams.delete('until');
+        touched = true;
+      }
       if (url.searchParams.has('private')) {
         setIdentityPrivate(privateFlag);
         url.searchParams.delete('private');
@@ -117,7 +125,11 @@ function Home() {
       // tries join-room, and on room-not-found falls back to create-room —
       // so this same navigate handles both "you're first" (auto-create) and
       // "you're joining a peer" (auto-join) cases with no server changes.
-      navigate(`/room/${autoRoom}${autoInit ? '?init=true' : ''}`, { replace: true });
+      const query = new URLSearchParams();
+      if (autoInit) query.set('init', 'true');
+      if (autoUntil) query.set('until', autoUntil); // the meeting's scheduled end, for the countdown
+      const qs = query.toString();
+      navigate(`/room/${autoRoom}${qs ? `?${qs}` : ''}`, { replace: true });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);

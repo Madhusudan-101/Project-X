@@ -531,6 +531,9 @@ class JoinScheduledOut(BaseModel):
     token: str
     keep_private: bool
     starts_at: datetime
+    # When the scheduled slot ends. PeerMeet shows the time left and warns; it never cuts the call off.
+    ends_at: datetime
+    duration_minutes: int
     is_ready: bool  # false if the meeting time hasn't arrived yet
     status: str     # meeting status AFTER this join (may have advanced)
 
@@ -831,6 +834,8 @@ def join_scheduled_meeting(
         token=token,
         keep_private=bool(row.get("keep_private", False)),
         starts_at=scheduled_at,
+        ends_at=scheduled_at + timedelta(minutes=row["duration_minutes"]),
+        duration_minutes=row["duration_minutes"],
         is_ready=is_ready,
         status=new_status,
     )

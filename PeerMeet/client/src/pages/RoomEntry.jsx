@@ -6,21 +6,21 @@
  */
 
 import React, { useState } from 'react';
-import { useParams, useSearchParams } from 'react-router-dom';
+import { useParams } from 'react-router-dom';
 import Lobby from '../components/Lobby.jsx';
 import MeetingRoom from './MeetingRoom.jsx';
-import { getAuthToken } from '../utils/authToken.js';
+import { getAuthToken, getIdentityPrivate } from '../utils/authToken.js';
 import { loadLobby, saveLobby } from '../utils/lobbyPrefs.js';
 
 function RoomEntry() {
   const { roomId } = useParams();
-  const [searchParams] = useSearchParams();
   const [lobby, setLobby] = useState(() => loadLobby(roomId));
 
   if (!lobby) {
     return (
       <Lobby
-        isPrivate={searchParams.get('private') === '1'}
+        // Home read this from the dashboard link and removed it from the URL; it lives in memory now.
+        isPrivate={getIdentityPrivate()}
         hasIdentity={Boolean(getAuthToken())}
         onJoin={(prefs) => {
           saveLobby(roomId, prefs);
