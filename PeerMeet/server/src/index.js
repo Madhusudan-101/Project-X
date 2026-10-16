@@ -422,6 +422,22 @@ function emitToParticipant(roomId, participantId, event, payload) {
   io.to(socketId).emit(event, payload);
 }
 
+/**
+ * Run one room's setup steps one after another. The browser sends "configure" and "start" back to back,
+ * and "configure" now waits on the backend to confirm both Yes answers, so without this "start" could be
+ * looked at before "configure" had finished and be silently ignored.
+ */
+const roomQueues = new Map();
+function enqueueForRoom(roomId, task) {
+  const prev = roomQueues.get(roomId) || Promise.resolve();
+  const next = prev.then(task).catch((err) => console.error(`[Room] queued step failed: ${err.message}`));
+  roomQueues.set(roomId, next);
+  next.then(() => {
+    if (roomQueues.get(roomId) === next) roomQueues.delete(roomId);
+  });
+  return next;
+}
+
 // ── Pre-call ("Get ready") ─────────────────────────────────────────────────────
 // Both people join the room first, but nothing is sent between them (no video, no captions, no AI)
 // until each has answered the consent question with Yes and clicked Ready.
@@ -1327,8 +1343,9 @@ io.on('connection', (socket) => {
   // ── Interview: configure ─────────────────────────────────────────────────
   // The creator submits interview setup. Server assigns roles and tells BOTH
   // participants their role + that AI assistance is active (disclosure).
-  socket.on('interview:configure', async ({ roomId, config } = {}) => {
+  socket.on('interview:configure', ({ roomId, config } = {}) => {
     if (!roomId || !socket.rooms.has(roomId)) return;
+    enqueueForRoom(roomId, async () => {
     const myParticipantId = getParticipantIdForSocket(roomId, socket.id);
     if (!myParticipantId) return;
     if (isRateLimited(socket, 'interview:configure', 1000)) return;
@@ -1385,11 +1402,13 @@ io.on('connection', (socket) => {
       phase: interview.phase,
       aiAssisted: true,
     });
+    });
   });
 
   // ── Interview: start ─────────────────────────────────────────────────────
-  socket.on('interview:start', async ({ roomId } = {}) => {
+  socket.on('interview:start', ({ roomId } = {}) => {
     if (!roomId || !socket.rooms.has(roomId)) return;
+    enqueueForRoom(roomId, async () => {
     const myParticipantId = getParticipantIdForSocket(roomId, socket.id);
     if (!myParticipantId) return;
     if (isRateLimited(socket, 'interview:start', 2000)) return;
@@ -1484,6 +1503,7 @@ io.on('connection', (socket) => {
         summary: getCopilotSummary(roomId),
       });
     }
+    });
   });
 
   // ── Interview: switch roles ──────────────────────────────────────────────

@@ -256,7 +256,7 @@ test.describe("dashboard peer-interview matchmaking -> PeerMeet room", () => {
     await guest.getByLabel("Rude or disrespectful").check();
     await guest.getByRole("button", { name: "Send report" }).click();
     await expect(guest.getByRole("status").filter({ hasText: /sent to the Mirracle team/ })).toBeVisible({ timeout: 15_000 });
-    await guest.getByRole("button", { name: "Close" }).click();
+    await guest.getByRole("dialog", { name: /Report this person/ }).getByRole("button", { name: "Close" }).last().click();
     await expect(guest.getByRole("button", { name: "Leave meeting" })).toBeVisible();
     await expect(guest.getByText("Connected").first()).toBeVisible();
     st = await (await request.get(`${API}/__e2e/state`)).json();
@@ -308,7 +308,7 @@ test.describe("dashboard peer-interview matchmaking -> PeerMeet room", () => {
     // end that match on the dashboard side, then match again
     const room1 = new URL(pa1.url()).pathname.split("/").pop()!;
     for (const who of [a, b]) {
-      await request.post(`${API}/candidate/peer-matchmaking/end`, { data: { room_id: room1 }, headers: { Authorization: `Bearer ${who.session.access_token}` } });
+      await request.post(`${API}/candidate/peer-matchmaking/end`, { data: { room_id: room1 }, headers: { Authorization: `Bearer ${who.session.token}` } });
     }
     await pa1.close(); await pb1.close();
     await a.page.reload(); await b.page.reload();
@@ -332,7 +332,7 @@ test.describe("dashboard peer-interview matchmaking -> PeerMeet room", () => {
     const [pa, pb] = [await popA, await popB];
     await expect(pa.getByRole("heading", { name: "Get ready" })).toBeVisible({ timeout: 30_000 });
     await expect(pb.getByRole("heading", { name: "Get ready" })).toBeVisible({ timeout: 30_000 });
-    await expect(pb.getByText("Your partner is getting ready.").or(pb.getByText("Cara", { exact: true }))).toBeVisible({ timeout: 15_000 });
+    await expect(pb.getByText("Cara", { exact: true })).toBeVisible({ timeout: 15_000 });
     await pa.getByRole("button", { name: "No, cancel the session" }).click();
     await expect(pa.getByRole("heading", { name: "Session cancelled" })).toBeVisible({ timeout: 10_000 });
     await expect(pb.getByRole("heading", { name: "Session cancelled" })).toBeVisible({ timeout: 10_000 });
@@ -379,7 +379,7 @@ test.describe("dashboard peer-interview matchmaking -> PeerMeet room", () => {
     test.setTimeout(120_000);
     const a = await candidate(browser, request, EMAIL.candidate);         // Cara waits
     const b = await candidate(browser, request, "cand2@e2e.dev");         // Dev never comes
-    const auth = { Authorization: `Bearer ${a.session.access_token}` };
+    const auth = { Authorization: `Bearer ${a.session.token}` };
     // Cara accepts the guidelines through the API and books a meeting with Dev that started 11 minutes ago
     await request.post(`${API}/candidate/peer-safety/guidelines/accept`, { data: { version: (await (await request.get(`${API}/candidate/peer-safety/guidelines`, { headers: auth })).json()).version, rules: true, media: true, ai: true }, headers: auth });
     const booked = await (await request.post(`${API}/candidate/peer-meetings`, {
@@ -413,8 +413,10 @@ test.describe("dashboard peer-interview matchmaking -> PeerMeet room", () => {
     expect(st.peer_user_flags_rows.find((f: any) => f.student_id === "u-cand")).toBeUndefined();   // the waiting person is never marked
     expect(st.peer_interview_reports_rows ?? []).toHaveLength(0);                                    // no score, no feedback report
     expect(st.peer_sanctions ?? 0).toBe(0);                                                          // a count only: no punishment
-    // the absent person cannot join it afterwards
-    const late = await request.post(`${API}/candidate/peer-meetings/${booked.id}/join`, { headers: { Authorization: `Bearer ${b.session.access_token}` } });
+    // the absent person (who has accepted the guidelines) cannot join it afterwards
+    const authB = { Authorization: `Bearer ${b.session.token}` };
+    await request.post(`${API}/candidate/peer-safety/guidelines/accept`, { data: { version: (await (await request.get(`${API}/candidate/peer-safety/guidelines`, { headers: authB })).json()).version, rules: true, media: true, ai: true }, headers: authB });
+    const late = await request.post(`${API}/candidate/peer-meetings/${booked.id}/join`, { headers: { Authorization: `Bearer ${b.session.token}` } });
     expect(late.status()).toBe(410);
     await a.ctx.close(); await b.ctx.close();
   });
@@ -422,7 +424,7 @@ test.describe("dashboard peer-interview matchmaking -> PeerMeet room", () => {
   test("partner did not show is not offered before the grace window", async ({ browser, request }) => {
     test.setTimeout(90_000);
     const a = await candidate(browser, request, EMAIL.candidate);
-    const auth = { Authorization: `Bearer ${a.session.access_token}` };
+    const auth = { Authorization: `Bearer ${a.session.token}` };
     await request.post(`${API}/candidate/peer-safety/guidelines/accept`, { data: { version: (await (await request.get(`${API}/candidate/peer-safety/guidelines`, { headers: auth })).json()).version, rules: true, media: true, ai: true }, headers: auth });
     const booked = await (await request.post(`${API}/candidate/peer-meetings`, {
       data: { scheduled_at: new Date(Date.now() + 5 * 60000).toISOString(), duration_minutes: 30, keep_private: false, invitee_email: "cand2@e2e.dev" }, headers: auth,

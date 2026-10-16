@@ -413,6 +413,18 @@ async function testSetupIsOnceByTheStarterAndLocks() {
   [A, B].forEach((s) => s.disconnect());
 }
 
+async function testConfigureThenStartBackToBackStillStarts() {
+  const room = await pair({ tokenA: (r) => mint('stu-a', 'Ann', r), tokenB: (r) => mint('stu-b', 'Bob', r) });
+  await goLive(room);
+  await sleep(1100);
+  // the browser sends both at once, without waiting for the roles to come back
+  room.A.emit('interview:configure', { roomId: room.roomId, config: { domain: 'SQL', whoStarts: 'interviewer', durationMinutes: 10 } });
+  room.A.emit('interview:start', { roomId: room.roomId });
+  await until(() => count(room.A, 'interview:started') && count(room.B, 'interview:started'), 4000, 'started');
+  record('Setup then start, sent together, still starts the interview for both', roomManager.getInterview(room.roomId).started === true);
+  [room.A, room.B].forEach((s) => s.disconnect());
+}
+
 async function testTheInterviewCannotStartWithoutSetupOrConsent() {
   const { roomId, A, B } = await pair();
   A.emit('interview:start', { roomId });
@@ -560,6 +572,7 @@ async function testShortAnswersGetAnHonestReportNotAScore() {
     testThePartnerSeesFirstNameAndCollegeOnly,
     testAPrivatePartnerStaysAnonymousOnTheCard,
     testSetupIsOnceByTheStarterAndLocks,
+    testConfigureThenStartBackToBackStillStarts,
     testTheInterviewCannotStartWithoutSetupOrConsent,
     testInterviewerMessageShowsOnceThenNeverAgain,
     testRoleSwitchShowsItToTheNewInterviewerOnlyIfNew,
