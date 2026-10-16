@@ -346,3 +346,14 @@ def test_agent_refuses_to_start_the_voice_pipeline_without_audio_consent():
     assert "ctx.shutdown(reason=\"no audio consent\")" in after_guard.split("video_consent =")[0]
     for pipeline_step in ("create_workflow(", "AgentSession(", "session.start(", "start_video_check("):
         assert src.index(pipeline_step, src.index("async def entrypoint")) > guard, pipeline_step
+
+
+def test_agent_follows_the_candidate_across_a_dropped_connection():
+    """Source-order check (agent.py needs the full voice stack to import): the session must not close
+    the moment the candidate drops, and the grace guard must be wired to join and leave events."""
+    src = open(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "agent.py")).read()
+    assert "close_on_disconnect=False" in src
+    assert 'participant_identity=meta.get("user_id")' in src
+    assert 'ctx.room.on("participant_disconnected"' in src and 'ctx.room.on("participant_connected"' in src
+    assert src.index("close_on_disconnect=False") < src.index("ReconnectGuard(")
+    assert "guard.cancel()" in src  # the countdown never outlives the job

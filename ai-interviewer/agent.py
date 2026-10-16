@@ -16,6 +16,7 @@ from livekit.plugins import (
 from livekit.plugins.turn_detector.multilingual import MultilingualModel
 
 from consent import has_audio_consent, has_video_consent
+from reconnect import ReconnectGuard, grace_seconds
 from graph import create_workflow  # <-- our compiled LangGraph app
 from video_monitor import start_video_check
 
@@ -132,8 +133,25 @@ async def entrypoint(ctx: agents.JobContext):
         agent=InterviewAgent(),
         room_input_options=RoomInputOptions(
             noise_cancellation=noise_cancellation.BVC(),
+            # Follow the candidate across a dropped connection: the same identity rejoining is
+            # picked up again. We do not close the session the moment they drop (the guard below
+            # decides after a grace period).
+            participant_identity=meta.get("user_id") or None,
+            close_on_disconnect=False,
         ),
     )
+
+    # A dropped connection does not end the interview straight away. The candidate gets a grace
+    # period to rejoin (the backend issues a new token); after that the interview is closed and
+    # graded on what was answered, as before.
+    guard = ReconnectGuard(
+        meta.get("user_id") or None,
+        grace_seconds(),
+        lambda: asyncio.ensure_future(_end_interview(ctx)),
+    )
+    ctx.room.on("participant_disconnected", lambda p: guard.on_disconnect(p.identity))
+    ctx.room.on("participant_connected", lambda p: guard.on_connect(p.identity))
+    ctx.add_shutdown_callback(lambda: guard.cancel())
 
     # Video check (no face / more than one person / camera blocked). It only runs
     # with the candidate's consent and never feeds the interview LLM or the score.

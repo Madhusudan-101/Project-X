@@ -26,6 +26,8 @@ export interface AiInterviewAssignment {
   instructions: string;
   expires_at: string;
   status: "invited" | "started" | "completed" | "expired";
+  /** The candidate has already asked this company for an accommodation. */
+  accommodation_requested?: boolean;
 }
 
 export type IntegrityKind =

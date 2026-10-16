@@ -26,6 +26,36 @@ export const aiInterviewService = {
     });
   },
 
+  /** The AI interviewer never joined: cancel and get the attempt back (the server double-checks). */
+  abortSession(roomName: string): Promise<{ released: boolean; kind: "company" | "practice" }> {
+    return request(`/candidate/ai-interview/session/${encodeURIComponent(roomName)}/abort`, {
+      method: "POST",
+      body: { reason: "interviewer_missing" },
+    });
+  },
+
+  /** A fresh join token for my own live interview after a dropped connection. */
+  rejoinSession(roomName: string): Promise<AiInterviewSession> {
+    return request<AiInterviewSession>(
+      `/candidate/ai-interview/session/${encodeURIComponent(roomName)}/rejoin`,
+      { method: "POST" },
+    );
+  },
+
+  /** Ask the company for an accommodation (extra time, another format) before starting. */
+  requestAccommodation(
+    inviteId: string,
+    message: string,
+  ): Promise<{ ok: boolean; company_emailed: boolean }> {
+    return request(
+      `/candidate/ai-interview/assignments/${encodeURIComponent(inviteId)}/accommodation`,
+      {
+        method: "POST",
+        body: { message },
+      },
+    );
+  },
+
   /** Interviews companies have sent me. */
   listAssignments(signal?: AbortSignal): Promise<AiInterviewAssignment[]> {
     return request<AiInterviewAssignment[]>("/candidate/ai-interview/assignments", { signal });

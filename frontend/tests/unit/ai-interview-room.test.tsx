@@ -6,10 +6,18 @@ const svc = vi.hoisted(() => ({
   startSession: vi.fn(),
   startInviteSession: vi.fn(),
   logIntegrityEvents: vi.fn(),
+  abortSession: vi.fn(),
+  rejoinSession: vi.fn(),
 }));
 vi.mock("@/services/api/candidate/aiInterview", () => ({ aiInterviewService: svc }));
 vi.mock("@/services/api/client", () => ({
-  ApiClientError: class ApiClientError extends Error {},
+  ApiClientError: class ApiClientError extends Error {
+    status: number;
+    constructor(message: string, status = 400) {
+      super(message);
+      this.status = status;
+    }
+  },
 }));
 
 type Handler = (...a: unknown[]) => void;
@@ -34,6 +42,7 @@ const lk = vi.hoisted(() => {
   return {
     makeTrack,
     handlers: {} as Record<string, Handler[]>,
+    noAgent: false,
     cameraError: null as Error | null,
     micError: null as Error | null,
     rooms: [] as unknown[],
@@ -47,7 +56,7 @@ const dispatch = (ev: string, ...args: unknown[]) =>
 
 vi.mock("livekit-client", () => {
   class FakeRoom {
-    remoteParticipants = new Map<string, unknown>([["agent", {}]]);
+    remoteParticipants = new Map<string, unknown>(lk.noAgent ? [] : [["agent", {}]]);
     localParticipant = {
       setMicrophoneEnabled: vi.fn(async () => {
         if (lk.micError) throw lk.micError;
@@ -80,6 +89,14 @@ vi.mock("livekit-client", () => {
   return {
     Room: FakeRoom,
     TrackEvent: { Ended: "ended", Restarted: "restarted" },
+    DisconnectReason: {
+      CLIENT_INITIATED: 1,
+      DUPLICATE_IDENTITY: 2,
+      SERVER_SHUTDOWN: 3,
+      PARTICIPANT_REMOVED: 4,
+      ROOM_DELETED: 5,
+      CONNECTION_TIMEOUT: 14,
+    },
     RoomEvent: {
       TrackSubscribed: "trackSubscribed",
       TrackUnsubscribed: "trackUnsubscribed",
@@ -91,6 +108,8 @@ vi.mock("livekit-client", () => {
       AudioPlaybackStatusChanged: "audioPlaybackStatusChanged",
       TranscriptionReceived: "transcriptionReceived",
       Disconnected: "disconnected",
+      Reconnecting: "reconnecting",
+      Reconnected: "reconnected",
     },
   };
 });
@@ -363,5 +382,175 @@ describe("useInterviewRoom (camera, microphone + integrity)", () => {
     const { result } = renderHook(() => useInterviewRoom());
     act(() => result.current.reportIntegrity("tab_hidden"));
     expect(svc.logIntegrityEvents).not.toHaveBeenCalled();
+  });
+});
+
+describe("useInterviewRoom (dropped connection, rejoin, interviewer never joined)", () => {
+  const session = {
+    serverUrl: "wss://x",
+    roomName: "ai-room1",
+    participantToken: "t",
+    maxMinutes: 20,
+  };
+  beforeEach(() => {
+    vi.clearAllMocks();
+    lk.noAgent = false;
+    lk.rooms = [];
+    lk.cam = lk.makeTrack("video");
+    lk.mic = lk.makeTrack("audio");
+    svc.startSession.mockResolvedValue(session);
+    svc.rejoinSession.mockResolvedValue({ ...session, participantToken: "t2", maxMinutes: 12 });
+    svc.logIntegrityEvents.mockResolvedValue({ accepted: 1 });
+  });
+
+  const joinedHere = async () => {
+    const hook = renderHook(() => useInterviewRoom());
+    await act(async () => {
+      await hook.result.current.start("ai_ml", "v", { micId: "m", camId: "c" });
+    });
+    await waitFor(() => expect(hook.result.current.phase).toBe("live"));
+    return hook;
+  };
+
+  it("shows reconnecting while the SDK retries, and clears it when back", async () => {
+    const { result } = await joinedHere();
+    emit("reconnecting");
+    expect(result.current.reconnecting).toBe(true);
+    emit("reconnected");
+    expect(result.current.reconnecting).toBe(false);
+    expect(result.current.phase).toBe("live");
+  });
+
+  it("a connection that drops with time left is interrupted, not ended", async () => {
+    const { result } = await joinedHere();
+    emit("disconnected", 14); // CONNECTION_TIMEOUT
+    expect(result.current.phase).toBe("interrupted");
+  });
+
+  it.each([1, 2, 3, 4, 5])(
+    "disconnect reason %i is final and ends the interview",
+    async (reason) => {
+      const { result } = await joinedHere();
+      emit("disconnected", reason);
+      expect(result.current.phase).toBe("ended");
+    },
+  );
+
+  it("pressing End ends it even though a disconnect follows", async () => {
+    const { result } = await joinedHere();
+    await act(async () => {
+      await result.current.end();
+    });
+    expect(result.current.phase).toBe("ended");
+  });
+
+  it("a disconnect after the time limit is the end", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    try {
+      const { result } = await joinedHere();
+      vi.setSystemTime(Date.now() + 21 * 60_000);
+      emit("disconnected", 14);
+      expect(result.current.phase).toBe("ended");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("rejoin asks for a fresh token for the same room and goes live again", async () => {
+    const { result } = await joinedHere();
+    emit("disconnected", 14);
+    await act(async () => {
+      await result.current.rejoin();
+    });
+    expect(svc.rejoinSession).toHaveBeenCalledWith("ai-room1");
+    expect(svc.startSession).toHaveBeenCalledTimes(1); // no second attempt is used
+    await waitFor(() => expect(result.current.phase).toBe("live"));
+    expect(result.current.roomName).toBe("ai-room1");
+  });
+
+  it("a failed rejoin stays on the interrupted screen so it can be retried", async () => {
+    const { result } = await joinedHere();
+    emit("disconnected", 14);
+    svc.rejoinSession.mockRejectedValueOnce(new Error("network"));
+    await act(async () => {
+      await result.current.rejoin();
+    });
+    expect(result.current.phase).toBe("interrupted");
+    expect(result.current.error).toBeTruthy();
+  });
+
+  it("a rejoin refused because the interview is over ends it", async () => {
+    const { ApiClientError } = await import("@/services/api/client");
+    const { result } = await joinedHere();
+    emit("disconnected", 14);
+    svc.rejoinSession.mockRejectedValueOnce(new ApiClientError("over", 409));
+    await act(async () => {
+      await result.current.rejoin();
+    });
+    expect(result.current.phase).toBe("ended");
+  });
+
+  describe("interviewer never joins", () => {
+    const joinEmpty = async () => {
+      lk.noAgent = true;
+      const hook = renderHook(() => useInterviewRoom());
+      await act(async () => {
+        await hook.result.current.start("ai_ml", "v", { micId: "m", camId: "c" });
+      });
+      return hook;
+    };
+
+    it("cancels automatically and gives the attempt back", async () => {
+      vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+      try {
+        svc.abortSession.mockResolvedValue({ released: true, kind: "practice" });
+        const { result } = await joinEmpty();
+        await act(async () => {
+          await vi.advanceTimersByTimeAsync(26_000);
+        });
+        expect(svc.abortSession).toHaveBeenCalledWith("ai-room1");
+        expect(result.current.phase).toBe("unavailable");
+        expect(result.current.unavailable).toEqual({ released: true });
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it("stays in the room when the server says the interviewer arrived (409)", async () => {
+      vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+      try {
+        const { ApiClientError } = await import("@/services/api/client");
+        svc.abortSession.mockRejectedValue(new ApiClientError("present", 409));
+        const { result } = await joinEmpty();
+        (lk.rooms[0] as { remoteParticipants: Map<string, unknown> }).remoteParticipants.set(
+          "agent",
+          {},
+        );
+        await act(async () => {
+          await vi.advanceTimersByTimeAsync(26_000);
+        });
+        expect(result.current.phase).toBe("live");
+        expect(result.current.interviewerMissing).toBe(false);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it("does not cancel when the interviewer is there", async () => {
+      vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+      try {
+        const { result } = renderHook(() => useInterviewRoom());
+        await act(async () => {
+          await result.current.start("ai_ml", "v", { micId: "m", camId: "c" });
+        });
+        await act(async () => {
+          await vi.advanceTimersByTimeAsync(30_000);
+        });
+        expect(svc.abortSession).not.toHaveBeenCalled();
+        expect(result.current.phase).toBe("live");
+      } finally {
+        vi.useRealTimers();
+      }
+    });
   });
 });

@@ -534,7 +534,8 @@ async def start_session(
         await lkapi.room.create_room(
             api.CreateRoomRequest(
                 name=room_name,
-                empty_timeout=60,
+                # Long enough to cover the agent's reconnect grace, so a dropped candidate can rejoin.
+                empty_timeout=180,
                 max_participants=2,  # the candidate + the agent
                 metadata=json.dumps(metadata),
             )
