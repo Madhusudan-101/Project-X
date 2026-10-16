@@ -176,7 +176,8 @@ function getOrCreateParticipantId(roomId) {
   }
 }
 
-function MeetingRoom() {
+function MeetingRoom({ lobby = {} }) {
+  const transcriptionConsent = lobby.transcriptionConsent === true;
   const { roomId } = useParams();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
@@ -222,7 +223,7 @@ function MeetingRoom() {
     setOnScreenShareEnded,
     stopStream,
     retry: retryMedia,
-  } = useMediaDevices();
+  } = useMediaDevices({ cameraId: lobby.cameraId, micId: lobby.micId });
 
   // ── WebRTC ─────────────────────────────────────────────────────────────────
   const {
@@ -346,6 +347,7 @@ function MeetingRoom() {
       participantId,
       token: getAuthToken(),
       keepPrivate: getIdentityPrivate(),
+          transcriptionConsent,
     });
   }, [localStream, roomId, participantId]);
 
@@ -353,11 +355,11 @@ function MeetingRoom() {
   useEffect(() => {
     const handleRoomCreated = ({ roomId: id }) => {
       debugLog('[MeetingRoom] Room created:', id);
-      setCanTranscribe(true);
+      setCanTranscribe(transcriptionConsent);
     };
 
     const handleReady = ({ initiatorId, partnerDisplayName: pdn } = {}) => {
-      setCanTranscribe(true);
+      setCanTranscribe(transcriptionConsent);
       // `ready` is delivered when the server knows who our partner is —
       // for a fresh second-participant join, this is the moment BOTH
       // participants exist in the room, so it's the authoritative signal
@@ -376,7 +378,7 @@ function MeetingRoom() {
       addToast('A participant has joined the meeting!', 'success');
       // Only the creator (initiator) sees the interview setup modal, and only
       // if they haven't already dismissed or completed it.
-      if (isInitiator && !setupDismissed) {
+      if (isInitiator && !setupDismissed && transcriptionConsent) {
         setShowSetup(true);
       }
     };
@@ -413,6 +415,7 @@ function MeetingRoom() {
           participantId,
           token: getAuthToken(),
           keepPrivate: getIdentityPrivate(),
+          transcriptionConsent,
         });
         return;
       }
@@ -428,6 +431,16 @@ function MeetingRoom() {
       addToast('You are not allowed in this meeting.', 'error', 0);
     };
 
+    const handleInterviewError = ({ reason } = {}) => {
+      if (reason === 'consent-required') {
+        addToast(
+          'AI feedback needs both people to agree to live transcription. You can still talk without it.',
+          'warning',
+          6000
+        );
+      }
+    };
+
     const handleRoomExists = () => {
       // Lost a create-vs-join race (e.g. duplicate tab) — the room exists
       // now, so join it instead.
@@ -437,6 +450,7 @@ function MeetingRoom() {
         participantId,
         token: getAuthToken(),
         keepPrivate: getIdentityPrivate(),
+          transcriptionConsent,
       });
     };
 
@@ -448,9 +462,11 @@ function MeetingRoom() {
     socket.on('room-not-found', handleRoomNotFound);
     socket.on('room-exists', handleRoomExists);
     socket.on('auth-error', handleAuthError);
+    socket.on('interview:error', handleInterviewError);
 
     return () => {
       socket.off('auth-error', handleAuthError);
+      socket.off('interview:error', handleInterviewError);
       socket.off('room-created', handleRoomCreated);
       socket.off('ready', handleReady);
       socket.off('user-joined', handleUserJoined);
@@ -459,7 +475,7 @@ function MeetingRoom() {
       socket.off('room-not-found', handleRoomNotFound);
       socket.off('room-exists', handleRoomExists);
     };
-  }, [addToast, isInitiator, setupDismissed, roomId, participantId]);
+  }, [addToast, isInitiator, setupDismissed, roomId, participantId, transcriptionConsent]);
 
   // ── Notify when connected ──────────────────────────────────────────────────
   useEffect(() => {
@@ -563,6 +579,7 @@ function MeetingRoom() {
         participantId,
         token: getAuthToken(),
         keepPrivate: getIdentityPrivate(),
+          transcriptionConsent,
       });
 
       stopTranscription();

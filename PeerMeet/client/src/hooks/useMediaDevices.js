@@ -26,6 +26,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { debugLog } from '../utils/debugLog.js';
+import { constraintsFor } from '../utils/lobbyPrefs.js';
 
 /**
  * Translate MediaDevices error names to user-friendly messages.
@@ -50,7 +51,9 @@ function getFriendlyError(err) {
   }
 }
 
-export function useMediaDevices() {
+export function useMediaDevices({ cameraId = null, micId = null } = {}) {
+  // Devices chosen in the lobby; read once so changing them mid-call cannot re-open the camera.
+  const prefsRef = useRef({ cameraId, micId });
   const [stream, setStream] = useState(null);
   // Stable mic source — set once on acquire, never touched by screen share.
   const [micStream, setMicStream] = useState(null);
@@ -75,18 +78,8 @@ export function useMediaDevices() {
     setError(null);
 
     try {
-      const constraints = {
-        video: {
-          width: { ideal: 1280 },
-          height: { ideal: 720 },
-          facingMode: 'user',
-        },
-        audio: {
-          echoCancellation: true,
-          noiseSuppression: true,
-          sampleRate: 48000,
-        },
-      };
+      const constraints = constraintsFor(prefsRef.current);
+      constraints.audio.sampleRate = 48000;
 
       let mediaStream;
       try {

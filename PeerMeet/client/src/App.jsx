@@ -8,7 +8,7 @@
 import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import Home from './pages/Home.jsx';
-import MeetingRoom from './pages/MeetingRoom.jsx';
+import RoomEntry from './pages/RoomEntry.jsx';
 import { ToastProvider } from './context/ToastContext.jsx';
 import Toast from './components/Toast.jsx';
 import ErrorBoundary from './components/ErrorBoundary.jsx';
@@ -23,7 +23,7 @@ function App() {
         <ErrorBoundary>
           <Routes>
             <Route path="/" element={<Home />} />
-            <Route path="/room/:roomId" element={<MeetingRoom />} />
+            <Route path="/room/:roomId" element={<RoomEntry />} />
             {/* Catch-all redirect */}
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
