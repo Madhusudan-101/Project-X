@@ -490,7 +490,7 @@ function OverviewTab({ onOpenAiInterview }: { onOpenAiInterview: () => void }) {
                     message: "Preparing your identity token…",
                   });
                   try {
-                    const { token } = await peerService.createSessionToken();
+                    const { token } = await peerService.createSessionToken(activePeerRoom.roomId);
                     const url = new URL("/", peermeetUrl);
                     url.searchParams.set("room", activePeerRoom.roomId);
                     url.searchParams.set("init", "1");
@@ -515,6 +515,8 @@ function OverviewTab({ onOpenAiInterview }: { onOpenAiInterview: () => void }) {
                   }
                 }}
                 onEnd={() => {
+                  // Tell the server too, otherwise this match stays "active" and blocks the next one.
+                  void peerService.endMatch().catch(() => undefined);
                   clearPeerRoom();
                   toast.success("Peer Interview session cleared.");
                 }}

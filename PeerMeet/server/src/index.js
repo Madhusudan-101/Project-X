@@ -68,7 +68,13 @@ const {
   getParticipantIdForSocket,
   getIdentityForParticipant,
   getPublicDisplayName,
+  getHostParticipantId,
+  isRoomRestricted,
+  isParticipantPrivate,
+  getRoomIdForSocket,
+  getPartner,
 } = require('./roomManager');
+const { sanitizeReport } = require('./reportSanitizer');
 const {
   createDeepgramTranscriptionManager,
 } = require('./deepgramTranscription');
@@ -83,6 +89,18 @@ const jwt = require('jsonwebtoken');
 // existing anonymous PeerMeet flows are never rejected.
 const PEERMEET_SHARED_SECRET = process.env.PEERMEET_SHARED_SECRET || null;
 const MIRRACLE_WEBHOOK_URL = process.env.MIRRACLE_WEBHOOK_URL || null;
+// Separate secrets are optional; both fall back to the older single shared secret.
+const TOKEN_SECRET = process.env.PEERMEET_TOKEN_SECRET || PEERMEET_SHARED_SECRET;
+const WEBHOOK_SECRET = process.env.PEERMEET_WEBHOOK_SECRET || PEERMEET_SHARED_SECRET;
+// When set, EVERY room needs a valid room-bound token (use this for a dashboard-only deployment).
+// Unset keeps standalone anonymous rooms working.
+const REQUIRE_TOKEN = ['1', 'true', 'yes'].includes(String(process.env.PEERMEET_REQUIRE_TOKEN || '').toLowerCase());
+// Room and participant ids are used as socket.io room names: keep them boring.
+const ID_PATTERN = /^[A-Za-z0-9_-]{3,64}$/;
+const crypto = require('crypto');
+
+/** First characters only: room ids are join credentials, so they never go to the logs in full. */
+const short = (id) => String(id || '').slice(0, 4) + '…';
 
 /**
  * Verify a dashboard-issued identity token. Returns
@@ -91,14 +109,76 @@ const MIRRACLE_WEBHOOK_URL = process.env.MIRRACLE_WEBHOOK_URL || null;
  * NEVER throws — a bad token must not reject room creation/join.
  */
 function verifyPeerToken(token) {
-  if (!token || !PEERMEET_SHARED_SECRET) return null;
+  if (!token || !TOKEN_SECRET) return null;
   try {
-    const decoded = jwt.verify(token, PEERMEET_SHARED_SECRET, { algorithms: ['HS256'] });
-    if (!decoded || !decoded.student_id) return null;
-    return { studentId: decoded.student_id, studentName: decoded.name || null };
+    const decoded = jwt.verify(token, TOKEN_SECRET, { algorithms: ['HS256'], audience: 'peermeet' });
+    // A token must expire and must name the room it is for; without those it is not usable.
+    if (!decoded || !decoded.student_id || !decoded.exp || !decoded.room) return null;
+    return {
+      studentId: decoded.student_id,
+      studentName: decoded.name || null,
+      room: decoded.room,
+    };
   } catch {
     return null;
   }
+}
+
+/**
+ * Decide whether a socket may enter a room. Returns null when allowed, or the reason it is refused.
+ *  - a token for a DIFFERENT room is always refused (misuse or a replayed token);
+ *  - rooms that belong to the dashboard (created with a token) refuse anonymous guests;
+ *  - with PEERMEET_REQUIRE_TOKEN=1 nobody enters without a valid token.
+ */
+function checkRoomAccess(roomId, rawToken, identity, { creating = false } = {}) {
+  if (rawToken && !identity) return REQUIRE_TOKEN || isRoomRestricted(roomId) ? 'invalid-token' : null;
+  if (identity && identity.room !== roomId) return 'wrong-room';
+  if (!identity) {
+    if (REQUIRE_TOKEN) return 'token-required';
+    if (!creating && isRoomRestricted(roomId)) return 'token-required';
+  }
+  return null;
+}
+
+// Retry schedule for the report webhook (ms). A report is the only durable record of an interview,
+// so a short outage on the dashboard side must not lose it. Overridable for tests.
+const WEBHOOK_RETRY_DELAYS_MS = (process.env.PEERMEET_WEBHOOK_RETRY_MS || '0,2000,10000,30000')
+  .split(',')
+  .map((n) => Number(n.trim()))
+  .filter((n) => Number.isFinite(n) && n >= 0);
+
+/** POST a signed report; retries network errors, 429 and 5xx, never other 4xx. */
+async function postReportWithRetry(payload) {
+  const url = `${MIRRACLE_WEBHOOK_URL.replace(/\/+$/, '')}/internal/peer-reports`;
+  const body = JSON.stringify(payload);
+  let lastError = 'no attempt made';
+  for (const delay of WEBHOOK_RETRY_DELAYS_MS) {
+    if (delay) await new Promise((r) => setTimeout(r, delay));
+    // Fresh timestamp + signature each attempt so a retry is never rejected as stale.
+    const timestamp = String(Math.floor(Date.now() / 1000));
+    const signature = crypto.createHmac('sha256', WEBHOOK_SECRET).update(`${timestamp}.${body}`).digest('hex');
+    try {
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${WEBHOOK_SECRET}`,
+          'X-Peer-Timestamp': timestamp,
+          'X-Peer-Signature': signature,
+        },
+        body,
+        signal: AbortSignal.timeout(10000),
+      });
+      if (res.ok) return;
+      lastError = `responded ${res.status}`;
+      if (res.status !== 429 && res.status < 500) throw new Error(lastError); // permanent: do not retry
+    } catch (err) {
+      if (String(err.message).startsWith('responded')) throw err;
+      lastError = err.message;
+    }
+    console.error(`[Webhook] peer-reports attempt failed (${lastError})`);
+  }
+  throw new Error(lastError);
 }
 
 /**
@@ -108,8 +188,16 @@ function verifyPeerToken(token) {
  * failure (or FastAPI being down) must never delay or affect the live
  * interview. Skipped entirely when the reporting participant is anonymous.
  */
-function fireReportWebhook({ roomId, subjectParticipantId, partnerParticipantId, role, report }) {
-  if (!MIRRACLE_WEBHOOK_URL || !PEERMEET_SHARED_SECRET) return;
+function fireReportWebhook({
+  roomId,
+  subjectParticipantId,
+  partnerParticipantId,
+  role,
+  report,
+  phase = 1,
+  final = true,
+}) {
+  if (!MIRRACLE_WEBHOOK_URL || !WEBHOOK_SECRET) return;
   if (!report) return;
 
   const subject = getIdentityForParticipant(roomId, subjectParticipantId);
@@ -124,6 +212,11 @@ function fireReportWebhook({ roomId, subjectParticipantId, partnerParticipantId,
     student_id: subject.studentId,
     partner_student_id: partner?.studentId || null,
     role,
+    phase,
+    final,
+    unavailable: !!report.unavailable,
+    // Did the partner ask to stay anonymous? The dashboard hides their name unless this is false.
+    partner_private: partnerParticipantId ? isParticipantPrivate(roomId, partnerParticipantId) : null,
     report: {
       overall_score: report.overall_score ?? null,
       technical_score: report.technical_score ?? null,
@@ -139,24 +232,9 @@ function fireReportWebhook({ roomId, subjectParticipantId, partnerParticipantId,
     },
   };
 
-  // Node 18+ built-in fetch — no new dependency. `.catch()` swallows any
-  // failure into a log line; the live interview never sees it.
-  fetch(`${MIRRACLE_WEBHOOK_URL.replace(/\/+$/, '')}/internal/peer-reports`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${PEERMEET_SHARED_SECRET}`,
-    },
-    body: JSON.stringify(payload),
-  })
-    .then((res) => {
-      if (!res.ok) {
-        console.error(`[Webhook] peer-reports responded ${res.status}`);
-      }
-    })
-    .catch((err) => {
-      console.error(`[Webhook] peer-reports POST failed: ${err.message}`);
-    });
+  postReportWithRetry(payload).catch((err) => {
+    console.error(`[Webhook] peer-reports gave up: ${err.message}`);
+  });
 }
 
 const app = express();
@@ -186,7 +264,14 @@ app.use(express.json());
 // indication anywhere why. This only runs the check (never throws) when
 // NODE_ENV=production, so `npm run dev` is completely unaffected.
 if (process.env.NODE_ENV === 'production') {
-  const REQUIRED_IN_PRODUCTION = ['CLIENT_URL', 'GEMINI_API_KEY', 'DEEPGRAM_API_KEY', 'METERED_API_KEY'];
+  const REQUIRED_IN_PRODUCTION = [
+    'CLIENT_URL',
+    'GEMINI_API_KEY',
+    'DEEPGRAM_API_KEY',
+    'METERED_API_KEY',
+    'PEERMEET_SHARED_SECRET',
+    'MIRRACLE_WEBHOOK_URL',
+  ];
   const missing = REQUIRED_IN_PRODUCTION.filter((name) => !process.env[name]);
   if (missing.length) {
     console.error(
@@ -195,7 +280,9 @@ if (process.env.NODE_ENV === 'production') {
       '     - CLIENT_URL missing      → CORS falls back to localhost, the real frontend will be blocked\n' +
       '     - GEMINI_API_KEY missing  → AI interview assistant (questions/evaluation/follow-ups/reports) disabled\n' +
       '     - DEEPGRAM_API_KEY missing→ live transcription disabled\n' +
-      '     - METERED_API_KEY missing → falls back to static TURN_URLS/TURN_USERNAME/TURN_CREDENTIAL if set, else TURN relay is unavailable\n'
+      '     - METERED_API_KEY missing → falls back to static TURN_URLS/TURN_USERNAME/TURN_CREDENTIAL if set, else TURN relay is unavailable\n' +
+      '     - PEERMEET_SHARED_SECRET missing → dashboard identity tokens are ignored and reports are never saved\n' +
+      '     - MIRRACLE_WEBHOOK_URL missing → interview reports are never saved to the dashboard\n'
     );
   }
 }
@@ -350,6 +437,8 @@ async function runAssistantAnalysis(roomId) {
 
   const interviewerId = interview.roles.interviewerId;
   if (!interviewerId) return;
+  // The phase this analysis belongs to: if roles switch while Gemini is thinking, drop the result.
+  const phaseAtStart = interview.phase;
 
   const { worth, measurement } = shouldAnalyze(interview, roomId);
   if (!worth) return;
@@ -396,6 +485,10 @@ async function runAssistantAnalysis(roomId) {
   } finally {
     analysisInFlight.delete(roomId);
   }
+
+  // Roles may have switched (or the interview ended) during the AI call. Writing this result would
+  // put the old turn's questions into the new turn and send an interviewer-only update to the new candidate.
+  if (interview.phase !== phaseAtStart || interview.ended || interview.roles.interviewerId !== interviewerId) return;
 
   // Only advance the watermark once we actually got a usable result —
   // otherwise a transient Gemini failure would permanently skip this chunk
@@ -482,7 +575,9 @@ const durationTimers = new Map();
  */
 async function endInterviewForRoom(roomId, opts = {}) {
   const interview = getInterview(roomId);
-  if (!interview || interview.ended) return;
+  // `ending` is set BEFORE the long report await, so a manual end plus the timer cannot both run.
+  if (!interview || interview.ended || interview.ending) return;
+  interview.ending = true;
 
   // Clear any pending duration/analysis timers for this room.
   if (durationTimers.has(roomId)) {
@@ -499,12 +594,18 @@ async function endInterviewForRoom(roomId, opts = {}) {
 
   let report = null;
   if (interviewAssistant.isConfigured()) {
-    report = await interviewAssistant.generateReport({
-      config: interview.config,
-      transcriptBuffer: interview.transcriptBuffer,
-      interviewerId,
-      summary: getCopilotSummary(roomId),
-    });
+    try {
+      report = sanitizeReport(
+        await interviewAssistant.generateReport({
+          config: interview.config,
+          transcriptBuffer: interview.transcriptBuffer,
+          interviewerId,
+          summary: getCopilotSummary(roomId),
+        })
+      );
+    } catch (err) {
+      console.error(`[Interview] report generation failed: ${err.message}`);
+    }
   }
   // Never leave the candidate with no report at all — degrade to a labeled
   // fallback rather than silently skipping 'interview:turn-report'.
@@ -531,6 +632,8 @@ async function endInterviewForRoom(roomId, opts = {}) {
       partnerParticipantId: interviewerId,
       role: 'candidate',
       report,
+      phase: interview.phase + 1, // the dashboard counts phases from 1; roomManager starts at 0
+      final: true,
     });
   }
 
@@ -720,9 +823,12 @@ io.on('connection', (socket) => {
    * and needs recreating) — see the 'join-room'-driven client fallback.
    */
   socket.on('create-room', ({ roomId, participantId, token, keepPrivate } = {}) => {
-    console.log(`[Room] create-room | roomId=${roomId} | participantId=${participantId} | socketId=${socket.id}`);
+    console.log(`[Room] create-room | room=${short(roomId)} | socket=${short(socket.id)}`);
 
-    if (!roomId || !participantId) return;
+    if (!ID_PATTERN.test(String(roomId || '')) || !ID_PATTERN.test(String(participantId || ''))) {
+      socket.emit('room-not-found', { roomId: null });
+      return;
+    }
 
     if (roomExists(roomId)) {
       // Room already exists — the client falls back to join-room.
@@ -730,14 +836,19 @@ io.on('connection', (socket) => {
       return;
     }
 
-    // Optional identity; a bad/expired/missing token is silently ignored
-    // and the participant is created anonymously.
+    // Identity comes from a signed, room-bound token. Anonymous rooms are allowed unless the
+    // deployment sets PEERMEET_REQUIRE_TOKEN=1.
     const identity = verifyPeerToken(token);
+    const denied = checkRoomAccess(roomId, token, identity, { creating: true });
+    if (denied) {
+      socket.emit('auth-error', { reason: denied });
+      return;
+    }
     createRoom(roomId, participantId, socket.id, identity, !!keepPrivate);
     socket.join(roomId);
     socket.emit('room-created', { roomId });
 
-    console.log(`[Room] Created: ${roomId}`);
+    console.log(`[Room] Created: ${short(roomId)}`);
   });
 
   /**
@@ -753,15 +864,19 @@ io.on('connection', (socket) => {
    *     the reconnecting participant's interview state.
    */
   socket.on('join-room', ({ roomId, participantId, token, keepPrivate } = {}) => {
-    console.log(`[Room] join-room | roomId=${roomId} | participantId=${participantId} | socketId=${socket.id}`);
+    console.log(`[Room] join-room | room=${short(roomId)} | socket=${short(socket.id)}`);
 
-    if (!roomId || !participantId) {
-      socket.emit('room-not-found', { roomId });
+    if (!ID_PATTERN.test(String(roomId || '')) || !ID_PATTERN.test(String(participantId || ''))) {
+      socket.emit('room-not-found', { roomId: null });
       return;
     }
 
-    // Optional identity — silently ignored if bad/expired/missing.
     const identity = verifyPeerToken(token);
+    const denied = checkRoomAccess(roomId, token, identity);
+    if (denied && roomExists(roomId)) {
+      socket.emit('auth-error', { reason: denied });
+      return;
+    }
 
     // The liveness probe lets joinRoom tell a genuine reconnect (old socket
     // already gone) apart from a duplicate tab that inherited this room's
@@ -781,9 +896,7 @@ io.on('connection', (socket) => {
     }
 
     if (result.duplicateSession) {
-      console.log(
-        `[Room] Rejecting duplicate session | roomId=${roomId} | participantId=${participantId} | socketId=${socket.id}`
-      );
+      console.log(`[Room] Rejecting duplicate session | room=${short(roomId)} | socket=${short(socket.id)}`);
       socket.emit('room-full', { roomId, reason: 'duplicate-session' });
       return;
     }
@@ -833,7 +946,7 @@ io.on('connection', (socket) => {
       // their previous (now-dead) socket while disconnected.
       sendInterviewStateTo(roomId, participantId, socket.id);
 
-      console.log(`[Room] ${socket.id} reconnected to room ${roomId} as participant ${participantId}`);
+      console.log(`[Room] ${short(socket.id)} reconnected to room ${short(roomId)}`);
       return;
     }
 
@@ -851,7 +964,7 @@ io.on('connection', (socket) => {
       partnerDisplayName,
     });
 
-    console.log(`[Room] ${socket.id} joined room ${roomId}. Partner: ${result.partnerId}`);
+    console.log(`[Room] ${short(socket.id)} joined room ${short(roomId)}`);
   });
 
   /**
@@ -860,8 +973,11 @@ io.on('connection', (socket) => {
    * from the sender to the target peer.
    * The server is a dumb relay — it never inspects the signal content.
    */
-  socket.on('signal', ({ signal, to }) => {
-    console.log(`[Signal] ${socket.id} → ${to} | type=${signal?.type || 'candidate'}`);
+  socket.on('signal', ({ signal, to } = {}) => {
+    // Only relay between the two members of the sender's own room. `to` used to be forwarded to
+    // any socket id or room name, which let an outsider inject signals into someone else's call.
+    const senderRoom = getRoomIdForSocket(socket.id);
+    if (!senderRoom || typeof to !== 'string' || getPartner(senderRoom, socket.id) !== to) return;
 
     io.to(to).emit('return-signal', {
       signal,
@@ -931,6 +1047,11 @@ io.on('connection', (socket) => {
     const existing = getInterview(roomId);
     if (existing?.started && !existing?.ended) return;
 
+    // Only the room host (the first person in the room) may set the interview up. Without this the
+    // second person to arrive could configure first, take the interviewer role and see the AI panel.
+    const host = getHostParticipantId(roomId);
+    if (host && host !== myParticipantId) return;
+
     // Only the participant who originally configured the interview (the
     // meeting host) may (re)configure it. This must NOT be checked against
     // roles.interviewerId — when whoStarts === 'candidate' the host is
@@ -976,6 +1097,8 @@ io.on('connection', (socket) => {
     // interview — anchored on configuredBy, not roles.interviewerId, since
     // the host may have assigned themselves the candidate role.
     if (!existing?.configuredBy || existing.configuredBy !== myParticipantId) return;
+    // Starting twice would reset the deadline and call the AI again; ignore repeats and a finished interview.
+    if (existing.started || existing.ended) return;
 
     const interview = startInterview(roomId);
     if (!interview) return;
@@ -1067,20 +1190,32 @@ io.on('connection', (socket) => {
     if (!interview || !interview.started) return;
     // Only the current interviewer may end their own turn / switch roles.
     if (interview.roles.interviewerId !== myParticipantId) return;
+    // A second click (or the other side racing) while the report is still being written must not flip twice.
+    if (interview.ended || interview.ending || interview.switching) return;
+    interview.switching = true;
 
     const outgoingCandidateId = interview.roles.candidateId;
     const interviewerId = interview.roles.interviewerId;
+    const phaseAtSwitch = interview.phase;
 
+    try {
     // Build the report from the current phase transcript BEFORE swapping.
     let report = null;
     if (interviewAssistant.isConfigured()) {
-      report = await interviewAssistant.generateReport({
-        config: interview.config,
-        transcriptBuffer: interview.transcriptBuffer,
-        interviewerId,
-        summary: getCopilotSummary(roomId),
-      });
+      try {
+        report = sanitizeReport(
+          await interviewAssistant.generateReport({
+            config: interview.config,
+            transcriptBuffer: interview.transcriptBuffer,
+            interviewerId,
+            summary: getCopilotSummary(roomId),
+          })
+        );
+      } catch (err) {
+        console.error(`[Interview] report generation failed: ${err.message}`);
+      }
     }
+    if (interview.ended || interview.phase !== phaseAtSwitch) return;
     // Never leave the outgoing candidate with no report at all.
     if (!report) {
       report = buildFallbackReport(interview);
@@ -1100,6 +1235,8 @@ io.on('connection', (socket) => {
         partnerParticipantId: interviewerId,
         role: 'candidate',
         report,
+        phase: phaseAtSwitch + 1, // the dashboard counts phases from 1
+        final: false,
       });
     }
 
@@ -1126,6 +1263,9 @@ io.on('connection', (socket) => {
 
     for (const participantId of [updated.roles.interviewerId, updated.roles.candidateId]) {
       emitToParticipant(roomId, participantId, 'interview:roles-switched', { phase: updated.phase });
+    }
+    } finally {
+      interview.switching = false;
     }
   });
 
@@ -1162,7 +1302,7 @@ io.on('connection', (socket) => {
     const { roomId, partnerId } = leaveRoom(socket.id);
 
     if (partnerId) {
-      console.log(`[Room] Notifying partner ${partnerId} that ${socket.id} left room ${roomId}`);
+      console.log(`[Room] partner notified: ${short(socket.id)} left room ${short(roomId)}`);
       io.to(partnerId).emit('user-left', { socketId: socket.id });
     }
 
@@ -1185,7 +1325,7 @@ io.on('connection', (socket) => {
     }
 
     if (roomId) {
-      console.log(`[Room] ${socket.id} removed from room ${roomId}`);
+      console.log(`[Room] ${short(socket.id)} removed from room ${short(roomId)}`);
     }
   });
 });

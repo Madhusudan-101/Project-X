@@ -33,6 +33,11 @@ const rooms = new Map();
  */
 function createRoom(roomId, participantId, socketId, identity = null, keepPrivate = false) {
   rooms.set(roomId, {
+    // The first participant is the room host: only they may configure/start an interview.
+    hostParticipantId: participantId,
+    // A room created with a verified identity token belongs to the dashboard: everyone who joins it
+    // must also present a valid token for THIS room (anonymous guests are refused).
+    restricted: !!identity,
     participants: [{ participantId, socketId, identity: identity || null, keepPrivate: !!keepPrivate }],
     // ── Interview state (all AI/role data lives server-side) ──────────────
     // This block is additive; existing signaling logic ignores it.
@@ -492,6 +497,20 @@ function getPublicDisplayName(roomId, participantId) {
   return participant.identity?.studentName || 'Participant';
 }
 
+function getHostParticipantId(roomId) {
+  return rooms.get(roomId)?.hostParticipantId || null;
+}
+
+function isRoomRestricted(roomId) {
+  return !!rooms.get(roomId)?.restricted;
+}
+
+/** Did this participant ask to stay anonymous? Unknown participants count as private. */
+function isParticipantPrivate(roomId, participantId) {
+  const p = rooms.get(roomId)?.participants.find((x) => x.participantId === participantId);
+  return p ? !!p.keepPrivate : true;
+}
+
 function getParticipantIdForSocket(roomId, socketId) {
   const room = rooms.get(roomId);
   if (!room || !socketId) return null;
@@ -659,4 +678,7 @@ module.exports = {
   getParticipantIdForSocket,
   getIdentityForParticipant,
   getPublicDisplayName,
+  getHostParticipantId,
+  isRoomRestricted,
+  isParticipantPrivate,
 };

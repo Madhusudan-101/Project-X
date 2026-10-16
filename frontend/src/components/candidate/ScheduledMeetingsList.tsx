@@ -27,7 +27,7 @@ import { reservePeerMeetTab } from "@/lib/peerMeetTab";
 const JOIN_WINDOW_BEFORE_MS = 5 * 60 * 1000; // matches backend JOIN_GRACE_MINUTES_BEFORE
 
 function isJoinable(m: ScheduledMeeting, now: number): boolean {
-  if (m.status === "cancelled" || m.status === "completed") return false;
+  if (m.status === "cancelled" || m.status === "completed" || m.status === "expired") return false;
   const start = new Date(m.scheduled_at).getTime();
   const end = start + m.duration_minutes * 60_000 + 60 * 60_000; // + backend AFTER grace
   return now >= start - JOIN_WINDOW_BEFORE_MS && now <= end;
@@ -45,6 +45,8 @@ function statusBadge(s: ScheduledMeetingStatus): { label: string; className: str
       return { label: "Completed", className: "border-border text-muted-foreground" };
     case "cancelled":
       return { label: "Cancelled", className: "border-border text-muted-foreground" };
+    case "expired":
+      return { label: "Expired", className: "border-border text-muted-foreground" };
   }
 }
 

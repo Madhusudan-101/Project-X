@@ -94,9 +94,18 @@ function waitConnect(socket, ms = 3000) {
   });
 }
 
-function mintToken(studentId, name) {
+function mintToken(studentId, name, room) {
+  // Same claims the FastAPI backend signs: audience, expiry and the ONE room the token is for.
   return jwt.sign(
-    { student_id: studentId, name, iat: Math.floor(Date.now() / 1000), exp: Math.floor(Date.now() / 1000) + 300 },
+    {
+      student_id: studentId,
+      name,
+      room,
+      aud: 'peermeet',
+      jti: Math.random().toString(36).slice(2),
+      iat: Math.floor(Date.now() / 1000),
+      exp: Math.floor(Date.now() / 1000) + 300,
+    },
     process.env.PEERMEET_SHARED_SECRET,
     { algorithm: 'HS256' }
   );
@@ -141,8 +150,8 @@ async function testTwoClientsSameRoom() {
   await waitConnect(A);
   await waitConnect(B);
 
-  const tokenA = mintToken('student-uuid-A', 'Alice Anderson');
-  const tokenB = mintToken('student-uuid-B', 'Bob Baker');
+  const tokenA = mintToken('student-uuid-A', 'Alice Anderson', roomId);
+  const tokenB = mintToken('student-uuid-B', 'Bob Baker', roomId);
 
   // A tries join first → will be told room-not-found because empty; falls
   // back to create-room (mimicking real client flow).
@@ -307,7 +316,7 @@ async function testReconnectPartnerAware() {
   await waitConnect(A);
   await waitConnect(B);
 
-  const tokenB = mintToken('student-uuid-Br', 'Reconn Bob');
+  const tokenB = mintToken('student-uuid-Br', 'Reconn Bob', roomId);
   A.emit('join-room', { roomId, participantId: 'p-Ar' });
   await waitEvent(A, 'room-not-found');
   A.emit('create-room', { roomId, participantId: 'p-Ar' });

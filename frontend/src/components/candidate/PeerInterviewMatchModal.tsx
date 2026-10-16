@@ -297,7 +297,7 @@ export function PeerInterviewMatchModal({ open, onOpenChange }: Props) {
         message: "Verifying the room ID and preparing your identity token.",
       });
       try {
-        const { token } = await peerService.createSessionToken();
+        const { token } = await peerService.createSessionToken(trimmed);
         const target = buildPeerMeetUrl(
           peermeetUrl,
           {

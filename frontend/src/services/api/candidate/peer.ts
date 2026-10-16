@@ -20,7 +20,8 @@ export type ScheduledMeetingStatus =
   | "waiting"
   | "live"
   | "cancelled"
-  | "completed";
+  | "completed"
+  | "expired";
 
 export interface ScheduledMeeting {
   id: string;
@@ -38,15 +39,15 @@ export interface ScheduledMeeting {
 /** Redacted card shape returned by /peer-meetings/upcoming (public list). */
 export interface PublicScheduledMeeting {
   id: string;
-  room_id: string;
+  // No room_id: a room id is a join credential, so it is only handed out by /join.
   title: string | null;
   scheduled_at: string;
   duration_minutes: number;
   status: ScheduledMeetingStatus;
   host_display_name: string;
-  is_open: boolean;       // no invitee -> any authed student may join
+  is_open: boolean; // no invitee -> any authed student may join
   is_authorized: boolean; // caller may join THIS meeting
-  can_join_now: boolean;  // is_authorized AND inside join window
+  can_join_now: boolean; // is_authorized AND inside join window
 }
 
 export interface CreateScheduledMeetingIn {
@@ -71,6 +72,7 @@ export interface PeerReport {
   id: string;
   room_id: string;
   role: "candidate" | "interviewer";
+  /** "Anonymous Candidate" when the partner chose to stay private. */
   partner_display_name: string | null;
   overall_score: number | null;
   technical_score: number | null;
@@ -86,9 +88,13 @@ export interface PeerReport {
 }
 
 export const peerService = {
-  /** Mint a short-lived token for the separately-deployed PeerMeet app. */
-  createSessionToken(): Promise<PeerSessionToken> {
-    return request<PeerSessionToken>("/candidate/peer-session-token", { method: "POST" });
+  /** Mint a short-lived token for ONE room of the separately-deployed PeerMeet app. The server only
+   * issues it for a room the caller was matched into or may join. */
+  createSessionToken(roomId: string): Promise<PeerSessionToken> {
+    return request<PeerSessionToken>("/candidate/peer-session-token", {
+      method: "POST",
+      body: { room_id: roomId },
+    });
   },
 
   /** Enter or poll the matchmaking queue. Idempotent — safe to call every 2s. */
@@ -102,6 +108,11 @@ export const peerService = {
   /** Leave the queue (only affects `waiting` tickets). */
   cancelMatch(): Promise<void> {
     return request<void>("/candidate/peer-matchmaking/cancel", { method: "POST" });
+  },
+
+  /** I am done with my current match: frees me and my partner to be matched again. Idempotent. */
+  endMatch(): Promise<void> {
+    return request<void>("/candidate/peer-matchmaking/end", { method: "POST" });
   },
 
   /** List my upcoming scheduled meetings (as creator or invitee). */
