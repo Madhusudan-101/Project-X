@@ -305,14 +305,14 @@ test.describe("dashboard peer-interview matchmaking -> PeerMeet room", () => {
     await first.getByRole("button", { name: "Got it" }).click();
     await expect.poll(async () => (await (await request.get(`${API}/__e2e/state`)).json()).peer_user_flags_rows?.length, { timeout: 10_000 }).toBe(1);
 
-    // end that match on the dashboard side, then match again
-    const room1 = new URL(pa1.url()).pathname.split("/").pop()!;
-    for (const who of [a, b]) {
-      await request.post(`${API}/candidate/peer-matchmaking/end`, { data: { room_id: room1 }, headers: { Authorization: `Bearer ${who.session.token}` } });
-    }
+    // end that match from the dashboard's own "End session" button (it also asks the server to close it), then match again
     await pa1.close(); await pb1.close();
-    await a.page.reload(); await b.page.reload();
-    await a.page.waitForTimeout(800);
+    for (const who of [a, b]) {
+      await who.page.getByRole("button", { name: "End session" }).click();
+      await expect(who.page.getByRole("button", { name: "End session" })).toHaveCount(0, { timeout: 10_000 });
+      const feedback = who.page.getByRole("dialog", { name: "How was your session?" });
+      if (await feedback.isVisible().catch(() => false)) await feedback.getByRole("button", { name: "Skip" }).click();
+    }
 
     const second = await session();
     await expect(second.pa.getByText(/AI assistance is active/)).toBeVisible({ timeout: 15_000 });
