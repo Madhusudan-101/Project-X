@@ -1,5 +1,6 @@
 import { request } from "@/services/api/client";
 import type {
+  AiInterviewAssignment,
   AiInterviewConfig,
   AiInterviewDomain,
   AiInterviewReport,
@@ -15,6 +16,19 @@ export const aiInterviewService = {
       method: "POST",
       body: { domain, consent: true, audioConsent: true, videoConsent: true, consentVersion },
     });
+  },
+
+  /** Start the interview a company invited this candidate to (one attempt, no daily limit). */
+  startInviteSession(inviteId: string, consentVersion: string): Promise<AiInterviewSession> {
+    return request<AiInterviewSession>("/candidate/ai-interview/session", {
+      method: "POST",
+      body: { inviteId, consent: true, audioConsent: true, videoConsent: true, consentVersion },
+    });
+  },
+
+  /** Interviews companies have sent me. */
+  listAssignments(signal?: AbortSignal): Promise<AiInterviewAssignment[]> {
+    return request<AiInterviewAssignment[]>("/candidate/ai-interview/assignments", { signal });
   },
 
   /** Real duration, daily limit, attempts left and the rules version to accept. */

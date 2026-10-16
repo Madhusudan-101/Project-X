@@ -16,6 +16,18 @@ export interface AiInterviewConfig {
   consentVersion: string;
 }
 
+/** An interview a company has sent this candidate. Never includes the rubric or any scoring. */
+export interface AiInterviewAssignment {
+  id: string;
+  company_name: string;
+  role_title: string;
+  level: "intern" | "junior" | "mid" | "senior";
+  duration_minutes: number;
+  instructions: string;
+  expires_at: string;
+  status: "invited" | "started" | "completed" | "expired";
+}
+
 export type IntegrityKind =
   | "tab_hidden"
   | "window_blur"

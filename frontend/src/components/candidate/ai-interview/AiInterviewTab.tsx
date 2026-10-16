@@ -5,11 +5,13 @@ import { Card } from "@/components/ui/card";
 import { ApiClientError } from "@/services/api/client";
 import { aiInterviewService } from "@/services/api/candidate/aiInterview";
 import type {
+  AiInterviewAssignment,
   AiInterviewConfig,
   AiInterviewDomain,
   AiInterviewReport,
   AiInterviewReportDetail,
 } from "@/types/candidate/aiInterview";
+import { AssignedInterviews } from "./AssignedInterviews";
 import { DOMAINS } from "./domains";
 import { DeviceCheck } from "./DeviceCheck";
 import { InterviewBriefing } from "./InterviewBriefing";
@@ -27,6 +29,9 @@ export function AiInterviewTab() {
   const [config, setConfig] = useState<AiInterviewConfig | null>(null);
   const [configError, setConfigError] = useState<string | null>(null);
   const [stage, setStage] = useState<"briefing" | "check">("briefing");
+  // Company interviews: the ones I have been sent, and the one I am about to take (if any).
+  const [assignments, setAssignments] = useState<AiInterviewAssignment[]>([]);
+  const [assignment, setAssignment] = useState<AiInterviewAssignment | null>(null);
   const [history, setHistory] = useState<AiInterviewReport[] | null>(null);
   const [report, setReport] = useState<AiInterviewReportDetail | null>(null);
   const [reportState, setReportState] = useState<"idle" | "waiting" | "timeout">("idle");
@@ -55,6 +60,39 @@ export function AiInterviewTab() {
     loadConfig(ctrl.signal);
     return () => ctrl.abort();
   }, [onBriefing, loadConfig]);
+
+  const loadAssignments = useCallback((signal?: AbortSignal) => {
+    aiInterviewService
+      .listAssignments(signal)
+      .then(setAssignments)
+      .catch(() => {
+        /* the practice flow still works without them */
+      });
+  }, []);
+  useEffect(() => {
+    if (!onBriefing || assignment) return;
+    const ctrl = new AbortController();
+    loadAssignments(ctrl.signal);
+    return () => ctrl.abort();
+  }, [onBriefing, assignment, loadAssignments]);
+
+  // The invitation email links here with ?ai_interview_invite=<id>: open that interview's briefing.
+  const deepLinkDone = useRef(false);
+  useEffect(() => {
+    if (deepLinkDone.current || assignments.length === 0) return;
+    deepLinkDone.current = true;
+    try {
+      const url = new URL(window.location.href);
+      const id = url.searchParams.get("ai_interview_invite");
+      if (!id) return;
+      const match = assignments.find((a) => a.id === id && a.status === "invited");
+      if (match) setAssignment(match);
+      url.searchParams.delete("ai_interview_invite");
+      window.history.replaceState(null, "", url.toString());
+    } catch {
+      /* no URL to read (SSR or a sandbox) */
+    }
+  }, [assignments]);
 
   // A failed join drops back to setup with an error; surface it on the briefing screen.
   const { error: roomError } = room;
@@ -85,7 +123,8 @@ export function AiInterviewTab() {
   const { phase, roomName } = room;
   const pollAbort = useRef<AbortController | null>(null);
   useEffect(() => {
-    if (phase !== "ended" || !roomName) return;
+    // A company interview's report belongs to the hiring team: there is nothing to wait for.
+    if (phase !== "ended" || !roomName || assignment) return;
     const ctrl = new AbortController();
     pollAbort.current = ctrl;
     const startedAt = Date.now();
@@ -118,13 +157,14 @@ export function AiInterviewTab() {
       ctrl.abort();
       clearTimeout(timer);
     };
-  }, [phase, roomName, loadHistory]);
+  }, [phase, roomName, assignment, loadHistory]);
 
   const startAgain = () => {
     setReport(null);
     setReportState("idle");
     setSelected(null);
     setStage("briefing");
+    setAssignment(null);
     room.reset();
   };
 
@@ -136,8 +176,8 @@ export function AiInterviewTab() {
         <div>
           <h1 className="font-display text-2xl font-semibold">AI Voice Interview</h1>
           <p className="text-sm text-muted-foreground">
-            A structured technical interview with an AI interviewer, followed by a scored report.
-            Requires a microphone.
+            Take interviews that companies send you, or practice on your own first. Needs a camera
+            and microphone.
           </p>
         </div>
       )}
@@ -145,8 +185,19 @@ export function AiInterviewTab() {
       {/* Remote audio is attached here; it renders nothing visible. */}
       <div ref={room.audioHostRef} className="hidden" aria-hidden />
 
+      {room.phase === "setup" && stage === "briefing" && !assignment && (
+        <AssignedInterviews assignments={assignments} onStart={setAssignment} />
+      )}
+
+      {room.phase === "setup" && stage === "briefing" && assignment && (
+        <Button variant="ghost" size="sm" className="-ml-2" onClick={() => setAssignment(null)}>
+          Back to all interviews
+        </Button>
+      )}
+
       {room.phase === "setup" && stage === "briefing" && (
         <InterviewBriefing
+          assignment={assignment}
           domain={domain}
           onDomain={setDomain}
           onContinue={() => setStage("check")}
@@ -157,19 +208,49 @@ export function AiInterviewTab() {
         />
       )}
 
-      {room.phase === "setup" && stage === "check" && domain && config && (
+      {room.phase === "setup" && stage === "check" && (assignment || domain) && config && (
         <DeviceCheck
-          domain={domain}
+          domain={domain ?? undefined}
+          roleTitle={assignment?.role_title}
           onBack={() => setStage("briefing")}
-          onJoin={(devices) => room.start(domain, config.consentVersion, devices)}
+          onJoin={(devices) =>
+            assignment
+              ? room.startInvite(assignment.id, config.consentVersion, devices)
+              : room.start(domain as AiInterviewDomain, config.consentVersion, devices)
+          }
         />
       )}
 
-      {room.phase === "connecting" && domain && <WaitingRoom domain={domain} />}
+      {room.phase === "connecting" && (assignment || domain) && (
+        <WaitingRoom domain={domain ?? undefined} roleTitle={assignment?.role_title} />
+      )}
 
-      {room.phase === "live" && domain && <MeetingRoom room={room} domain={domain} />}
+      {room.phase === "live" && (assignment || domain) && (
+        <MeetingRoom
+          room={room}
+          domain={domain ?? undefined}
+          roleTitle={assignment?.role_title}
+          company={assignment?.company_name}
+        />
+      )}
 
-      {room.phase === "ended" && (
+      {room.phase === "ended" && assignment && (
+        <div className="space-y-4">
+          <Card className="space-y-2 p-8 text-center">
+            <h2 className="font-display text-xl font-semibold">Interview submitted</h2>
+            <p className="mx-auto max-w-md text-sm text-muted-foreground">
+              Thank you. Your responses have been sent to {assignment.company_name}&apos;s hiring
+              team for the {assignment.role_title} role. They will contact you about next steps. You
+              will not see a report for this interview.
+            </p>
+          </Card>
+          <Button variant="outline" onClick={startAgain}>
+            Back to my interviews
+          </Button>
+        </div>
+      )}
+
+      {room.phase === "ended" && !assignment && (
         <div className="space-y-4">
           {report ? (
             <ReportView report={report} />
@@ -190,7 +271,7 @@ export function AiInterviewTab() {
         </div>
       )}
 
-      {room.phase === "setup" && history && history.length > 0 && (
+      {room.phase === "setup" && !assignment && history && history.length > 0 && (
         <div className="space-y-3">
           <h2 className="font-display text-base font-semibold">Past interviews</h2>
           {history.map((h) => (

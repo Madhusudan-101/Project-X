@@ -4,8 +4,14 @@ import type { AiInterviewDomain } from "@/types/candidate/aiInterview";
 import { domainInfo } from "./domains";
 
 /** Shown while the LiveKit room connects and the voice agent is dispatched. */
-export function WaitingRoom({ domain }: { domain: AiInterviewDomain }) {
-  const role = domainInfo(domain)?.role;
+export function WaitingRoom({
+  domain,
+  roleTitle,
+}: {
+  domain?: AiInterviewDomain;
+  roleTitle?: string;
+}) {
+  const role = roleTitle ?? (domain ? domainInfo(domain)?.role : undefined);
   return (
     <Card className="mx-auto max-w-xl space-y-4 p-10 text-center">
       <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-full bg-gradient-brand font-display text-2xl font-semibold text-primary-foreground">

@@ -7,7 +7,9 @@ import { domainInfo } from "./domains";
 import type { DevicePick } from "./useInterviewRoom";
 
 interface Props {
-  domain: AiInterviewDomain;
+  domain?: AiInterviewDomain;
+  /** Company interviews name their own role; practice uses the track's role. */
+  roleTitle?: string;
   onBack: () => void;
   onJoin: (devices: DevicePick) => void;
 }
@@ -27,7 +29,7 @@ const stateFromError = (e: unknown): DeviceState => {
  * granted to join. The devices are opened only for the preview and meter, then
  * released so the LiveKit room can take over on join.
  */
-export function DeviceCheck({ domain, onBack, onJoin }: Props) {
+export function DeviceCheck({ domain, roleTitle, onBack, onJoin }: Props) {
   const [micState, setMicState] = useState<DeviceState>("asking");
   const [camState, setCamState] = useState<DeviceState>("asking");
   const [mics, setMics] = useState<MediaDeviceInfo[]>([]);
@@ -38,7 +40,7 @@ export function DeviceCheck({ domain, onBack, onJoin }: Props) {
   const [level, setLevel] = useState(0);
   const [heard, setHeard] = useState(false);
   const videoRef = useRef<HTMLVideoElement | null>(null);
-  const role = domainInfo(domain)?.role;
+  const role = roleTitle ?? (domain ? domainInfo(domain)?.role : undefined);
 
   const refreshDeviceLists = async () => {
     try {

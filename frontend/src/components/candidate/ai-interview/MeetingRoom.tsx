@@ -28,8 +28,19 @@ const VIDEO_FLAG_MESSAGES = {
 const fmt = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
 
 /** Live interview: one formal "meeting room" with interviewer stage, captions and call controls. */
-export function MeetingRoom({ room, domain }: { room: Room; domain: AiInterviewDomain }) {
-  const info = domainInfo(domain);
+export function MeetingRoom({
+  room,
+  domain,
+  roleTitle,
+  company,
+}: {
+  room: Room;
+  domain?: AiInterviewDomain;
+  roleTitle?: string;
+  /** Set for a company interview. */
+  company?: string;
+}) {
+  const role = roleTitle ?? (domain ? domainInfo(domain)?.role : undefined);
   const [confirmEnd, setConfirmEnd] = useState(false);
   const logRef = useRef<HTMLDivElement | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
@@ -65,8 +76,10 @@ export function MeetingRoom({ room, domain }: { room: Room; domain: AiInterviewD
     >
       <header className="flex flex-wrap items-center justify-between gap-3 border-b border-background/15 px-5 py-3">
         <div className="min-w-0">
-          <p className="truncate text-sm font-semibold">{info?.role} interview</p>
-          <p className="text-xs text-background/60">Mirracle AI Interview · Voice session</p>
+          <p className="truncate text-sm font-semibold">{role} interview</p>
+          <p className="text-xs text-background/60">
+            {company ? `${company} · AI interview` : "Practice interview"}
+          </p>
         </div>
         <div className="flex items-center gap-2 text-xs tabular-nums">
           <span className="flex items-center gap-2 rounded-full border border-background/20 px-3 py-1.5">

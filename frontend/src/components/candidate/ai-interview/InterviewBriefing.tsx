@@ -3,7 +3,11 @@ import { Check, Clock, FileText, ShieldCheck, Video } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
-import type { AiInterviewConfig, AiInterviewDomain } from "@/types/candidate/aiInterview";
+import type {
+  AiInterviewAssignment,
+  AiInterviewConfig,
+  AiInterviewDomain,
+} from "@/types/candidate/aiInterview";
 import { DOMAINS, domainInfo } from "./domains";
 
 interface Props {
@@ -15,6 +19,8 @@ interface Props {
   config: AiInterviewConfig | null;
   configError: string | null;
   onRetryConfig: () => void;
+  /** Set when the candidate is taking an interview a company sent them (not practice). */
+  assignment?: AiInterviewAssignment | null;
 }
 
 const RULES_DO = [
@@ -69,11 +75,21 @@ export function InterviewBriefing({
   config,
   configError,
   onRetryConfig,
+  assignment,
 }: Props) {
   const [agreed, setAgreed] = useState(false);
   const [audioAgreed, setAudioAgreed] = useState(false);
   const [videoAgreed, setVideoAgreed] = useState(false);
   const selected = domain ? domainInfo(domain) : null;
+  const company = assignment?.company_name ?? "";
+  const minutes = assignment ? assignment.duration_minutes : config?.maxMinutes;
+  const notes = assignment
+    ? DATA_NOTES.map((n) =>
+        n.startsWith("Your voice is transcribed live")
+          ? `Your voice is transcribed live. The transcript, your scored report and any integrity flags are shared with ${company}'s hiring team. You will not see the report.`
+          : n,
+      )
+    : DATA_NOTES;
 
   return (
     <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">
@@ -81,50 +97,68 @@ export function InterviewBriefing({
         <Card className="space-y-5 p-6">
           <div>
             <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
-              Step 1 of 3 · Interview briefing
+              {assignment
+                ? `Step 1 of 3 · Interview for ${company}`
+                : "Step 1 of 3 · Practice interview"}
             </p>
-            <h2 className="mt-1 font-display text-xl font-semibold">Choose your interview track</h2>
+            <h2 className="mt-1 font-display text-xl font-semibold">
+              {assignment ? assignment.role_title : "Choose your interview track"}
+            </h2>
             <p className="mt-1 text-sm text-muted-foreground">
-              You will be interviewed for the role below. The interviewer asks structured,
-              role-specific questions and scores every answer against the same rubric.
+              {assignment
+                ? `${company} invited you to this interview. You can take it once, so start when you are ready and have time to finish.`
+                : "Practice before the real thing. The interviewer asks structured, role-specific questions and scores every answer. Only you see the report."}
             </p>
+            {assignment?.instructions && (
+              <p className="mt-3 rounded-lg bg-muted/40 p-3 text-sm">{assignment.instructions}</p>
+            )}
           </div>
 
-          <div className="grid gap-3 md:grid-cols-3" role="radiogroup" aria-label="Interview track">
-            {DOMAINS.map((d) => {
-              const on = domain === d.id;
-              return (
-                <button
-                  key={d.id}
-                  type="button"
-                  role="radio"
-                  aria-checked={on}
-                  onClick={() => onDomain(d.id)}
-                  className={`rounded-xl border p-4 text-left transition ${
-                    on
-                      ? "border-primary bg-primary/5 ring-1 ring-primary"
-                      : "hover:border-primary/50"
-                  }`}
-                >
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="font-medium">{d.role}</span>
-                    {on && <Check className="h-4 w-4 text-primary" aria-hidden />}
-                  </div>
-                  <div className="mt-1 text-xs text-muted-foreground">{d.blurb}</div>
-                </button>
-              );
-            })}
-          </div>
+          {!assignment && (
+            <div
+              className="grid gap-3 md:grid-cols-3"
+              role="radiogroup"
+              aria-label="Interview track"
+            >
+              {DOMAINS.map((d) => {
+                const on = domain === d.id;
+                return (
+                  <button
+                    key={d.id}
+                    type="button"
+                    role="radio"
+                    aria-checked={on}
+                    onClick={() => onDomain(d.id)}
+                    className={`rounded-xl border p-4 text-left transition ${
+                      on
+                        ? "border-primary bg-primary/5 ring-1 ring-primary"
+                        : "hover:border-primary/50"
+                    }`}
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="font-medium">{d.role}</span>
+                      {on && <Check className="h-4 w-4 text-primary" aria-hidden />}
+                    </div>
+                    <div className="mt-1 text-xs text-muted-foreground">{d.blurb}</div>
+                  </button>
+                );
+              })}
+            </div>
+          )}
 
           <dl className="grid grid-cols-2 gap-px overflow-hidden rounded-lg border bg-border text-sm sm:grid-cols-4">
             {[
               {
                 icon: Clock,
                 k: "Duration",
-                v: config ? `Up to ${config.maxMinutes} min` : "Loading…",
+                v: minutes ? `Up to ${minutes} min` : "Loading…",
               },
               { icon: Video, k: "Format", v: "Live voice and video" },
-              { icon: FileText, k: "Outcome", v: "Scored report" },
+              {
+                icon: FileText,
+                k: "Outcome",
+                v: assignment ? `Sent to ${company}` : "Scored report",
+              },
               { icon: ShieldCheck, k: "Interviewer", v: "AI" },
             ].map(({ icon: Icon, k, v }) => (
               <div key={k} className="flex flex-col gap-1 bg-card p-3">
@@ -136,7 +170,7 @@ export function InterviewBriefing({
             ))}
           </dl>
 
-          {selected && (
+          {!assignment && selected && (
             <div className="rounded-lg bg-muted/40 p-4 text-sm">
               <p className="font-medium">Topics for {selected.role}</p>
               <ul className="mt-2 list-disc space-y-1 pl-5 text-muted-foreground">
@@ -179,7 +213,7 @@ export function InterviewBriefing({
             <h3 id="rules-data" className="text-sm font-semibold">
               AI disclosure and your data
             </h3>
-            <Bullets items={DATA_NOTES} tone="info" />
+            <Bullets items={notes} tone="info" />
           </section>
         </Card>
       </div>
@@ -191,7 +225,7 @@ export function InterviewBriefing({
             <li>Chrome, Edge or Safari, latest version</li>
             <li>Working camera and microphone</li>
             <li>Stable internet connection</li>
-            <li>About {config ? config.maxMinutes : "…"} uninterrupted minutes</li>
+            <li>About {minutes ?? "…"} uninterrupted minutes</li>
           </ul>
         </Card>
         <Card className="space-y-4 p-5">
@@ -237,7 +271,7 @@ export function InterviewBriefing({
               visible and alone. I understand video is checked live and not recorded.
             </span>
           </label>
-          {config && (
+          {config && !assignment && (
             <p className="text-sm text-muted-foreground">
               {config.remainingToday > 0
                 ? `${config.remainingToday} of ${config.dailyLimit} interviews left today.`
@@ -259,15 +293,15 @@ export function InterviewBriefing({
               !agreed ||
               !audioAgreed ||
               !videoAgreed ||
-              !domain ||
+              !(domain || assignment) ||
               !config ||
-              config.remainingToday === 0
+              (!assignment && config.remainingToday === 0)
             }
             onClick={onContinue}
           >
             Continue to equipment check
           </Button>
-          {!domain && (
+          {!domain && !assignment && (
             <p className="text-xs text-muted-foreground">Choose an interview track to continue.</p>
           )}
         </Card>

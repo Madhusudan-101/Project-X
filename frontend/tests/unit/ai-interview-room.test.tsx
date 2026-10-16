@@ -4,6 +4,7 @@ import { useInterviewRoom } from "@/components/candidate/ai-interview/useIntervi
 
 const svc = vi.hoisted(() => ({
   startSession: vi.fn(),
+  startInviteSession: vi.fn(),
   logIntegrityEvents: vi.fn(),
 }));
 vi.mock("@/services/api/candidate/aiInterview", () => ({ aiInterviewService: svc }));
@@ -153,6 +154,36 @@ describe("useInterviewRoom (camera, microphone + integrity)", () => {
     expect(result.current.roomName).toBe("ai-room1");
     expect(result.current.micLost).toBe(false);
     expect(result.current.cameraLost).toBe(false);
+  });
+
+  it("a company interview starts from the invitation, with the same devices, not as practice", async () => {
+    svc.startInviteSession.mockResolvedValue({
+      serverUrl: "wss://x",
+      roomName: "ai-inv1",
+      participantToken: "t",
+      maxMinutes: 25,
+    });
+    const hook = renderHook(() => useInterviewRoom());
+    await act(async () => {
+      await hook.result.current.startInvite("inv-1", "v-test", { micId: "mic1", camId: "cam1" });
+    });
+    await waitFor(() => expect(hook.result.current.phase).toBe("live"));
+    expect(svc.startInviteSession).toHaveBeenCalledWith("inv-1", "v-test");
+    expect(svc.startSession).not.toHaveBeenCalled();
+    expect(hook.result.current.roomName).toBe("ai-inv1");
+    const room = lk.rooms[0] as { localParticipant: { setCameraEnabled: unknown } };
+    expect(room.localParticipant.setCameraEnabled).toHaveBeenCalledWith(true, { deviceId: "cam1" });
+  });
+
+  it("a rejected invitation (expired, already used) returns to setup with the reason", async () => {
+    svc.startInviteSession.mockRejectedValue(new Error("This invitation has expired."));
+    const hook = renderHook(() => useInterviewRoom());
+    await act(async () => {
+      await hook.result.current.startInvite("inv-1", "v-test");
+    });
+    await waitFor(() => expect(hook.result.current.phase).toBe("setup"));
+    expect(hook.result.current.error).toBeTruthy();
+    expect(lk.rooms).toHaveLength(0); // no room was opened
   });
 
   it("refuses to run without a camera and returns to setup with a clear error", async () => {

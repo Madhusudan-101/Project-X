@@ -80,15 +80,15 @@ function summaryText(s: IntegritySummary): string {
   return `${parts.join(", ")} recorded.`;
 }
 
-/** Supervision result for the session. Hidden for reports made before integrity tracking existed. */
-export function IntegrityBlock({
-  report,
+/** Supervision result for a session: counts, then each event with its time and who saw it.
+ *  Used by the candidate's practice report and by the hiring team's candidate report. */
+export function IntegritySection({
+  summary,
+  events,
 }: {
-  report: AiInterviewReport | AiInterviewReportDetail;
+  summary: IntegritySummary;
+  events: IntegrityEvent[];
 }) {
-  const summary = report.integrity;
-  if (!summary) return null;
-  const events = "integrity_events" in report ? (report.integrity_events ?? []) : [];
   const clean = summary.total === 0;
   return (
     <div
@@ -110,13 +110,29 @@ export function IntegrityBlock({
           {events.map((e, i) => (
             <li key={i} className="flex gap-3">
               <span className="w-12 shrink-0 tabular-nums">{mmss(e.offset_seconds)}</span>
-              <span>{EVENT_LABELS[e.kind] ?? e.kind}</span>
+              <span>
+                {EVENT_LABELS[e.kind] ?? e.kind}
+                {e.source === "agent" && (
+                  <span className="text-xs"> (seen by the interviewer)</span>
+                )}
+              </span>
             </li>
           ))}
         </ul>
       )}
     </div>
   );
+}
+
+/** Supervision result for a practice report. Hidden for reports made before integrity tracking existed. */
+export function IntegrityBlock({
+  report,
+}: {
+  report: AiInterviewReport | AiInterviewReportDetail;
+}) {
+  if (!report.integrity) return null;
+  const events = "integrity_events" in report ? (report.integrity_events ?? []) : [];
+  return <IntegritySection summary={report.integrity} events={events} />;
 }
 
 export function ReportView({ report }: { report: AiInterviewReport | AiInterviewReportDetail }) {

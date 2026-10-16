@@ -4,6 +4,7 @@ import { ApiClientError } from "@/services/api/client";
 import { aiInterviewService } from "@/services/api/candidate/aiInterview";
 import type {
   AiInterviewDomain,
+  AiInterviewSession,
   IntegrityKind,
   VideoFlagKind,
 } from "@/types/candidate/aiInterview";
@@ -161,8 +162,9 @@ export function useInterviewRoom() {
     };
   }, [teardown]);
 
-  const start = useCallback(
-    async (domain: AiInterviewDomain, consentVersion: string, devices: DevicePick = {}) => {
+  /** Open the room for a session the backend has just created (practice or company). */
+  const begin = useCallback(
+    async (open: () => Promise<AiInterviewSession>, devices: DevicePick = {}) => {
       setError(null);
       setCaptions([]);
       setMuted(false);
@@ -180,7 +182,7 @@ export function useInterviewRoom() {
       roomNameRef.current = null;
       setPhase("connecting");
       try {
-        const session = await aiInterviewService.startSession(domain, consentVersion);
+        const session = await open();
         const { Room, RoomEvent, TrackEvent } = await import("livekit-client");
         if (unmountedRef.current) return;
 
@@ -317,6 +319,20 @@ export function useInterviewRoom() {
     [teardown, flushIntegrity, markLost, markRestored],
   );
 
+  /** Practice interview on one of the built-in tracks. */
+  const start = useCallback(
+    (domain: AiInterviewDomain, consentVersion: string, devices: DevicePick = {}) =>
+      begin(() => aiInterviewService.startSession(domain, consentVersion), devices),
+    [begin],
+  );
+
+  /** The interview a company invited this candidate to. */
+  const startInvite = useCallback(
+    (inviteId: string, consentVersion: string, devices: DevicePick = {}) =>
+      begin(() => aiInterviewService.startInviteSession(inviteId, consentVersion), devices),
+    [begin],
+  );
+
   const end = useCallback(() => {
     const room = roomRef.current;
     endingRef.current = true;
@@ -402,6 +418,7 @@ export function useInterviewRoom() {
     needsAudioUnlock,
     audioHostRef,
     start,
+    startInvite,
     end,
     toggleMute,
     unlockAudio,
