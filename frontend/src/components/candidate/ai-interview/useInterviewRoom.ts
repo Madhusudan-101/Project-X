@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { LocalVideoTrack, Room } from "livekit-client";
 import { ApiClientError } from "@/services/api/client";
 import { aiInterviewService } from "@/services/api/candidate/aiInterview";
-import type { AiInterviewDomain } from "@/types/candidate/aiInterview";
+import type { AiInterviewDomain, IntegrityKind } from "@/types/candidate/aiInterview";
 
 export type InterviewPhase = "setup" | "connecting" | "live" | "ended";
 
@@ -32,6 +32,13 @@ export function useInterviewRoom() {
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const joinTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const unmountedRef = useRef(false);
+  const roomNameRef = useRef<string | null>(null);
+  const startedAtRef = useRef(0);
+  const cameraLostRef = useRef(false);
+  const pendingEventsRef = useRef<{ kind: IntegrityKind; offsetSeconds: number }[]>([]);
+  const flushingRef = useRef(false);
+  /** True once the call is being closed, so unpublishing tracks is not reported as a camera fault. */
+  const endingRef = useRef(false);
 
   const [phase, setPhase] = useState<InterviewPhase>("setup");
   const [roomName, setRoomName] = useState<string | null>(null);
@@ -53,7 +60,39 @@ export function useInterviewRoom() {
     joinTimerRef.current = null;
   };
 
+  /** Send queued integrity events; anything that fails stays queued for the next attempt. */
+  const flushIntegrity = useCallback(async () => {
+    const name = roomNameRef.current;
+    if (!name || flushingRef.current) return;
+    flushingRef.current = true;
+    try {
+      while (pendingEventsRef.current.length > 0) {
+        const batch = pendingEventsRef.current.slice(0, 20);
+        try {
+          await aiInterviewService.logIntegrityEvents(name, batch);
+        } catch {
+          return; // keep the batch queued; the next event or the end of the call retries
+        }
+        pendingEventsRef.current = pendingEventsRef.current.slice(batch.length);
+      }
+    } finally {
+      flushingRef.current = false;
+    }
+  }, []);
+
+  /** Record a supervision signal against the live interview (saved by the backend). */
+  const reportIntegrity = useCallback(
+    (kind: IntegrityKind) => {
+      if (!roomNameRef.current || endingRef.current) return;
+      const offsetSeconds = Math.max(0, Math.round((Date.now() - startedAtRef.current) / 1000));
+      pendingEventsRef.current.push({ kind, offsetSeconds });
+      void flushIntegrity();
+    },
+    [flushIntegrity],
+  );
+
   const teardown = useCallback(() => {
+    endingRef.current = true;
     stopTimer();
     const room = roomRef.current;
     roomRef.current = null;
@@ -73,7 +112,7 @@ export function useInterviewRoom() {
   }, [teardown]);
 
   const start = useCallback(
-    async (domain: AiInterviewDomain, devices: DevicePick = {}) => {
+    async (domain: AiInterviewDomain, consentVersion: string, devices: DevicePick = {}) => {
       setError(null);
       setCaptions([]);
       setMuted(false);
@@ -82,15 +121,20 @@ export function useInterviewRoom() {
       setInterviewerSpeaking(false);
       setSelfVideo(null);
       setCameraLost(false);
+      cameraLostRef.current = false;
+      endingRef.current = false;
+      pendingEventsRef.current = [];
+      roomNameRef.current = null;
       setPhase("connecting");
       try {
-        const session = await aiInterviewService.startSession(domain);
+        const session = await aiInterviewService.startSession(domain, consentVersion);
         const { Room, RoomEvent } = await import("livekit-client");
         if (unmountedRef.current) return;
 
         const room = new Room({ adaptiveStream: false, dynacast: false });
         roomRef.current = room;
         setRoomName(session.roomName);
+        roomNameRef.current = session.roomName;
 
         room.on(RoomEvent.TrackSubscribed, (track) => {
           if (track.kind === "audio" && audioHostRef.current) {
@@ -111,12 +155,20 @@ export function useInterviewRoom() {
           if (pub.track?.kind === "video") {
             setSelfVideo(pub.track as LocalVideoTrack);
             setCameraLost(false);
+            if (cameraLostRef.current) {
+              cameraLostRef.current = false;
+              reportIntegrity("camera_restored");
+            }
           }
         });
         room.on(RoomEvent.LocalTrackUnpublished, (pub) => {
           if (pub.track?.kind === "video") {
             setSelfVideo(null);
             setCameraLost(true);
+            if (!cameraLostRef.current) {
+              cameraLostRef.current = true;
+              reportIntegrity("camera_lost");
+            }
           }
         });
         room.on(RoomEvent.AudioPlaybackStatusChanged, () => {
@@ -137,8 +189,10 @@ export function useInterviewRoom() {
         });
         room.on(RoomEvent.Disconnected, () => {
           // Fires for: End button, server time limit, network loss, agent exit.
+          endingRef.current = true;
           stopTimer();
           roomRef.current = null;
+          void flushIntegrity();
           if (!unmountedRef.current) setPhase("ended");
         });
 
@@ -172,6 +226,7 @@ export function useInterviewRoom() {
           return;
         }
 
+        startedAtRef.current = Date.now();
         const endsAt = Date.now() + session.maxMinutes * 60_000;
         setSecondsLeft(session.maxMinutes * 60);
         timerRef.current = setInterval(() => {
@@ -198,11 +253,12 @@ export function useInterviewRoom() {
         );
       }
     },
-    [teardown],
+    [teardown, reportIntegrity, flushIntegrity],
   );
 
   const end = useCallback(() => {
     const room = roomRef.current;
+    endingRef.current = true;
     if (room)
       void room.disconnect(); // Disconnected handler moves us to "ended"
     else setPhase("ended");
@@ -257,6 +313,7 @@ export function useInterviewRoom() {
     selfVideo,
     cameraLost,
     retryCamera,
+    reportIntegrity,
     needsAudioUnlock,
     audioHostRef,
     start,

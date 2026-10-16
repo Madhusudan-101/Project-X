@@ -1,12 +1,29 @@
 import { act, fireEvent, render, renderHook, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { DOMAINS, domainInfo } from "@/components/candidate/ai-interview/domains";
+import { aiInterviewService } from "@/services/api/candidate/aiInterview";
+import type { AiInterviewConfig, AiInterviewReportDetail } from "@/types/candidate/aiInterview";
 import { InterviewBriefing } from "@/components/candidate/ai-interview/InterviewBriefing";
 import { MeetingRoom } from "@/components/candidate/ai-interview/MeetingRoom";
 import { DeviceCheck } from "@/components/candidate/ai-interview/DeviceCheck";
 import { useIntegrityMonitor } from "@/components/candidate/ai-interview/useIntegrityMonitor";
+import { IntegrityBlock } from "@/components/candidate/ai-interview/ReportView";
 import { WaitingRoom } from "@/components/candidate/ai-interview/WaitingRoom";
+
+const requestMock = vi.hoisted(() => vi.fn());
+vi.mock("@/services/api/client", () => ({
+  request: requestMock,
+  ApiClientError: class ApiClientError extends Error {},
+}));
+
+const CONFIG: AiInterviewConfig = {
+  maxMinutes: 20,
+  dailyLimit: 3,
+  usedToday: 1,
+  remainingToday: 2,
+  consentVersion: "v-test",
+};
 
 type RoomProp = Parameters<typeof MeetingRoom>[0]["room"];
 
@@ -24,6 +41,7 @@ const makeRoom = (over: Partial<RoomProp> = {}): RoomProp =>
     selfVideo: null,
     cameraLost: false,
     retryCamera: vi.fn(),
+    reportIntegrity: vi.fn(),
     needsAudioUnlock: false,
     audioHostRef: { current: null },
     start: vi.fn(),
@@ -43,18 +61,26 @@ describe("interview domains", () => {
 });
 
 describe("InterviewBriefing", () => {
-  const setup = (domain: "ai_ml" | null = null, error: string | null = null) => {
+  const setup = (
+    domain: "ai_ml" | null = null,
+    error: string | null = null,
+    over: { config?: AiInterviewConfig | null; configError?: string | null } = {},
+  ) => {
     const onDomain = vi.fn();
     const onContinue = vi.fn();
+    const onRetryConfig = vi.fn();
     render(
       <InterviewBriefing
         domain={domain}
         onDomain={onDomain}
         onContinue={onContinue}
         error={error}
+        config={over.config === undefined ? CONFIG : over.config}
+        configError={over.configError ?? null}
+        onRetryConfig={onRetryConfig}
       />,
     );
-    return { onDomain, onContinue };
+    return { onDomain, onContinue, onRetryConfig };
   };
 
   it("shows the rules, integrity and data sections", () => {
@@ -106,6 +132,139 @@ describe("InterviewBriefing", () => {
   it("renders a join error", () => {
     setup("ai_ml", "Microphone access is required.");
     expect(screen.getByText("Microphone access is required.")).toBeTruthy();
+  });
+});
+
+describe("InterviewBriefing live config", () => {
+  const base = (over: Parameters<typeof InterviewBriefing>[0]["config"]) =>
+    render(
+      <InterviewBriefing
+        domain="ai_ml"
+        onDomain={vi.fn()}
+        onContinue={vi.fn()}
+        error={null}
+        config={over}
+        configError={null}
+        onRetryConfig={vi.fn()}
+      />,
+    );
+
+  it("shows the backend's duration and attempts left", () => {
+    base({ ...CONFIG, maxMinutes: 30, remainingToday: 2 });
+    expect(screen.getByText("Up to 30 min")).toBeTruthy();
+    expect(screen.getByText("2 of 3 interviews left today.")).toBeTruthy();
+  });
+
+  it("blocks starting when today's interviews are used up", async () => {
+    const user = userEvent.setup();
+    base({ ...CONFIG, usedToday: 3, remainingToday: 0 });
+    await user.click(screen.getByRole("checkbox"));
+    expect(screen.getByText(/used all 3 interviews for today/i)).toBeTruthy();
+    expect(
+      (screen.getByRole("button", { name: /continue to equipment check/i }) as HTMLButtonElement)
+        .disabled,
+    ).toBe(true);
+  });
+
+  it("cannot continue until the config has loaded", async () => {
+    const user = userEvent.setup();
+    base(null);
+    await user.click(screen.getByRole("checkbox"));
+    expect(screen.getByText("Loading…")).toBeTruthy();
+    expect(
+      (screen.getByRole("button", { name: /continue to equipment check/i }) as HTMLButtonElement)
+        .disabled,
+    ).toBe(true);
+  });
+
+  it("shows a config error with a working retry", async () => {
+    const onRetryConfig = vi.fn();
+    render(
+      <InterviewBriefing
+        domain="ai_ml"
+        onDomain={vi.fn()}
+        onContinue={vi.fn()}
+        error={null}
+        config={null}
+        configError="Could not load interview details."
+        onRetryConfig={onRetryConfig}
+      />,
+    );
+    await userEvent.setup().click(screen.getByRole("button", { name: "Retry" }));
+    expect(onRetryConfig).toHaveBeenCalledOnce();
+  });
+});
+
+describe("aiInterviewService", () => {
+  beforeEach(() => requestMock.mockReset().mockResolvedValue({}));
+
+  it("sends consent and the rules version when starting", async () => {
+    await aiInterviewService.startSession("dsa", "v-test");
+    expect(requestMock).toHaveBeenCalledWith("/candidate/ai-interview/session", {
+      method: "POST",
+      body: { domain: "dsa", consent: true, consentVersion: "v-test" },
+    });
+  });
+
+  it("loads the live config", async () => {
+    await aiInterviewService.getConfig();
+    expect(requestMock).toHaveBeenCalledWith("/candidate/ai-interview/config", {
+      signal: undefined,
+    });
+  });
+
+  it("posts integrity events to the live session", async () => {
+    await aiInterviewService.logIntegrityEvents("ai-abc", [
+      { kind: "tab_hidden", offsetSeconds: 12 },
+    ]);
+    expect(requestMock).toHaveBeenCalledWith(
+      "/candidate/ai-interview/session/ai-abc/integrity-events",
+      { method: "POST", body: { events: [{ kind: "tab_hidden", offsetSeconds: 12 }] } },
+    );
+  });
+});
+
+describe("IntegrityBlock", () => {
+  const report = (over: Partial<AiInterviewReportDetail>) =>
+    ({
+      id: "1",
+      room_id: "r",
+      domain: "dsa",
+      per_question: [],
+      ...over,
+    }) as AiInterviewReportDetail;
+
+  it("renders nothing for reports from before integrity tracking", () => {
+    const { container } = render(<IntegrityBlock report={report({})} />);
+    expect(container.firstChild).toBeNull();
+  });
+
+  it("confirms a clean session", () => {
+    render(
+      <IntegrityBlock
+        report={report({ integrity: { tab_switches: 0, camera_lost: 0, total: 0 } })}
+      />,
+    );
+    expect(screen.getByText(/no tab switches or camera interruptions/i)).toBeTruthy();
+  });
+
+  it("lists flagged events with timestamps", () => {
+    render(
+      <IntegrityBlock
+        report={report({
+          integrity: { tab_switches: 1, camera_lost: 1, total: 2 },
+          integrity_events: [
+            { kind: "tab_hidden", offset_seconds: 75 },
+            { kind: "camera_lost", offset_seconds: 130 },
+          ],
+        })}
+      />,
+    );
+    expect(screen.getByText(/1 tab switch and 1 camera interruption recorded/i)).toBeTruthy();
+    expect(screen.getByText("1:15")).toBeTruthy();
+    expect(screen.getByText("Left the interview tab")).toBeTruthy();
+    expect(screen.getByText("2:10")).toBeTruthy();
+    expect(screen.getByText("Camera stopped")).toBeTruthy();
   });
 });
 
@@ -201,6 +360,26 @@ describe("useIntegrityMonitor", () => {
     expect(result.current.tabSwitches).toBe(2);
   });
 
+  it("reports which kind of departure it was, once per departure", () => {
+    const onLeave = vi.fn();
+    renderHook(() => useIntegrityMonitor(true, onLeave));
+    act(() => {
+      window.dispatchEvent(new Event("blur"));
+    });
+    expect(onLeave).toHaveBeenCalledTimes(1);
+    expect(onLeave).toHaveBeenCalledWith("window_blur");
+  });
+
+  it("reports a hidden tab as tab_hidden", () => {
+    const onLeave = vi.fn();
+    renderHook(() => useIntegrityMonitor(true, onLeave));
+    vi.spyOn(document, "hidden", "get").mockReturnValue(true);
+    act(() => {
+      document.dispatchEvent(new Event("visibilitychange"));
+    });
+    expect(onLeave).toHaveBeenCalledWith("tab_hidden");
+  });
+
   it("ignores events while inactive", () => {
     const { result } = renderHook(() => useIntegrityMonitor(false));
     act(() => {
@@ -280,6 +459,16 @@ describe("MeetingRoom", () => {
     });
     expect(screen.getByRole("alert").textContent).toMatch(/left the interview tab/i);
     expect(screen.getByText("Tab switches flagged: 1")).toBeTruthy();
+  });
+
+  it("sends each tab departure to the backend", () => {
+    const room = makeRoom();
+    render(<MeetingRoom room={room} domain="ai_ml" />);
+    act(() => {
+      fireEvent(window, new Event("blur"));
+    });
+    expect(room.reportIntegrity).toHaveBeenCalledWith("window_blur");
+    expect(room.reportIntegrity).toHaveBeenCalledTimes(1);
   });
 
   it("warns when the camera stops and lets the candidate restore it", async () => {

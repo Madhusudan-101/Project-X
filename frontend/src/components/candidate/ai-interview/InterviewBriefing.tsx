@@ -3,14 +3,18 @@ import { Check, Clock, FileText, ShieldCheck, Video } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
-import type { AiInterviewDomain } from "@/types/candidate/aiInterview";
-import { DEFAULT_MAX_MINUTES, DOMAINS, domainInfo } from "./domains";
+import type { AiInterviewConfig, AiInterviewDomain } from "@/types/candidate/aiInterview";
+import { DOMAINS, domainInfo } from "./domains";
 
 interface Props {
   domain: AiInterviewDomain | null;
   onDomain: (d: AiInterviewDomain) => void;
   onContinue: () => void;
   error: string | null;
+  /** Live limits from the backend; null while loading or if the request failed. */
+  config: AiInterviewConfig | null;
+  configError: string | null;
+  onRetryConfig: () => void;
 }
 
 const RULES_DO = [
@@ -55,7 +59,15 @@ function Bullets({ items, tone }: { items: string[]; tone: "ok" | "no" | "info" 
   );
 }
 
-export function InterviewBriefing({ domain, onDomain, onContinue, error }: Props) {
+export function InterviewBriefing({
+  domain,
+  onDomain,
+  onContinue,
+  error,
+  config,
+  configError,
+  onRetryConfig,
+}: Props) {
   const [agreed, setAgreed] = useState(false);
   const selected = domain ? domainInfo(domain) : null;
 
@@ -102,7 +114,11 @@ export function InterviewBriefing({ domain, onDomain, onContinue, error }: Props
 
           <dl className="grid grid-cols-2 gap-px overflow-hidden rounded-lg border bg-border text-sm sm:grid-cols-4">
             {[
-              { icon: Clock, k: "Duration", v: `Up to ${DEFAULT_MAX_MINUTES} min` },
+              {
+                icon: Clock,
+                k: "Duration",
+                v: config ? `Up to ${config.maxMinutes} min` : "Loading…",
+              },
               { icon: Video, k: "Format", v: "Live voice and video" },
               { icon: FileText, k: "Outcome", v: "Scored report" },
               { icon: ShieldCheck, k: "Interviewer", v: "AI" },
@@ -171,7 +187,7 @@ export function InterviewBriefing({ domain, onDomain, onContinue, error }: Props
             <li>Chrome, Edge or Safari, latest version</li>
             <li>Working camera and microphone</li>
             <li>Stable internet connection</li>
-            <li>About {DEFAULT_MAX_MINUTES} uninterrupted minutes</li>
+            <li>About {config ? config.maxMinutes : "…"} uninterrupted minutes</li>
           </ul>
         </Card>
         <Card className="space-y-4 p-5">
@@ -187,10 +203,25 @@ export function InterviewBriefing({ domain, onDomain, onContinue, error }: Props
               help, with my camera on, and to have my voice transcribed and saved.
             </span>
           </label>
+          {config && (
+            <p className="text-sm text-muted-foreground">
+              {config.remainingToday > 0
+                ? `${config.remainingToday} of ${config.dailyLimit} interviews left today.`
+                : `You have used all ${config.dailyLimit} interviews for today. Try again tomorrow.`}
+            </p>
+          )}
+          {configError && (
+            <p className="text-sm text-destructive" role="alert">
+              {configError}{" "}
+              <button type="button" className="underline" onClick={onRetryConfig}>
+                Retry
+              </button>
+            </p>
+          )}
           {error && <p className="text-sm text-destructive">{error}</p>}
           <Button
             className="w-full bg-gradient-brand text-primary-foreground"
-            disabled={!agreed || !domain}
+            disabled={!agreed || !domain || !config || config.remainingToday === 0}
             onClick={onContinue}
           >
             Continue to equipment check

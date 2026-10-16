@@ -7,6 +7,28 @@ export interface AiInterviewSession {
   maxMinutes: number;
 }
 
+/** Limits and rules version the briefing screen must show; fetched before the candidate can start. */
+export interface AiInterviewConfig {
+  maxMinutes: number;
+  dailyLimit: number;
+  usedToday: number;
+  remainingToday: number;
+  consentVersion: string;
+}
+
+export type IntegrityKind = "tab_hidden" | "window_blur" | "camera_lost" | "camera_restored";
+
+export interface IntegrityEvent {
+  kind: IntegrityKind;
+  offset_seconds: number;
+}
+
+export interface IntegritySummary {
+  tab_switches: number;
+  camera_lost: number;
+  total: number;
+}
+
 export interface AiInterviewQuestionFeedback {
   question: string;
   feedback: string;
@@ -29,9 +51,11 @@ export interface AiInterviewReport {
   final_recommendation: string | null;
   duration_seconds: number | null;
   created_at: string;
+  integrity?: IntegritySummary;
 }
 
 export interface AiInterviewReportDetail extends AiInterviewReport {
   report_markdown: string | null;
   transcript: string | null;
+  integrity_events?: IntegrityEvent[];
 }

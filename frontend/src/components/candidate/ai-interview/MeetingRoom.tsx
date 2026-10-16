@@ -26,7 +26,7 @@ export function MeetingRoom({ room, domain }: { room: Room; domain: AiInterviewD
   const [confirmEnd, setConfirmEnd] = useState(false);
   const logRef = useRef<HTMLDivElement | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
-  const { tabSwitches, away } = useIntegrityMonitor(true);
+  const { tabSwitches, away } = useIntegrityMonitor(true, room.reportIntegrity);
 
   const { selfVideo } = room;
   useEffect(() => {

@@ -1,8 +1,12 @@
-import { AlertTriangle, CheckCircle2, TrendingUp } from "lucide-react";
+import { AlertTriangle, CheckCircle2, ShieldAlert, ShieldCheck, TrendingUp } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
-import type { AiInterviewReport, AiInterviewReportDetail } from "@/types/candidate/aiInterview";
+import type {
+  AiInterviewReport,
+  AiInterviewReportDetail,
+  IntegrityEvent,
+} from "@/types/candidate/aiInterview";
 
 const DOMAIN_LABELS: Record<string, string> = {
   ai_ml: "AI/ML",
@@ -44,6 +48,56 @@ function BulletList({
           <li key={i}>{s}</li>
         ))}
       </ul>
+    </div>
+  );
+}
+
+const EVENT_LABELS: Record<IntegrityEvent["kind"], string> = {
+  tab_hidden: "Left the interview tab",
+  window_blur: "Switched to another window",
+  camera_lost: "Camera stopped",
+  camera_restored: "Camera restored",
+};
+
+const mmss = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+
+/** Supervision result for the session. Hidden for reports made before integrity tracking existed. */
+export function IntegrityBlock({
+  report,
+}: {
+  report: AiInterviewReport | AiInterviewReportDetail;
+}) {
+  const summary = report.integrity;
+  if (!summary) return null;
+  const events = "integrity_events" in report ? (report.integrity_events ?? []) : [];
+  const clean = summary.total === 0;
+  return (
+    <div
+      className={`rounded-lg border p-4 text-sm ${clean ? "" : "border-destructive/40 bg-destructive/5"}`}
+    >
+      <h4 className="flex items-center gap-1.5 font-semibold">
+        {clean ? (
+          <ShieldCheck className="h-4 w-4 text-success" aria-hidden />
+        ) : (
+          <ShieldAlert className="h-4 w-4 text-destructive" aria-hidden />
+        )}
+        Session integrity
+      </h4>
+      <p className="mt-1 text-muted-foreground">
+        {clean
+          ? "No tab switches or camera interruptions were recorded."
+          : `${summary.tab_switches} tab switch${summary.tab_switches === 1 ? "" : "es"} and ${summary.camera_lost} camera interruption${summary.camera_lost === 1 ? "" : "s"} recorded.`}
+      </p>
+      {events.length > 0 && (
+        <ul className="mt-2 space-y-1 text-muted-foreground">
+          {events.map((e, i) => (
+            <li key={i} className="flex gap-3">
+              <span className="w-12 shrink-0 tabular-nums">{mmss(e.offset_seconds)}</span>
+              <span>{EVENT_LABELS[e.kind] ?? e.kind}</span>
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   );
 }
@@ -91,6 +145,8 @@ export function ReportView({ report }: { report: AiInterviewReport | AiInterview
         items={report.red_flags}
         icon={<AlertTriangle className="h-4 w-4 text-destructive" />}
       />
+
+      <IntegrityBlock report={report} />
 
       {report.per_question.length > 0 && (
         <div>

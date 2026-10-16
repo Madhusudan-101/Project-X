@@ -34,6 +34,3 @@ export const DOMAINS: DomainInfo[] = [
 ];
 
 export const domainInfo = (id: AiInterviewDomain) => DOMAINS.find((d) => d.id === id);
-
-/** Fallback shown before a session exists; the live timer uses the server's maxMinutes. */
-export const DEFAULT_MAX_MINUTES = 20;

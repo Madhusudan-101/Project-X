@@ -1,18 +1,36 @@
 import { request } from "@/services/api/client";
 import type {
+  AiInterviewConfig,
   AiInterviewDomain,
   AiInterviewReport,
   AiInterviewReportDetail,
   AiInterviewSession,
+  IntegrityEvent,
 } from "@/types/candidate/aiInterview";
 
 export const aiInterviewService = {
   /** Start an interview: creates the LiveKit room server-side and returns join info. */
-  startSession(domain: AiInterviewDomain): Promise<AiInterviewSession> {
+  startSession(domain: AiInterviewDomain, consentVersion: string): Promise<AiInterviewSession> {
     return request<AiInterviewSession>("/candidate/ai-interview/session", {
       method: "POST",
-      body: { domain },
+      body: { domain, consent: true, consentVersion },
     });
+  },
+
+  /** Real duration, daily limit, attempts left and the rules version to accept. */
+  getConfig(signal?: AbortSignal): Promise<AiInterviewConfig> {
+    return request<AiInterviewConfig>("/candidate/ai-interview/config", { signal });
+  },
+
+  /** Save supervision signals (tab left, camera lost...) against the live interview. */
+  logIntegrityEvents(
+    roomName: string,
+    events: { kind: IntegrityEvent["kind"]; offsetSeconds: number }[],
+  ): Promise<{ accepted: number }> {
+    return request<{ accepted: number }>(
+      `/candidate/ai-interview/session/${encodeURIComponent(roomName)}/integrity-events`,
+      { method: "POST", body: { events } },
+    );
   },
 
   listReports(): Promise<AiInterviewReport[]> {

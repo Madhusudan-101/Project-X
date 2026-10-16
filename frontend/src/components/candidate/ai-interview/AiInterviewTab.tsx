@@ -5,6 +5,7 @@ import { Card } from "@/components/ui/card";
 import { ApiClientError } from "@/services/api/client";
 import { aiInterviewService } from "@/services/api/candidate/aiInterview";
 import type {
+  AiInterviewConfig,
   AiInterviewDomain,
   AiInterviewReport,
   AiInterviewReportDetail,
@@ -23,11 +24,37 @@ const REPORT_POLL_TIMEOUT_MS = 120_000;
 export function AiInterviewTab() {
   const room = useInterviewRoom();
   const [domain, setDomain] = useState<AiInterviewDomain | null>(null);
+  const [config, setConfig] = useState<AiInterviewConfig | null>(null);
+  const [configError, setConfigError] = useState<string | null>(null);
   const [stage, setStage] = useState<"briefing" | "check">("briefing");
   const [history, setHistory] = useState<AiInterviewReport[] | null>(null);
   const [report, setReport] = useState<AiInterviewReportDetail | null>(null);
   const [reportState, setReportState] = useState<"idle" | "waiting" | "timeout">("idle");
   const [selected, setSelected] = useState<AiInterviewReport | null>(null);
+
+  // Real limits and the rules version come from the backend; refresh whenever we are back
+  // on the briefing so "interviews left today" is current after each attempt.
+  const loadConfig = useCallback((signal?: AbortSignal) => {
+    setConfigError(null);
+    aiInterviewService
+      .getConfig(signal)
+      .then(setConfig)
+      .catch((err: unknown) => {
+        if (signal?.aborted) return;
+        setConfigError(
+          err instanceof ApiClientError
+            ? err.message
+            : "Could not load interview details. Check your connection.",
+        );
+      });
+  }, []);
+  const onBriefing = room.phase === "setup" && stage === "briefing";
+  useEffect(() => {
+    if (!onBriefing) return;
+    const ctrl = new AbortController();
+    loadConfig(ctrl.signal);
+    return () => ctrl.abort();
+  }, [onBriefing, loadConfig]);
 
   // A failed join drops back to setup with an error; surface it on the briefing screen.
   const { error: roomError } = room;
@@ -124,14 +151,17 @@ export function AiInterviewTab() {
           onDomain={setDomain}
           onContinue={() => setStage("check")}
           error={room.error}
+          config={config}
+          configError={configError}
+          onRetryConfig={() => loadConfig()}
         />
       )}
 
-      {room.phase === "setup" && stage === "check" && domain && (
+      {room.phase === "setup" && stage === "check" && domain && config && (
         <DeviceCheck
           domain={domain}
           onBack={() => setStage("briefing")}
-          onJoin={(devices) => room.start(domain, devices)}
+          onJoin={(devices) => room.start(domain, config.consentVersion, devices)}
         />
       )}
 
