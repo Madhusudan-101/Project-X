@@ -45,7 +45,7 @@ describe("calendar file", () => {
   });
 
   it("escapes text so a title cannot inject calendar fields", () => {
-    expect(icsEscape("a,b;c\\d\ne")).toBe("a\\,b\;c\\\\d\\ne");
+    expect(icsEscape("a,b;c\\d\ne")).toBe("a\\,b\\;c\\\\d\\ne");
     const ics = buildIcs({ ...meeting, title: "x\r\nBEGIN:VEVENT\r\nSUMMARY:evil" });
     expect(ics.split("\r\n").filter((l) => l === "BEGIN:VEVENT").length).toBe(1); // no injected event line
     expect(ics).toContain("SUMMARY:x\\nBEGIN:VEVENT\\nSUMMARY:evil");
