@@ -36,7 +36,7 @@ from ...crud import (
     list_drives_for_job,
 )
 from ...deps import db_client, require_company_role
-from ...services.candidate import oa_judge
+from ...services.candidate import oa_judge, oa_similarity
 from ...services.candidate.oa_bank import template_sections
 from ...services.notifications import oa_emails
 from ..candidate.assessment import _first, _parse_ts, format_args, provision_template
@@ -588,3 +588,142 @@ def _timeline(attempt: dict, questions: List[dict], sec_pos: Dict[str, int]) -> 
         })
     return {"items": items, "counts": counts, "largest_paste": largest_paste,
             "logged": int(attempt.get("events_logged") or 0), "capped": len(rows) >= MAX_TIMELINE_EVENTS}
+
+
+# ── Code similarity ─────────────────────────────────────────────────
+
+SIMILARITY_NOTE = (
+    "Similarity is evidence to review, not proof. Short or textbook solutions converge honestly, "
+    "so shared fingerprints are weighted by how rare they are across this drive, and the starter code "
+    "is ignored. Open the side-by-side view before acting on a flag."
+)
+MAX_COMPARED_PER_QUESTION = 1500
+
+
+def _chunks(items: List[str], n: int = 100) -> List[List[str]]:
+    return [items[i:i + n] for i in range(0, len(items), n)]
+
+
+def _display_name(person: dict) -> str:
+    return person.get("name") or " ".join(x for x in [person.get("first_name"), person.get("last_name")] if x) or "Candidate"
+
+
+def _similarity_inputs(job_id: str, assessment: dict) -> Dict[str, Any]:
+    """Each candidate's final code per coding question, ready to compare."""
+    attempts = {a["id"]: a for a in _attempts(assessment["id"])}
+    sections = db_client.table("oa_sections").select("id, position").eq("assessment_id", assessment["id"]).execute().data or []
+    sec_pos = {x["id"]: x["position"] for x in sections}
+    questions = [q for q in (db_client.table("oa_questions").select("*")
+                             .in_("section_id", list(sec_pos)).execute().data or [])
+                 if q["qtype"] == "coding" and q.get("problem_id")] if sec_pos else []
+    qids = [q["id"] for q in questions]
+    starters = {p["id"]: (p.get("starter_code") or {}) for p in (
+        db_client.table("oa_problems").select("id, starter_code").in_("id", list({q["problem_id"] for q in questions}))
+        .execute().data or [])} if questions else {}
+
+    best: Dict[tuple, dict] = {}
+    for chunk in _chunks(list(attempts)):
+        if not qids:
+            break
+        for sub in db_client.table("oa_submissions").select("attempt_id, question_id, language, source, score, created_at") \
+                .in_("attempt_id", chunk).in_("question_id", qids).execute().data or []:
+            k = (sub["attempt_id"], sub["question_id"])
+            cur = best.get(k)
+            if not cur or (float(sub["score"]), str(sub["created_at"])) > (float(cur["score"]), str(cur["created_at"])):
+                best[k] = sub
+        for ans in db_client.table("oa_answers").select("attempt_id, question_id, language, answer") \
+                .in_("attempt_id", chunk).in_("question_id", qids).execute().data or []:
+            k = (ans["attempt_id"], ans["question_id"])
+            if k not in best and ans.get("answer") and ans.get("language"):   # never submitted: use the saved draft
+                best[k] = {"language": ans["language"], "source": ans["answer"], "score": -1, "created_at": "", "draft": True}
+
+    apps = {a["id"]: a for a in list_applications_for_job(job_id)}
+    people = get_profiles_basic([a["student_id"] for a in apps.values()])
+    names = {app_id: _display_name(people.get(a["student_id"], {})) for app_id, a in apps.items()}
+    return {"attempts": attempts, "questions": questions, "sec_pos": sec_pos, "starters": starters, "best": best, "names": names}
+
+
+def _prepare_solutions(inputs: Dict[str, Any], question: dict) -> Dict[str, "oa_similarity.Solution"]:
+    out: Dict[str, oa_similarity.Solution] = {}
+    for (attempt_id, qid), sub in inputs["best"].items():
+        if qid != question["id"] or sub["language"] not in oa_similarity.LANGUAGES:
+            continue
+        app_id = inputs["attempts"][attempt_id]["application_id"]
+        starter = (inputs["starters"].get(question["problem_id"]) or {}).get(sub["language"], "")
+        sol = oa_similarity.prepare(app_id, sub["language"], sub["source"], starter)
+        sol.draft = bool(sub.get("draft"))
+        out[app_id] = sol
+    return out
+
+
+@router.get(_BASE + "/similarity")
+def similarity(
+    job_id: str, drive_id: str,
+    min_similarity: float = Query(default=oa_similarity.LEVEL_MEDIUM, ge=0.3, le=1.0),
+    current_user: dict = Depends(require_company_role),
+) -> Dict[str, Any]:
+    """Pairs of candidates whose code for the same question looks copied, per question."""
+    job, drive = _owned_drive(job_id, drive_id, current_user)
+    assessment = _need_assessment(drive)
+    inputs = _similarity_inputs(job_id, assessment)
+    names = inputs["names"]
+    report: List[Dict[str, Any]] = []
+    involved: set = set()
+    flagged_pairs = 0
+    for q in sorted(inputs["questions"], key=lambda x: (inputs["sec_pos"].get(x["section_id"], 0), x["position"])):
+        sols = _prepare_solutions(inputs, q)
+        usable = [s for s in sols.values() if s.usable][:MAX_COMPARED_PER_QUESTION]
+        matches = oa_similarity.compare_all(usable, min_similarity)
+        flagged_pairs += len(matches)
+        for m in matches:
+            involved.update((m.a, m.b))
+        report.append({
+            "question_id": q["id"], "title": q["title"], "section": inputs["sec_pos"].get(q["section_id"]),
+            "position": q["position"], "compared": len(usable),
+            "skipped": sum(1 for s in sols.values() if not s.usable),
+            "pairs": [{
+                "a": {"application_id": m.a, "name": names.get(m.a, "Candidate"), "draft": sols[m.a].draft},
+                "b": {"application_id": m.b, "name": names.get(m.b, "Candidate"), "draft": sols[m.b].draft},
+                "language": m.language, "similarity": m.similarity, "overlap": m.overlap,
+                "raw_overlap": m.raw_overlap, "level": m.level,
+            } for m in matches],
+            "clusters": [{"size": len(g), "members": [{"application_id": x, "name": names.get(x, "Candidate")} for x in g]}
+                         for g in oa_similarity.clusters(matches) if len(g) >= 3],
+        })
+    return {
+        "note": SIMILARITY_NOTE, "min_similarity": min_similarity,
+        "levels": {"high": oa_similarity.LEVEL_HIGH, "medium": oa_similarity.LEVEL_MEDIUM},
+        "summary": {"flagged_pairs": flagged_pairs, "candidates_involved": len(involved)},
+        "questions": report,
+    }
+
+
+@router.get(_BASE + "/similarity/compare")
+def similarity_compare(
+    job_id: str, drive_id: str,
+    question_id: str = Query(...), a: str = Query(...), b: str = Query(...),
+    current_user: dict = Depends(require_company_role),
+) -> Dict[str, Any]:
+    """Both candidates' code for one question side by side, with the shared lines marked."""
+    job, drive = _owned_drive(job_id, drive_id, current_user)
+    assessment = _need_assessment(drive)
+    inputs = _similarity_inputs(job_id, assessment)
+    question = next((q for q in inputs["questions"] if q["id"] == question_id), None)
+    if not question:
+        raise HTTPException(status_code=404, detail="Coding question not found in this assessment.")
+    sols = _prepare_solutions(inputs, question)
+    if a == b or a not in sols or b not in sols:
+        raise HTTPException(status_code=404, detail="Both candidates need code for this question.")
+    sa, sb = sols[a], sols[b]
+    matches = oa_similarity.compare_all([x for x in (sa, sb) if x.usable], 0.0)
+    match = matches[0] if matches else None
+    lines_a, lines_b = oa_similarity.matched_lines(sa, sb) if sa.usable and sb.usable else ([], [])
+    side = lambda s: {"application_id": s.key, "name": inputs["names"].get(s.key, "Candidate"), "language": s.language,
+                      "source": s.source, "draft": s.draft, "matched_lines": lines_a if s is sa else lines_b,
+                      "skipped": s.skipped}
+    return {
+        "note": SIMILARITY_NOTE, "question": {"id": question["id"], "title": question["title"]},
+        "similarity": match.similarity if match else 0.0, "raw_overlap": match.raw_overlap if match else 0.0,
+        "level": match.level if match else None, "comparable": sa.language == sb.language and sa.usable and sb.usable,
+        "a": side(sa), "b": side(sb),
+    }

@@ -296,6 +296,29 @@ check("detail: paste shows where and what", big["question"]["title"] and big["de
 check("detail: summary counts", tl["counts"]["tab_switch"] == 4 and tl["counts"]["paste"] == 3 and tl["largest_paste"] == len(BIG) and tl["capped"] is False, tl["counts"])
 check("no attempt → 404 detail", client.get(URL + "/results/app-2").status_code == 404)
 
+# ── 7b. code similarity ─────────────────────────────────────────────
+att1 = db.store["oa_attempts"][0]
+db.store["oa_submissions"] = [x for x in db.store["oa_submissions"] if x["language"] == "python"]   # app-1's best is its python solution
+db.store["oa_attempts"].append({**att1, "id": "att-2", "application_id": "app-2", "student_id": "stu-2"})
+COPY_PY = GOOD_PY.replace("seen", "cache").replace("nums", "arr").replace("target", "goal").replace(" n ", " v ").replace("[n]", "[v]").replace("i, n in", "k, v in").replace(", i]", ", k]")
+db.store["oa_submissions"].append({"id": "sub-x", "attempt_id": "att-2", "question_id": QID, "language": "python", "source": COPY_PY,
+                                   "verdict": "accepted", "passed": 5, "total": 5, "score": 100, "created_at": "2026-10-16T12:00:00+00:00"})
+sim = client.get(URL + "/similarity").json()
+sq = next(x for x in sim["questions"] if x["question_id"] == QID)
+check("similarity: the renamed copy is flagged high", len(sq["pairs"]) == 1 and sq["pairs"][0]["level"] == "high" and sq["pairs"][0]["similarity"] >= 0.9, sq)
+check("similarity: names both candidates, summary + caveat", {sq["pairs"][0]["a"]["name"], sq["pairs"][0]["b"]["name"]} == {"Student stu-1", "Student stu-2"}
+      and sim["summary"] == {"flagged_pairs": 1, "candidates_involved": 2} and "not proof" in sim["note"], sim["summary"])
+cmp_ = client.get(URL + "/similarity/compare", params={"question_id": QID, "a": "app-1", "b": "app-2"}).json()
+check("similarity: side-by-side with the shared lines marked", cmp_["comparable"] and cmp_["a"]["source"] == GOOD_PY and cmp_["b"]["source"] == COPY_PY
+      and cmp_["a"]["matched_lines"] and cmp_["b"]["matched_lines"] and cmp_["level"] == "high", cmp_["a"]["matched_lines"])
+db.store["oa_submissions"][-1]["source"] = PARTIAL_PY
+check("similarity: a different solution is not flagged", client.get(URL + "/similarity").json()["summary"]["flagged_pairs"] == 0)
+check("similarity: a candidate without code → 404", client.get(URL + "/similarity/compare", params={"question_id": QID, "a": "app-1", "b": "app-9"}).status_code == 404)
+check("similarity: the other company can't see it", (lambda: (as_company("co-user-2"), client.get(URL + "/similarity").status_code)[1])() == 404)
+as_company()
+db.store["oa_attempts"] = [x for x in db.store["oa_attempts"] if x["id"] != "att-2"]
+db.store["oa_submissions"] = [x for x in db.store["oa_submissions"] if x["id"] != "sub-x"]
+
 # ── 8. expiry enforced on the server for code endpoints ─────────────
 seed(); put(GOOD); client.post(URL + "/invites", json={"all": True}); sent.clear()
 as_candidate()

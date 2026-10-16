@@ -13,6 +13,11 @@
 import { request } from "../client";
 import type {
   IntegrityEvent,
+  SimilarityCompare,
+  SimilarityCompareSide,
+  SimilarityPair,
+  SimilarityPerson,
+  SimilarityReport,
   IntegrityTimeline,
   Assessment,
   AssessmentDraft,
@@ -225,6 +230,77 @@ export const companyAssessmentService = {
     driveId: string,
   ): Promise<{ sent: number; skipped: number; failed: number }> =>
     request(`${base(jobId, driveId)}/remind`, { method: "POST" }),
+
+  similarity: (jobId: string, driveId: string): Promise<SimilarityReport> =>
+    request<Raw>(`${base(jobId, driveId)}/similarity`).then((r) => {
+      const person = (p: Raw): SimilarityPerson => ({
+        applicationId: p.application_id as string,
+        name: p.name as string,
+        draft: p.draft ? true : undefined,
+      });
+      const s = (r.summary as Raw) ?? {};
+      return {
+        note: r.note as string,
+        minSimilarity: Number(r.min_similarity),
+        summary: {
+          flaggedPairs: Number(s.flagged_pairs ?? 0),
+          candidatesInvolved: Number(s.candidates_involved ?? 0),
+        },
+        questions: ((r.questions as Raw[]) ?? []).map((q) => ({
+          questionId: q.question_id as string,
+          title: q.title as string,
+          section: (q.section as number | null) ?? null,
+          position: Number(q.position),
+          compared: Number(q.compared),
+          skipped: Number(q.skipped),
+          pairs: ((q.pairs as Raw[]) ?? []).map((p) => ({
+            a: person(p.a as Raw),
+            b: person(p.b as Raw),
+            language: p.language as string,
+            similarity: Number(p.similarity),
+            overlap: Number(p.overlap),
+            rawOverlap: Number(p.raw_overlap),
+            level: p.level as SimilarityPair["level"],
+          })),
+          clusters: ((q.clusters as Raw[]) ?? []).map((c) => ({
+            size: Number(c.size),
+            members: ((c.members as Raw[]) ?? []).map(person),
+          })),
+        })),
+      };
+    }),
+
+  similarityCompare: (
+    jobId: string,
+    driveId: string,
+    questionId: string,
+    a: string,
+    b: string,
+  ): Promise<SimilarityCompare> =>
+    request<Raw>(
+      `${base(jobId, driveId)}/similarity/compare?question_id=${encodeURIComponent(questionId)}&a=${encodeURIComponent(a)}&b=${encodeURIComponent(b)}`,
+    ).then((r) => {
+      const side = (x: Raw): SimilarityCompareSide => ({
+        applicationId: x.application_id as string,
+        name: x.name as string,
+        language: x.language as string,
+        source: x.source as string,
+        draft: Boolean(x.draft),
+        matchedLines: (x.matched_lines as number[]) ?? [],
+        skipped: (x.skipped as string | null) ?? null,
+      });
+      const q = r.question as Raw;
+      return {
+        note: r.note as string,
+        question: { id: q.id as string, title: q.title as string },
+        similarity: Number(r.similarity),
+        rawOverlap: Number(r.raw_overlap),
+        level: (r.level as SimilarityCompare["level"]) ?? null,
+        comparable: Boolean(r.comparable),
+        a: side(r.a as Raw),
+        b: side(r.b as Raw),
+      };
+    }),
 
   results: (jobId: string, driveId: string): Promise<Results> =>
     request<Raw>(`${base(jobId, driveId)}/results`).then((r) => {

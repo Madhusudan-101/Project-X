@@ -184,3 +184,64 @@ export interface ResultDetail {
   sectionTitles: Record<number, string>;
   questions: ResultQuestion[];
 }
+
+export type SimilarityLevel = "high" | "medium";
+
+export interface SimilarityPerson {
+  applicationId: string;
+  name: string;
+  /** never submitted: this is the saved editor draft */
+  draft?: boolean;
+}
+
+export interface SimilarityPair {
+  a: SimilarityPerson;
+  b: SimilarityPerson;
+  language: string;
+  /** rarity-weighted share of the shorter solution found in the other (0-1) */
+  similarity: number;
+  overlap: number;
+  /** same, with variable names kept: high means they even share names */
+  rawOverlap: number;
+  level: SimilarityLevel;
+}
+
+export interface SimilarityQuestion {
+  questionId: string;
+  title: string;
+  section: number | null;
+  position: number;
+  compared: number;
+  skipped: number;
+  pairs: SimilarityPair[];
+  clusters: { size: number; members: SimilarityPerson[] }[];
+}
+
+export interface SimilarityReport {
+  note: string;
+  minSimilarity: number;
+  summary: { flaggedPairs: number; candidatesInvolved: number };
+  questions: SimilarityQuestion[];
+}
+
+export interface SimilarityCompareSide {
+  applicationId: string;
+  name: string;
+  language: string;
+  source: string;
+  draft: boolean;
+  matchedLines: number[];
+  skipped: string | null;
+}
+
+export interface SimilarityCompare {
+  note: string;
+  question: { id: string; title: string };
+  similarity: number;
+  rawOverlap: number;
+  level: SimilarityLevel | null;
+  /** same language and enough code on both sides */
+  comparable: boolean;
+  a: SimilarityCompareSide;
+  b: SimilarityCompareSide;
+}
