@@ -223,8 +223,22 @@ def mint_peer_session_token(body: SessionTokenIn, current_user: dict = Depends(g
 
 # ─── Matchmaking ──────────────────────────────────────────────────────────────
 
+MATCH_TOPICS = ("software", "data", "product", "design", "business")
+
+
 class MatchmakingRequest(BaseModel):
     keep_private: bool = False
+    # Optional topic. The matcher prefers a partner on the same topic but never makes anyone wait for it.
+    topic: Optional[str] = None
+
+    @field_validator("topic")
+    @classmethod
+    def known_topic(cls, v: Optional[str]) -> Optional[str]:
+        if v in (None, "", "any"):
+            return None
+        if v not in MATCH_TOPICS:
+            raise ValueError("Unknown topic")
+        return v
 
 
 class MatchmakingStatus(BaseModel):
@@ -340,7 +354,7 @@ def request_matchmaking(
     try:
         rpc = db_client.rpc(
             "claim_peer_matchmaking_ticket",
-            {"p_student_id": user_id, "p_room_id": proposed_room_id},
+            {"p_student_id": user_id, "p_room_id": proposed_room_id, "p_topic": body.topic},
         ).execute()
     except APIError as e:
         raise HTTPException(status_code=500, detail=f"Matcher failed: {e.message}")
@@ -367,6 +381,7 @@ def request_matchmaking(
                     "matched_with": peer_id,
                     "matched_at": datetime.now(timezone.utc).isoformat(),
                     "keep_private": bool(body.keep_private),
+                    "topic": body.topic,
                 }).execute()
                 own_row = (own.data or [{}])[0]
                 own_id = own_row.get("id", "")
@@ -407,6 +422,7 @@ def request_matchmaking(
             "student_id": user_id,
             "status": "waiting",
             "keep_private": bool(body.keep_private),
+            "topic": body.topic,
         }).execute()
     except APIError as e:
         # Unique violation → the other request won; re-read and return.

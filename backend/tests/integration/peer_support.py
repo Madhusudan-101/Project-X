@@ -41,10 +41,26 @@ def install_matcher(env):
                         return True
             return False
 
+        topic = params.get("p_topic")
+
+        def met_recently(other):
+            cutoff = n - timedelta(hours=24)
+            for r in rows:
+                at = r.get("matched_at")
+                if not at or datetime.fromisoformat(at) <= cutoff:
+                    continue
+                if (r["student_id"] == me and r.get("matched_with") == other) or (r["student_id"] == other and r.get("matched_with") == me):
+                    return True
+            return False
+
         waiting = sorted(
             (r for r in rows if r["status"] == "waiting" and r["student_id"] != me
              and not blocked(r["student_id"]) and not suspended(r["student_id"])),
-            key=lambda r: r["created_at"],
+            key=lambda r: (
+                met_recently(r["student_id"]),
+                0 if (topic is None or r.get("topic") is None or r.get("topic") == topic) else 1,
+                r["created_at"],
+            ),
         )
         if not waiting:
             return []
