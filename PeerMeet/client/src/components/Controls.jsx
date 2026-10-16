@@ -14,6 +14,7 @@ import React from 'react';
 import {
   HiMicrophone,
   HiSpeakerXMark,
+  HiFlag,
 } from 'react-icons/hi2';
 import {
   MdVideocam,
@@ -46,6 +47,7 @@ function Controls({
   onToggleAudio,
   onToggleVideo,
   onToggleScreenShare,
+  onReport,
   onLeave,
 }) {
   return (
@@ -100,6 +102,19 @@ function Controls({
         label={isScreenSharing ? 'Stop Share' : 'Share Screen'}
         title={isScreenSharing ? 'Stop screen sharing' : 'Share your screen'}
       />
+
+      {/* ── Report ──────────────────────────────────────────────────────────── */}
+      {onReport && (
+        <ControlButton
+          id="btn-report"
+          onClick={onReport}
+          isActive={false}
+          activeClass=""
+          icon={<HiFlag />}
+          label="Report"
+          title="Report the other person"
+        />
+      )}
 
       {/* ── Divider ─────────────────────────────────────────────────────────── */}
       <div className="w-px h-10 bg-white/10 mx-1" role="separator" />

@@ -148,9 +148,11 @@ const WEBHOOK_RETRY_DELAYS_MS = (process.env.PEERMEET_WEBHOOK_RETRY_MS || '0,200
   .map((n) => Number(n.trim()))
   .filter((n) => Number.isFinite(n) && n >= 0);
 
-/** POST a signed report; retries network errors, 429 and 5xx, never other 4xx. */
-async function postReportWithRetry(payload) {
-  const url = `${MIRRACLE_WEBHOOK_URL.replace(/\/+$/, '')}/internal/peer-reports`;
+/** POST a signed payload to the dashboard backend; retries network errors, 429 and 5xx, never other 4xx. */
+const postReportWithRetry = (payload) => postSigned('/internal/peer-reports', payload);
+
+async function postSigned(pathname, payload) {
+  const url = `${MIRRACLE_WEBHOOK_URL.replace(/\/+$/, '')}${pathname}`;
   const body = JSON.stringify(payload);
   let lastError = 'no attempt made';
   for (const delay of WEBHOOK_RETRY_DELAYS_MS) {
@@ -170,7 +172,7 @@ async function postReportWithRetry(payload) {
         body,
         signal: AbortSignal.timeout(10000),
       });
-      if (res.ok) return;
+      if (res.ok) return res;
       lastError = `responded ${res.status}`;
       if (res.status !== 429 && res.status < 500) throw new Error(lastError); // permanent: do not retry
     } catch (err) {
@@ -1284,6 +1286,41 @@ io.on('connection', (socket) => {
     if (!interview?.roles?.interviewerId || interview.roles.interviewerId !== myParticipantId) return;
 
     await endInterviewForRoom(roomId, { reason: 'manual' });
+  });
+
+  /**
+   * REPORT-USER
+   * Report the other person from inside the meeting. The reporter's identity comes from their verified
+   * token (never from this payload), the transcript evidence is captured here on the server, and the
+   * backend works out who the partner was from the room, so the browser cannot forge any of it.
+   */
+  socket.on('report-user', async ({ roomId, reason, details, block } = {}, ack) => {
+    const reply = typeof ack === 'function' ? ack : () => {};
+    if (!roomId || !socket.rooms.has(roomId)) return reply({ ok: false, error: 'not-in-room' });
+    if (isRateLimited(socket, 'report-user', 10000)) return reply({ ok: false, error: 'slow-down' });
+    const myParticipantId = getParticipantIdForSocket(roomId, socket.id);
+    const me = getIdentityForParticipant(roomId, myParticipantId);
+    if (!me?.studentId || !MIRRACLE_WEBHOOK_URL || !WEBHOOK_SECRET) {
+      // Anonymous guests cannot be attributed, so there is nobody to take the report on.
+      return reply({ ok: false, error: 'login-required' });
+    }
+    const transcript = getTranscriptHistory(roomId)
+      .slice(-200)
+      .map((l) => `${l.speakerParticipantId === myParticipantId ? 'Reporter' : 'Other person'}: ${String(l.text || '').slice(0, 300)}`);
+    try {
+      await postSigned('/internal/peer-safety/report', {
+        room_id: roomId,
+        reporter_student_id: me.studentId,
+        reason: String(reason || '').slice(0, 60),
+        details: String(details || '').slice(0, 1000),
+        block: !!block,
+        evidence: { transcript, captured_at: new Date().toISOString() },
+      });
+      reply({ ok: true });
+    } catch (err) {
+      console.error(`[Safety] report not delivered: ${err.message}`);
+      reply({ ok: false, error: 'not-delivered' });
+    }
   });
 
   /**

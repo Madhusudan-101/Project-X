@@ -16,6 +16,7 @@ import React, { useEffect, useRef, useCallback, useState, useMemo } from 'react'
 import { useParams, useSearchParams, useNavigate } from 'react-router-dom';
 import Navbar from '../components/Navbar.jsx';
 import VideoPlayer from '../components/VideoPlayer.jsx';
+import ReportDialog from '../components/ReportDialog.jsx';
 import Controls from '../components/Controls.jsx';
 import WaitingScreen from '../components/WaitingScreen.jsx';
 import Loader from '../components/Loader.jsx';
@@ -191,6 +192,7 @@ function MeetingRoom() {
   const hasJoinedRef = useRef(false);
 
   // Room rejection states
+  const [showReport, setShowReport] = useState(false);
   const [roomError, setRoomError] = useState(null); // 'full' | 'not-found'
   const [remoteJoined, setRemoteJoined] = useState(false);
   const [canTranscribe, setCanTranscribe] = useState(false);
@@ -755,11 +757,25 @@ function MeetingRoom() {
               onToggleAudio={toggleAudio}
               onToggleVideo={toggleVideo}
               onToggleScreenShare={handleToggleScreenShare}
+              onReport={remoteJoined ? () => setShowReport(true) : undefined}
               onLeave={handleLeave}
             />
           </div>
         )}
       </main>
+
+      {/* ── Report the other person ─────────────────────────────────────── */}
+      {showReport && (
+        <ReportDialog
+          socket={socket}
+          roomId={roomId}
+          onClose={() => setShowReport(false)}
+          onSubmitted={({ block }) => {
+            // Blocking means this meeting is over for us: leave once they have seen the confirmation.
+            if (block) setTimeout(() => handleLeave(), 2500);
+          }}
+        />
+      )}
 
       {/* ── Interview setup modal (creator only) ─────────────────────────── */}
       {showSetup && (

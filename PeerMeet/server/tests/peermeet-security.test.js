@@ -264,6 +264,71 @@ async function testOnlyTheHostConfiguresTheInterview() {
   await sleep(80);
 }
 
+// ── reporting from inside the meeting ────────────────────────────────────────
+function emitAck(socket, event, payload, ms = 4000) {
+  return new Promise((resolve, reject) => {
+    const t = setTimeout(() => reject(new Error(`no ack for ${event}`)), ms);
+    socket.emit(event, payload, (res) => {
+      clearTimeout(t);
+      resolve(res);
+    });
+  });
+}
+
+async function testInMeetingReport() {
+  hook.calls = [];
+  hook.failFirst = 0;
+  const roomId = `rep-${uid()}`;
+  const A = await newRoom(roomId, 'p-rep-a', mint('student-A', 'Ann', roomId));
+  const B = connect();
+  await waitConnect(B);
+  const ready = waitEvent(B, 'ready');
+  B.emit('join-room', { roomId, participantId: 'p-rep-b', token: mint('student-B', 'Bob', roomId) });
+  await ready;
+  for (let i = 0; i < 250; i++) {
+    roomManager.appendTranscriptHistory(roomId, {
+      id: `l${i}`, speakerId: 's', speakerParticipantId: i % 2 ? 'p-rep-a' : 'p-rep-b', text: `line ${i}`, timestamp: i,
+    });
+  }
+
+  // B reports. B tries to pose as someone else in the payload: it must be ignored.
+  const res = await emitAck(B, 'report-user', {
+    roomId, reason: 'harassment', details: 'rude', block: true, reporter_student_id: 'student-A', reporterStudentId: 'student-A',
+  });
+  record('A signed-in participant can report from the meeting', res.ok === true, JSON.stringify(res));
+  const call = hook.calls.find((c) => c.url === '/internal/peer-safety/report');
+  const payload = call && JSON.parse(call.body);
+  record('The report goes to the safety endpoint, signed', Boolean(call && call.headers['x-peer-signature'] && call.headers['x-peer-timestamp']));
+  record('The reporter comes from the verified token, not the browser payload', payload && payload.reporter_student_id === 'student-B');
+  record('Block and reason are passed along', payload && payload.block === true && payload.reason === 'harassment');
+  record('Evidence is the last 200 transcript lines captured on the server', payload && payload.evidence.transcript.length === 200 && payload.evidence.transcript[199].endsWith('line 249'));
+  record('Evidence labels who said what without names', payload && /^(Reporter|Other person): /.test(payload.evidence.transcript[0]) && !payload.evidence.transcript.join('').includes('Ann') && !payload.evidence.transcript.join('').includes('Bob'));
+
+  // a second report within 10s is slowed down
+  const again = await emitAck(B, 'report-user', { roomId, reason: 'spam' });
+  record('Report spam from one socket is rate limited', again.ok === false && again.error === 'slow-down');
+
+  // someone outside the room cannot report into it
+  const outsider = connect();
+  await waitConnect(outsider);
+  const out = await emitAck(outsider, 'report-user', { roomId, reason: 'spam' });
+  record('An outsider cannot file a report for a room', out.ok === false && out.error === 'not-in-room');
+
+  // an anonymous guest in an open room cannot be attributed
+  const openRoom = `open-${uid()}`;
+  const G1 = await newRoom(openRoom, 'p-g1', null);
+  const G2 = connect();
+  await waitConnect(G2);
+  const r2 = waitEvent(G2, 'ready');
+  G2.emit('join-room', { roomId: openRoom, participantId: 'p-g2' });
+  await r2;
+  const anon = await emitAck(G2, 'report-user', { roomId: openRoom, reason: 'spam' });
+  record('An anonymous guest is told to use the dashboard to report', anon.ok === false && anon.error === 'login-required');
+
+  [A, B, outsider, G1, G2].forEach((x) => x.disconnect());
+  await sleep(80);
+}
+
 // ── leaving ──────────────────────────────────────────────────────────────────
 async function testLeavingFreesTheSlotButDroppingDoesNot() {
   const roomId = `leave-${uid()}`;
@@ -401,6 +466,7 @@ async function testSwitchRolesReportIsNotFinalAndOnlyOnce() {
     await testSignalRelayStaysInsideTheRoom();
     await testOnlyTheHostConfiguresTheInterview();
     await testLeavingFreesTheSlotButDroppingDoesNot();
+    await testInMeetingReport();
     await testWebhookIsSignedAndRetried();
     await testSwitchRolesReportIsNotFinalAndOnlyOnce();
     const passed = results.filter((r) => r.ok).length;
