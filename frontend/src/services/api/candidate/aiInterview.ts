@@ -13,7 +13,7 @@ export const aiInterviewService = {
   startSession(domain: AiInterviewDomain, consentVersion: string): Promise<AiInterviewSession> {
     return request<AiInterviewSession>("/candidate/ai-interview/session", {
       method: "POST",
-      body: { domain, consent: true, consentVersion },
+      body: { domain, consent: true, videoConsent: true, consentVersion },
     });
   },
 

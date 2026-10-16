@@ -2,7 +2,11 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { LocalVideoTrack, Room } from "livekit-client";
 import { ApiClientError } from "@/services/api/client";
 import { aiInterviewService } from "@/services/api/candidate/aiInterview";
-import type { AiInterviewDomain, IntegrityKind } from "@/types/candidate/aiInterview";
+import type {
+  AiInterviewDomain,
+  IntegrityKind,
+  VideoFlagKind,
+} from "@/types/candidate/aiInterview";
 
 export type InterviewPhase = "setup" | "connecting" | "live" | "ended";
 
@@ -15,6 +19,27 @@ export interface CaptionLine {
 export interface DevicePick {
   micId?: string;
   camId?: string;
+}
+
+const VIDEO_FLAGS: VideoFlagKind[] = ["no_face", "multiple_faces", "camera_blocked"];
+
+/**
+ * The interviewer agent tells the candidate, on topic "integrity", when its video check
+ * flags or clears a problem. Returns null for anything else, so stray data is ignored.
+ */
+export function parseIntegrityNotice(
+  payload: Uint8Array,
+  topic?: string,
+): { kind: VideoFlagKind; state: "flagged" | "cleared" } | null {
+  if (topic !== "integrity") return null;
+  try {
+    const msg = JSON.parse(new TextDecoder().decode(payload)) as { kind?: string; state?: string };
+    if (!VIDEO_FLAGS.includes(msg.kind as VideoFlagKind)) return null;
+    if (msg.state !== "flagged" && msg.state !== "cleared") return null;
+    return { kind: msg.kind as VideoFlagKind, state: msg.state };
+  } catch {
+    return null;
+  }
 }
 
 const MAX_CAPTIONS = 8;
@@ -52,6 +77,7 @@ export function useInterviewRoom() {
   const [interviewerSpeaking, setInterviewerSpeaking] = useState(false);
   const [selfVideo, setSelfVideo] = useState<LocalVideoTrack | null>(null);
   const [cameraLost, setCameraLost] = useState(false);
+  const [videoFlag, setVideoFlag] = useState<VideoFlagKind | null>(null);
 
   const stopTimer = () => {
     if (timerRef.current) clearInterval(timerRef.current);
@@ -123,6 +149,7 @@ export function useInterviewRoom() {
       setCameraLost(false);
       cameraLostRef.current = false;
       endingRef.current = false;
+      setVideoFlag(null);
       pendingEventsRef.current = [];
       roomNameRef.current = null;
       setPhase("connecting");
@@ -150,6 +177,14 @@ export function useInterviewRoom() {
         });
         room.on(RoomEvent.ActiveSpeakersChanged, (speakers) => {
           setInterviewerSpeaking(speakers.some((s) => !s.isLocal));
+        });
+        room.on(RoomEvent.DataReceived, (payload, participant, _kind, topic) => {
+          if (!participant || participant.isLocal) return; // only the interviewer may send these
+          const notice = parseIntegrityNotice(payload, topic);
+          if (!notice) return;
+          setVideoFlag((cur) =>
+            notice.state === "flagged" ? notice.kind : cur === notice.kind ? null : cur,
+          );
         });
         room.on(RoomEvent.LocalTrackPublished, (pub) => {
           if (pub.track?.kind === "video") {
@@ -296,6 +331,7 @@ export function useInterviewRoom() {
     setInterviewerSpeaking(false);
     setSelfVideo(null);
     setCameraLost(false);
+    setVideoFlag(null);
     setError(null);
     setPhase("setup");
   }, [teardown]);
@@ -312,6 +348,7 @@ export function useInterviewRoom() {
     interviewerSpeaking,
     selfVideo,
     cameraLost,
+    videoFlag,
     retryCamera,
     reportIntegrity,
     needsAudioUnlock,

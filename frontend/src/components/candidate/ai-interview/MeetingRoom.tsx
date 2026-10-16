@@ -18,6 +18,13 @@ import type { useInterviewRoom } from "./useInterviewRoom";
 
 type Room = ReturnType<typeof useInterviewRoom>;
 
+const VIDEO_FLAG_MESSAGES = {
+  no_face: "The interviewer cannot see your face. Move into frame and face the camera.",
+  multiple_faces:
+    "The interviewer can see more than one person. You must take this interview alone.",
+  camera_blocked: "Your camera looks blocked or too dark. Uncover it or improve the lighting.",
+} as const;
+
 const fmt = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
 
 /** Live interview: one formal "meeting room" with interviewer stage, captions and call controls. */
@@ -64,7 +71,7 @@ export function MeetingRoom({ room, domain }: { room: Room; domain: AiInterviewD
         <div className="flex items-center gap-2 text-xs tabular-nums">
           <span className="flex items-center gap-2 rounded-full border border-background/20 px-3 py-1.5">
             <span className="h-2 w-2 animate-pulse rounded-full bg-destructive" aria-hidden />
-            Live · camera on · supervised
+            Live · interviewer can see your camera
           </span>
           {room.secondsLeft !== null && (
             <span
@@ -79,6 +86,16 @@ export function MeetingRoom({ room, domain }: { room: Room; domain: AiInterviewD
           )}
         </div>
       </header>
+
+      {room.videoFlag && (
+        <div
+          role="alert"
+          className="flex items-center gap-3 border-b border-destructive/60 bg-destructive/25 px-5 py-2.5 text-sm"
+        >
+          <TriangleAlert className="h-4 w-4 shrink-0" aria-hidden />
+          <span>{VIDEO_FLAG_MESSAGES[room.videoFlag]}</span>
+        </div>
+      )}
 
       {(away || room.cameraLost) && (
         <div

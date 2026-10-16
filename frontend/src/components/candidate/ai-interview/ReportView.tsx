@@ -6,6 +6,7 @@ import type {
   AiInterviewReport,
   AiInterviewReportDetail,
   IntegrityEvent,
+  IntegritySummary,
 } from "@/types/candidate/aiInterview";
 
 const DOMAIN_LABELS: Record<string, string> = {
@@ -57,9 +58,23 @@ const EVENT_LABELS: Record<IntegrityEvent["kind"], string> = {
   window_blur: "Switched to another window",
   camera_lost: "Camera stopped",
   camera_restored: "Camera restored",
+  no_face: "Interviewer could not see a face",
+  multiple_faces: "More than one person in view",
+  camera_blocked: "Camera looked blocked",
 };
 
 const mmss = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+
+const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
+
+function summaryText(s: IntegritySummary): string {
+  const parts = [
+    s.tab_switches > 0 && plural(s.tab_switches, "tab switch", "tab switches"),
+    s.camera_lost > 0 && plural(s.camera_lost, "camera interruption", "camera interruptions"),
+    (s.video_flags ?? 0) > 0 && plural(s.video_flags, "video check flag", "video check flags"),
+  ].filter(Boolean) as string[];
+  return `${parts.join(", ")} recorded.`;
+}
 
 /** Supervision result for the session. Hidden for reports made before integrity tracking existed. */
 export function IntegrityBlock({
@@ -84,9 +99,7 @@ export function IntegrityBlock({
         Session integrity
       </h4>
       <p className="mt-1 text-muted-foreground">
-        {clean
-          ? "No tab switches or camera interruptions were recorded."
-          : `${summary.tab_switches} tab switch${summary.tab_switches === 1 ? "" : "es"} and ${summary.camera_lost} camera interruption${summary.camera_lost === 1 ? "" : "s"} recorded.`}
+        {clean ? "No tab switches or camera interruptions were recorded." : summaryText(summary)}
       </p>
       {events.length > 0 && (
         <ul className="mt-2 space-y-1 text-muted-foreground">

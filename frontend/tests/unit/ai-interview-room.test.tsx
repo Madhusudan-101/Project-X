@@ -52,6 +52,7 @@ vi.mock("livekit-client", () => {
       TrackUnsubscribed: "trackUnsubscribed",
       ParticipantConnected: "participantConnected",
       ActiveSpeakersChanged: "activeSpeakersChanged",
+      DataReceived: "dataReceived",
       LocalTrackPublished: "localTrackPublished",
       LocalTrackUnpublished: "localTrackUnpublished",
       AudioPlaybackStatusChanged: "audioPlaybackStatusChanged",
@@ -159,6 +160,46 @@ describe("useInterviewRoom (camera + integrity)", () => {
     await waitFor(() => expect(svc.logIntegrityEvents).toHaveBeenCalledTimes(2));
     const resent = svc.logIntegrityEvents.mock.calls[1][1].map((e: { kind: string }) => e.kind);
     expect(resent).toEqual(["tab_hidden", "window_blur"]);
+  });
+
+  it("sends the rules version and consent flags to the backend on join", async () => {
+    await joined();
+    expect(svc.startSession).toHaveBeenCalledWith("ai_ml", "v-test");
+  });
+
+  describe("interviewer's video check notices", () => {
+    const send = (obj: unknown, topic = "integrity", from: unknown = { isLocal: false }) =>
+      emit("dataReceived", new TextEncoder().encode(JSON.stringify(obj)), from, 0, topic);
+
+    it("shows a flagged problem, then clears it when the interviewer clears it", async () => {
+      const { result } = await joined();
+      send({ kind: "multiple_faces", state: "flagged" });
+      expect(result.current.videoFlag).toBe("multiple_faces");
+      send({ kind: "multiple_faces", state: "cleared" });
+      expect(result.current.videoFlag).toBeNull();
+    });
+
+    it("keeps a newer problem when an older one clears", async () => {
+      const { result } = await joined();
+      send({ kind: "no_face", state: "flagged" });
+      send({ kind: "camera_blocked", state: "flagged" });
+      send({ kind: "no_face", state: "cleared" });
+      expect(result.current.videoFlag).toBe("camera_blocked");
+    });
+
+    it("ignores notices from other topics, from the local participant, or with no sender", async () => {
+      const { result } = await joined();
+      send({ kind: "no_face", state: "flagged" }, "chat");
+      send({ kind: "no_face", state: "flagged" }, "integrity", { isLocal: true });
+      send({ kind: "no_face", state: "flagged" }, "integrity", null);
+      expect(result.current.videoFlag).toBeNull();
+    });
+
+    it("does not save interviewer notices as browser integrity events", async () => {
+      await joined();
+      send({ kind: "no_face", state: "flagged" });
+      expect(svc.logIntegrityEvents).not.toHaveBeenCalled();
+    });
   });
 
   it("ignores integrity signals when there is no live session", () => {

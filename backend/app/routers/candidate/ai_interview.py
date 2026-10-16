@@ -53,12 +53,16 @@ REPORTS_LIMIT = 50
 
 # Bump when the rules shown on the briefing screen change materially. Candidates
 # must accept the current version to start; the version is stored with the session.
-CONSENT_VERSION = "2026-10-camera-v1"
+CONSENT_VERSION = "2026-10-video-v2"
 
 # Signals the browser may report. "tab_hidden" and "window_blur" both mean the
 # candidate left the interview page; camera_* track the mandatory camera.
 INTEGRITY_KINDS = ("tab_hidden", "window_blur", "camera_lost", "camera_restored")
 TAB_LEFT_KINDS = ("tab_hidden", "window_blur")
+# Signals only the AI interviewer's video check may report (via the internal
+# webhook), and only for candidates who consented to video analysis. Objective
+# observations only: no judgement of gaze, emotion or appearance.
+VIDEO_KINDS = ("no_face", "multiple_faces", "camera_blocked")
 MAX_EVENTS_PER_REQUEST = 20
 MAX_EVENTS_PER_SESSION = 200
 # Events are only accepted while the interview could still be running.
@@ -98,6 +102,8 @@ class StartSessionIn(BaseModel):
     domain: str
     # The candidate must explicitly accept the rules (and camera supervision).
     consent: bool
+    # Separate, explicit permission for the AI interviewer to view the camera feed.
+    videoConsent: bool
     consentVersion: str
 
 
@@ -125,11 +131,13 @@ class IntegrityEventsOut(BaseModel):
 class IntegrityEventOut(BaseModel):
     kind: str
     offset_seconds: int
+    source: str = "browser"
 
 
 class IntegritySummary(BaseModel):
     tab_switches: int = 0
     camera_lost: int = 0
+    video_flags: int = 0
     total: int = 0
 
 
@@ -202,7 +210,8 @@ def _used_today(user_id: str) -> int:
 def _summarize_integrity(events: list[dict]) -> dict:
     tab = sum(1 for e in events if e.get("kind") in TAB_LEFT_KINDS)
     cam = sum(1 for e in events if e.get("kind") == "camera_lost")
-    return {"tab_switches": tab, "camera_lost": cam, "total": tab + cam}
+    vid = sum(1 for e in events if e.get("kind") in VIDEO_KINDS)
+    return {"tab_switches": tab, "camera_lost": cam, "video_flags": vid, "total": tab + cam + vid}
 
 
 def _integrity_by_room(room_ids: list[str], student_id: str) -> dict[str, list[dict]]:
@@ -212,7 +221,7 @@ def _integrity_by_room(room_ids: list[str], student_id: str) -> dict[str, list[d
     try:
         res = (
             db_client.table("ai_voice_interview_integrity_events")
-            .select("room_id, kind, offset_seconds")
+            .select("room_id, kind, offset_seconds, source")
             .eq("student_id", student_id)
             .in_("room_id", room_ids)
             .order("created_at")
@@ -259,6 +268,11 @@ async def start_session(
             status_code=400,
             detail="You must accept the interview rules and camera supervision to start.",
         )
+    if not body.videoConsent:
+        raise HTTPException(
+            status_code=400,
+            detail="You must allow the AI interviewer to view your camera to start.",
+        )
     if body.consentVersion != CONSENT_VERSION:
         raise HTTPException(
             status_code=409,
@@ -300,6 +314,8 @@ async def start_session(
                     "user_id": user_id,
                     "display_name": display_name,
                     "max_minutes": max_minutes,
+                    # The agent analyses video only when this is true.
+                    "video_consent": True,
                 }),
             )
         )
@@ -314,6 +330,7 @@ async def start_session(
             "student_id": user_id,
             "domain": body.domain,
             "consent_at": datetime.now(timezone.utc).isoformat(),
+            "video_consent": True,
             "consent_version": CONSENT_VERSION,
         }).execute()
     except APIError as e:
@@ -422,6 +439,7 @@ def post_integrity_events(
                     "student_id": user_id,
                     "kind": e.kind,
                     "offset_seconds": e.offsetSeconds,
+                    "source": "browser",
                 }
                 for e in batch
             ]).execute()
@@ -479,6 +497,11 @@ def get_my_report(room_id: str, current_user: dict = Depends(require_candidate_r
         **_row_to_out(rows[0]),
         "integrity": _summarize_integrity(events),
         "integrity_events": [
-            {"kind": e["kind"], "offset_seconds": e["offset_seconds"]} for e in events
+            {
+                "kind": e["kind"],
+                "offset_seconds": e["offset_seconds"],
+                "source": e.get("source") or "browser",
+            }
+            for e in events
         ],
     }

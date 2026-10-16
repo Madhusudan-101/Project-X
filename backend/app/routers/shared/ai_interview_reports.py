@@ -23,6 +23,7 @@ from fastapi import APIRouter, Header, HTTPException
 from pydantic import BaseModel, Field
 
 from ...deps import db_client
+from ..candidate.ai_interview import MAX_EVENTS_PER_SESSION, VIDEO_KINDS
 
 logger = logging.getLogger(__name__)
 
@@ -111,3 +112,71 @@ def ingest_ai_interview_report(
         logger.exception("ai_voice_interview_sessions status update failed")
 
     return {"ok": True, "id": (res.data or [{}])[0].get("id")}
+
+
+class VideoEventIn(BaseModel):
+    kind: str
+    offset_seconds: int = Field(ge=0, le=24 * 3600)
+
+
+class VideoEventsIn(BaseModel):
+    room_id: str = Field(min_length=1, max_length=64)
+    events: List[VideoEventIn] = Field(min_length=1, max_length=20)
+
+
+@router.post("/ai-interview-integrity", status_code=201)
+def ingest_video_integrity(
+    body: VideoEventsIn,
+    authorization: Optional[str] = Header(None),
+) -> dict:
+    """Video-check observations from the interviewer agent (no face, more than one
+    person, camera blocked). Stored only if the candidate consented to video
+    analysis when starting, and only while the interview is live. The student is
+    taken from the session row, never from the payload."""
+    _verify_secret(authorization)
+    bad = sorted({e.kind for e in body.events if e.kind not in VIDEO_KINDS})
+    if bad:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unknown event kind. Must be one of: {', '.join(VIDEO_KINDS)}",
+        )
+
+    sess = (
+        db_client.table("ai_voice_interview_sessions")
+        .select("student_id, status, video_consent")
+        .eq("room_id", body.room_id)
+        .limit(1)
+        .execute()
+    ).data
+    if not sess:
+        raise HTTPException(status_code=404, detail="Unknown interview session")
+    row = sess[0]
+    if not row.get("video_consent"):
+        raise HTTPException(status_code=403, detail="Candidate did not consent to video analysis")
+    if row.get("status") != "started":
+        raise HTTPException(status_code=409, detail="This interview has already finished")
+
+    existing = (
+        db_client.table("ai_voice_interview_integrity_events")
+        .select("id", count="exact")
+        .eq("room_id", body.room_id)
+        .execute()
+    )
+    room_left = MAX_EVENTS_PER_SESSION - (existing.count or 0)
+    batch = body.events[: max(0, room_left)]
+    if batch:
+        try:
+            db_client.table("ai_voice_interview_integrity_events").insert([
+                {
+                    "room_id": body.room_id,
+                    "student_id": row["student_id"],
+                    "kind": e.kind,
+                    "offset_seconds": e.offset_seconds,
+                    "source": "agent",
+                }
+                for e in batch
+            ]).execute()
+        except Exception as e:  # noqa: BLE001
+            logger.exception("video integrity insert failed")
+            raise HTTPException(status_code=500, detail=f"Insert failed: {e}")
+    return {"accepted": len(batch)}

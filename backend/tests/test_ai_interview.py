@@ -141,7 +141,7 @@ class _FakeLK:
     async def aclose(self): pass
 
 
-CONSENT = {"consent": True, "consentVersion": cand.CONSENT_VERSION}
+CONSENT = {"consent": True, "videoConsent": True, "consentVersion": cand.CONSENT_VERSION}
 
 STUDENT, OTHER = "11111111-1111-1111-1111-111111111111", "22222222-2222-2222-2222-222222222222"
 
@@ -290,7 +290,7 @@ def test_config_requires_auth():
 
 
 def test_session_requires_explicit_consent(env):
-    r = env.client.post(f"{URL}/session", json={"domain": "dsa", "consent": False,
+    r = env.client.post(f"{URL}/session", json={"domain": "dsa", "consent": False, "videoConsent": True,
                                                 "consentVersion": cand.CONSENT_VERSION})
     assert r.status_code == 400 and "accept" in r.json()["detail"].lower()
     assert env.client.post(f"{URL}/session", json={"domain": "dsa"}).status_code == 422
@@ -299,7 +299,7 @@ def test_session_requires_explicit_consent(env):
 
 
 def test_session_rejects_stale_rules_version(env):
-    r = env.client.post(f"{URL}/session", json={"domain": "dsa", "consent": True,
+    r = env.client.post(f"{URL}/session", json={"domain": "dsa", "consent": True, "videoConsent": True,
                                                 "consentVersion": "old"})
     assert r.status_code == 409
     assert env.store.tables.get("ai_voice_interview_sessions", []) == []
@@ -382,17 +382,100 @@ def test_reports_include_integrity_summary_and_timeline(env):
     env.client.post("/internal/ai-interview-reports", json={"room_id": room, "overall_score": 70}, headers=AUTH)
 
     detail = env.client.get(f"{URL}/reports/{room}").json()
-    assert detail["integrity"] == {"tab_switches": 2, "camera_lost": 1, "total": 3}
+    assert detail["integrity"] == {"tab_switches": 2, "camera_lost": 1, "video_flags": 0, "total": 3}
     assert [(e["kind"], e["offset_seconds"]) for e in detail["integrity_events"]] == [
         ("tab_hidden", 10), ("window_blur", 20), ("camera_lost", 30), ("camera_restored", 35)]
 
     listed = env.client.get(f"{URL}/reports").json()
-    assert listed[0]["integrity"] == {"tab_switches": 2, "camera_lost": 1, "total": 3}
+    assert listed[0]["integrity"] == {"tab_switches": 2, "camera_lost": 1, "video_flags": 0, "total": 3}
 
 
 def test_report_without_events_has_clean_summary(env):
     room = _start(env)
     env.client.post("/internal/ai-interview-reports", json={"room_id": room}, headers=AUTH)
     d = env.client.get(f"{URL}/reports/{room}").json()
-    assert d["integrity"] == {"tab_switches": 0, "camera_lost": 0, "total": 0}
+    assert d["integrity"] == {"tab_switches": 0, "camera_lost": 0, "video_flags": 0, "total": 0}
     assert d["integrity_events"] == []
+
+
+# ─── Video consent + agent video observations ─────────────────────────────────
+
+def test_session_requires_explicit_video_consent(env):
+    r = env.client.post(f"{URL}/session", json={"domain": "dsa", "consent": True,
+                                                "videoConsent": False,
+                                                "consentVersion": cand.CONSENT_VERSION})
+    assert r.status_code == 400 and "camera" in r.json()["detail"].lower()
+    r = env.client.post(f"{URL}/session", json={"domain": "dsa", "consent": True,
+                                                "consentVersion": cand.CONSENT_VERSION})
+    assert r.status_code == 422
+    assert env.store.tables.get("ai_voice_interview_sessions", []) == []
+    assert _FakeLK.created == [] and _FakeLK.dispatched == []
+
+
+def test_video_consent_is_recorded_and_told_to_the_agent(env):
+    import json
+    _start(env)
+    assert env.store.tables["ai_voice_interview_sessions"][0]["video_consent"] is True
+    assert json.loads(_FakeLK.created[0].metadata)["video_consent"] is True
+
+
+def _agent_events(env, room, *kinds, at=30, headers=AUTH):
+    return env.client.post("/internal/ai-interview-integrity", headers=headers, json={
+        "room_id": room, "events": [{"kind": k, "offset_seconds": at} for k in kinds]})
+
+
+def test_agent_video_events_require_the_shared_secret(env):
+    room = _start(env)
+    assert _agent_events(env, room, "no_face", headers={}).status_code == 401
+    assert _agent_events(env, room, "no_face", headers={"Authorization": "Bearer wrong"}).status_code == 401
+    assert env.store.tables.get("ai_voice_interview_integrity_events", []) == []
+
+
+def test_agent_video_events_are_saved_with_source_and_student_from_session(env):
+    room = _start(env)
+    r = _agent_events(env, room, "no_face", "multiple_faces", at=95)
+    assert r.status_code == 201 and r.json() == {"accepted": 2}
+    rows = env.store.tables["ai_voice_interview_integrity_events"]
+    assert [(x["kind"], x["source"], x["student_id"], x["offset_seconds"]) for x in rows] == [
+        ("no_face", "agent", STUDENT, 95), ("multiple_faces", "agent", STUDENT, 95)]
+
+
+def test_agent_cannot_store_browser_kinds_and_browser_cannot_store_video_kinds(env):
+    room = _start(env)
+    assert _agent_events(env, room, "tab_hidden").status_code == 400
+    assert _events(env, room, "no_face").status_code == 400
+    assert env.store.tables.get("ai_voice_interview_integrity_events", []) == []
+
+
+def test_agent_video_events_refused_without_video_consent(env):
+    room = _start(env)
+    env.store.tables["ai_voice_interview_sessions"][0]["video_consent"] = False
+    r = _agent_events(env, room, "no_face")
+    assert r.status_code == 403
+    assert env.store.tables.get("ai_voice_interview_integrity_events", []) == []
+
+
+def test_agent_video_events_refused_for_unknown_or_finished_interviews(env):
+    assert _agent_events(env, "ghost", "no_face").status_code == 404
+    room = _start(env)
+    env.client.post("/internal/ai-interview-reports", json={"room_id": room}, headers=AUTH)
+    assert _agent_events(env, room, "no_face").status_code == 409
+
+
+def test_agent_video_events_share_the_per_session_cap(env, monkeypatch):
+    from app.routers.shared import ai_interview_reports as hookmod
+    monkeypatch.setattr(hookmod, "MAX_EVENTS_PER_SESSION", 2)
+    room = _start(env)
+    assert _agent_events(env, room, "no_face", "no_face", "no_face").json() == {"accepted": 2}
+    assert _agent_events(env, room, "no_face").json() == {"accepted": 0}
+
+
+def test_reports_count_video_flags_and_label_the_source(env):
+    room = _start(env)
+    _events(env, room, "tab_hidden", at=10)
+    _agent_events(env, room, "multiple_faces", "camera_blocked", at=50)
+    env.client.post("/internal/ai-interview-reports", json={"room_id": room}, headers=AUTH)
+    d = env.client.get(f"{URL}/reports/{room}").json()
+    assert d["integrity"] == {"tab_switches": 1, "camera_lost": 0, "video_flags": 2, "total": 3}
+    assert [(e["kind"], e["source"]) for e in d["integrity_events"]] == [
+        ("tab_hidden", "browser"), ("multiple_faces", "agent"), ("camera_blocked", "agent")]

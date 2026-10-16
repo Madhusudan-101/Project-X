@@ -33,6 +33,7 @@ const RULES_DONT = [
 
 const SUPERVISION = [
   "This session is supervised. Your camera is live in the interview room from start to finish.",
+  "With your permission, the AI interviewer views your camera to check that your face is visible and that you are alone. You are told on screen if there is a problem.",
   "Leaving the interview tab or window is detected and flagged on screen while it happens.",
   "If your camera stops, you are asked to restore it. Repeated violations can invalidate the interview.",
 ];
@@ -40,7 +41,8 @@ const SUPERVISION = [
 const DATA_NOTES = [
   "You are speaking with an AI interviewer. Scores are generated automatically and can contain errors.",
   "Your voice is transcribed live. The transcript and your scored report are saved to your account.",
-  "Your camera video is streamed to the live interview session.",
+  "Every few seconds, one small frame from your camera is checked by an AI model (Google Gemini) for three things: a face is visible, more than one person is in frame, and the camera is not blocked. Frames are not saved. Only the type of problem and its time are kept.",
+  "The camera check does not look at your expression, gaze or appearance, and it does not affect your interview score.",
   "Closing this tab or ending the call finishes the interview. You cannot resume it.",
 ];
 
@@ -69,6 +71,7 @@ export function InterviewBriefing({
   onRetryConfig,
 }: Props) {
   const [agreed, setAgreed] = useState(false);
+  const [videoAgreed, setVideoAgreed] = useState(false);
   const selected = domain ? domainInfo(domain) : null;
 
   return (
@@ -200,7 +203,22 @@ export function InterviewBriefing({
             />
             <span>
               I have read the rules. I agree to complete this interview on my own, without outside
-              help, with my camera on, and to have my voice transcribed and saved.
+              help, and to have my voice transcribed and saved.
+            </span>
+          </label>
+          <label
+            htmlFor="ai-video-consent"
+            className="flex cursor-pointer items-start gap-3 text-sm"
+          >
+            <Checkbox
+              id="ai-video-consent"
+              checked={videoAgreed}
+              onCheckedChange={(v) => setVideoAgreed(v === true)}
+              className="mt-0.5"
+            />
+            <span>
+              I allow the AI interviewer to view my camera during the interview to check that I am
+              visible and alone. I understand video is checked live and not recorded.
             </span>
           </label>
           {config && (
@@ -221,7 +239,7 @@ export function InterviewBriefing({
           {error && <p className="text-sm text-destructive">{error}</p>}
           <Button
             className="w-full bg-gradient-brand text-primary-foreground"
-            disabled={!agreed || !domain || !config || config.remainingToday === 0}
+            disabled={!agreed || !videoAgreed || !domain || !config || config.remainingToday === 0}
             onClick={onContinue}
           >
             Continue to equipment check

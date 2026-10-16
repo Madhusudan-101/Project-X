@@ -16,6 +16,7 @@ from livekit.plugins import (
 from livekit.plugins.turn_detector.multilingual import MultilingualModel
 
 from graph import create_workflow  # <-- our compiled LangGraph app
+from video_monitor import start_video_check
 
 load_dotenv(".env.local")
 
@@ -50,6 +51,8 @@ async def entrypoint(ctx: agents.JobContext):
     except json.JSONDecodeError:
         pass
     initial_domain = meta.get("domain")
+    # True only if the candidate explicitly allowed the interviewer to view their camera.
+    video_consent = meta.get("video_consent") is True
     try:
         max_minutes = int(meta.get("max_minutes") or os.getenv("AI_INTERVIEW_MAX_MINUTES", "20"))
     except ValueError:
@@ -117,6 +120,11 @@ async def entrypoint(ctx: agents.JobContext):
             noise_cancellation=noise_cancellation.BVC(),
         ),
     )
+
+    # Video check (no face / more than one person / camera blocked). It only runs
+    # with the candidate's consent and never feeds the interview LLM or the score.
+    video_check = start_video_check(ctx.room, ctx.job.room.name, video_consent)
+    ctx.add_shutdown_callback(lambda: video_check.stop())
 
     # Start the interview workflow - the graph will drive the conversation
     print("Starting changing your learning graph")

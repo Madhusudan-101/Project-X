@@ -8,6 +8,7 @@ import { InterviewBriefing } from "@/components/candidate/ai-interview/Interview
 import { MeetingRoom } from "@/components/candidate/ai-interview/MeetingRoom";
 import { DeviceCheck } from "@/components/candidate/ai-interview/DeviceCheck";
 import { useIntegrityMonitor } from "@/components/candidate/ai-interview/useIntegrityMonitor";
+import { parseIntegrityNotice } from "@/components/candidate/ai-interview/useInterviewRoom";
 import { IntegrityBlock } from "@/components/candidate/ai-interview/ReportView";
 import { WaitingRoom } from "@/components/candidate/ai-interview/WaitingRoom";
 
@@ -23,6 +24,12 @@ const CONFIG: AiInterviewConfig = {
   usedToday: 1,
   remainingToday: 2,
   consentVersion: "v-test",
+};
+
+/** Both the rules consent and the separate camera-analysis consent are required to start. */
+const acceptBoth = async (user: ReturnType<typeof userEvent.setup>) => {
+  await user.click(screen.getByLabelText(/i have read the rules/i));
+  await user.click(screen.getByLabelText(/allow the ai interviewer to view my camera/i));
 };
 
 type RoomProp = Parameters<typeof MeetingRoom>[0]["room"];
@@ -42,6 +49,7 @@ const makeRoom = (over: Partial<RoomProp> = {}): RoomProp =>
     cameraLost: false,
     retryCamera: vi.fn(),
     reportIntegrity: vi.fn(),
+    videoFlag: null,
     needsAudioUnlock: false,
     audioHostRef: { current: null },
     start: vi.fn(),
@@ -98,7 +106,34 @@ describe("InterviewBriefing", () => {
     expect(screen.getByText(/camera is live in the interview room/i)).toBeTruthy();
     expect(screen.getByText(/Do not switch tabs or windows/i)).toBeTruthy();
     expect(screen.getByText("Live voice and video")).toBeTruthy();
-    expect(screen.getByText(/with my camera on/i)).toBeTruthy();
+    expect(screen.getByLabelText(/allow the ai interviewer to view my camera/i)).toBeTruthy();
+  });
+
+  it("explains exactly what the camera check does and does not do", () => {
+    setup();
+    expect(screen.getByText(/more than one person is in frame/i)).toBeTruthy();
+    expect(screen.getByText(/frames are not saved/i)).toBeTruthy();
+    expect(screen.getByText(/does not look at your expression, gaze or appearance/i)).toBeTruthy();
+  });
+
+  it("will not continue with only the rules consent: camera permission is required too", async () => {
+    const user = userEvent.setup();
+    setup("ai_ml");
+    await user.click(screen.getByLabelText(/i have read the rules/i));
+    const btn = screen.getByRole("button", { name: /continue to equipment check/i });
+    expect((btn as HTMLButtonElement).disabled).toBe(true);
+    await user.click(screen.getByLabelText(/allow the ai interviewer to view my camera/i));
+    expect((btn as HTMLButtonElement).disabled).toBe(false);
+  });
+
+  it("will not continue with only the camera consent", async () => {
+    const user = userEvent.setup();
+    setup("ai_ml");
+    await user.click(screen.getByLabelText(/allow the ai interviewer to view my camera/i));
+    expect(
+      (screen.getByRole("button", { name: /continue to equipment check/i }) as HTMLButtonElement)
+        .disabled,
+    ).toBe(true);
   });
 
   it("keeps Continue disabled until a track is chosen and consent is given", async () => {
@@ -106,7 +141,7 @@ describe("InterviewBriefing", () => {
     const { onContinue } = setup("ai_ml");
     const btn = screen.getByRole("button", { name: /continue to equipment check/i });
     expect((btn as HTMLButtonElement).disabled).toBe(true);
-    await user.click(screen.getByRole("checkbox"));
+    await acceptBoth(user);
     expect((btn as HTMLButtonElement).disabled).toBe(false);
     await user.click(btn);
     expect(onContinue).toHaveBeenCalledOnce();
@@ -115,7 +150,7 @@ describe("InterviewBriefing", () => {
   it("stays disabled with consent but no track", async () => {
     const user = userEvent.setup();
     setup(null);
-    await user.click(screen.getByRole("checkbox"));
+    await acceptBoth(user);
     const btn = screen.getByRole("button", { name: /continue to equipment check/i });
     expect((btn as HTMLButtonElement).disabled).toBe(true);
     expect(screen.getByText(/choose an interview track/i)).toBeTruthy();
@@ -158,7 +193,7 @@ describe("InterviewBriefing live config", () => {
   it("blocks starting when today's interviews are used up", async () => {
     const user = userEvent.setup();
     base({ ...CONFIG, usedToday: 3, remainingToday: 0 });
-    await user.click(screen.getByRole("checkbox"));
+    await acceptBoth(user);
     expect(screen.getByText(/used all 3 interviews for today/i)).toBeTruthy();
     expect(
       (screen.getByRole("button", { name: /continue to equipment check/i }) as HTMLButtonElement)
@@ -169,7 +204,7 @@ describe("InterviewBriefing live config", () => {
   it("cannot continue until the config has loaded", async () => {
     const user = userEvent.setup();
     base(null);
-    await user.click(screen.getByRole("checkbox"));
+    await acceptBoth(user);
     expect(screen.getByText("Loading…")).toBeTruthy();
     expect(
       (screen.getByRole("button", { name: /continue to equipment check/i }) as HTMLButtonElement)
@@ -202,7 +237,7 @@ describe("aiInterviewService", () => {
     await aiInterviewService.startSession("dsa", "v-test");
     expect(requestMock).toHaveBeenCalledWith("/candidate/ai-interview/session", {
       method: "POST",
-      body: { domain: "dsa", consent: true, consentVersion: "v-test" },
+      body: { domain: "dsa", consent: true, videoConsent: true, consentVersion: "v-test" },
     });
   });
 
@@ -242,7 +277,9 @@ describe("IntegrityBlock", () => {
   it("confirms a clean session", () => {
     render(
       <IntegrityBlock
-        report={report({ integrity: { tab_switches: 0, camera_lost: 0, total: 0 } })}
+        report={report({
+          integrity: { tab_switches: 0, camera_lost: 0, video_flags: 0, total: 0 },
+        })}
       />,
     );
     expect(screen.getByText(/no tab switches or camera interruptions/i)).toBeTruthy();
@@ -252,7 +289,7 @@ describe("IntegrityBlock", () => {
     render(
       <IntegrityBlock
         report={report({
-          integrity: { tab_switches: 1, camera_lost: 1, total: 2 },
+          integrity: { tab_switches: 1, camera_lost: 1, video_flags: 0, total: 2 },
           integrity_events: [
             { kind: "tab_hidden", offset_seconds: 75 },
             { kind: "camera_lost", offset_seconds: 130 },
@@ -260,11 +297,62 @@ describe("IntegrityBlock", () => {
         })}
       />,
     );
-    expect(screen.getByText(/1 tab switch and 1 camera interruption recorded/i)).toBeTruthy();
+    expect(screen.getByText(/1 tab switch, 1 camera interruption recorded/i)).toBeTruthy();
     expect(screen.getByText("1:15")).toBeTruthy();
     expect(screen.getByText("Left the interview tab")).toBeTruthy();
     expect(screen.getByText("2:10")).toBeTruthy();
     expect(screen.getByText("Camera stopped")).toBeTruthy();
+  });
+});
+
+describe("IntegrityBlock video flags", () => {
+  it("shows what the interviewer's video check saw, with times", () => {
+    render(
+      <IntegrityBlock
+        report={
+          {
+            id: "1",
+            room_id: "r",
+            domain: "dsa",
+            per_question: [],
+            integrity: { tab_switches: 0, camera_lost: 0, video_flags: 2, total: 2 },
+            integrity_events: [
+              { kind: "multiple_faces", offset_seconds: 61, source: "agent" },
+              { kind: "no_face", offset_seconds: 200, source: "agent" },
+            ],
+          } as AiInterviewReportDetail
+        }
+      />,
+    );
+    expect(screen.getByText(/2 video check flags recorded/i)).toBeTruthy();
+    expect(screen.getByText("More than one person in view")).toBeTruthy();
+    expect(screen.getByText("1:01")).toBeTruthy();
+    expect(screen.getByText("Interviewer could not see a face")).toBeTruthy();
+    expect(screen.getByText("3:20")).toBeTruthy();
+  });
+});
+
+describe("parseIntegrityNotice", () => {
+  const enc = (o: unknown) => new TextEncoder().encode(JSON.stringify(o));
+
+  it("accepts the interviewer's flagged and cleared notices on the integrity topic", () => {
+    expect(parseIntegrityNotice(enc({ kind: "no_face", state: "flagged" }), "integrity")).toEqual({
+      kind: "no_face",
+      state: "flagged",
+    });
+    expect(
+      parseIntegrityNotice(enc({ kind: "multiple_faces", state: "cleared" }), "integrity"),
+    ).toEqual({ kind: "multiple_faces", state: "cleared" });
+  });
+
+  it("ignores other topics, unknown kinds, bad states and garbage", () => {
+    expect(parseIntegrityNotice(enc({ kind: "no_face", state: "flagged" }), "chat")).toBeNull();
+    expect(parseIntegrityNotice(enc({ kind: "no_face", state: "flagged" }))).toBeNull();
+    expect(
+      parseIntegrityNotice(enc({ kind: "tab_hidden", state: "flagged" }), "integrity"),
+    ).toBeNull();
+    expect(parseIntegrityNotice(enc({ kind: "no_face", state: "maybe" }), "integrity")).toBeNull();
+    expect(parseIntegrityNotice(new TextEncoder().encode("not json"), "integrity")).toBeNull();
   });
 });
 
@@ -436,7 +524,7 @@ describe("MeetingRoom", () => {
 
   it("shows the supervised, camera-on status and the self view", () => {
     render(<MeetingRoom room={makeRoom()} domain="ai_ml" />);
-    expect(screen.getByText(/camera on · supervised/i)).toBeTruthy();
+    expect(screen.getByText(/interviewer can see your camera/i)).toBeTruthy();
     expect(screen.getByLabelText("Your camera")).toBeTruthy();
   });
 
@@ -469,6 +557,20 @@ describe("MeetingRoom", () => {
     });
     expect(room.reportIntegrity).toHaveBeenCalledWith("window_blur");
     expect(room.reportIntegrity).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([
+    ["no_face", /cannot see your face/i],
+    ["multiple_faces", /more than one person/i],
+    ["camera_blocked", /blocked or too dark/i],
+  ] as const)("tells the candidate right away when the interviewer flags %s", (kind, text) => {
+    render(<MeetingRoom room={makeRoom({ videoFlag: kind })} domain="ai_ml" />);
+    expect(screen.getByRole("alert").textContent).toMatch(text);
+  });
+
+  it("shows no alert when the video check is clear", () => {
+    render(<MeetingRoom room={makeRoom({ videoFlag: null })} domain="ai_ml" />);
+    expect(screen.queryByRole("alert")).toBeNull();
   });
 
   it("warns when the camera stops and lets the candidate restore it", async () => {
