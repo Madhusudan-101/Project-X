@@ -69,6 +69,11 @@ function normalizeSession(raw: Raw): OASession {
     status: raw.status as OASession["status"],
     serverTime: raw.server_time as string,
     codingEnabled: Boolean(raw.coding_enabled),
+    webcam: {
+      mode: ((raw.webcam as Raw | undefined)?.mode as OASession["webcam"]["mode"]) ?? "off",
+      active: Boolean((raw.webcam as Raw | undefined)?.active),
+      intervalSeconds: Number((raw.webcam as Raw | undefined)?.interval_seconds ?? 60),
+    },
     section: s
       ? {
           position: Number(s.position),
@@ -97,6 +102,9 @@ function normalizeOverview(raw: Raw): OAOverview {
     totalDurationMinutes: Number(raw.total_duration_minutes),
     totalQuestions: Number(raw.total_questions),
     codingEnabled: Boolean(raw.coding_enabled),
+    webcamMode: (raw.webcam_mode as OAOverview["webcamMode"]) ?? "off",
+    snapshotIntervalSeconds: Number(raw.snapshot_interval_seconds ?? 60),
+    snapshotRetentionDays: Number(raw.snapshot_retention_days ?? 30),
     sections: ((raw.sections as Raw[]) ?? []).map((s) => ({
       position: Number(s.position),
       title: s.title as string,
@@ -152,8 +160,21 @@ export const candidateAssessmentService = {
   getOverview: (applicationId: string): Promise<OAOverview> =>
     request<Raw>(`/candidate/oa/${applicationId}`).then(normalizeOverview),
 
-  start: (applicationId: string): Promise<OASession> =>
-    request<Raw>(`/candidate/oa/${applicationId}/start`, { method: "POST" }).then(normalizeSession),
+  start: (applicationId: string, webcamConsent = false): Promise<OASession> =>
+    request<Raw>(`/candidate/oa/${applicationId}/start`, {
+      method: "POST",
+      body: { webcam_consent: webcamConsent },
+    }).then(normalizeSession),
+
+  /** One camera frame (JPEG data URL). `faces` is what the browser counted, if it can. */
+  sendSnapshot: (
+    applicationId: string,
+    body: { image: string; questionId?: string | null; faces?: number | null },
+  ): Promise<void> =>
+    request<unknown>(`/candidate/oa/${applicationId}/snapshots`, {
+      method: "POST",
+      body: { image: body.image, question_id: body.questionId ?? null, faces: body.faces ?? null },
+    }).then(() => undefined),
 
   getSession: (applicationId: string): Promise<OASession> =>
     request<Raw>(`/candidate/oa/${applicationId}/session`).then(normalizeSession),

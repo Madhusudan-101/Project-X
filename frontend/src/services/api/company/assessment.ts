@@ -12,6 +12,8 @@
 
 import { request } from "../client";
 import type {
+  CameraSnapshot,
+  CameraSnapshots,
   IntegrityEvent,
   SimilarityCompare,
   SimilarityCompareSide,
@@ -41,6 +43,7 @@ function normalizeAssessment(raw: Raw): Assessment {
     id: raw.id as string,
     title: raw.title as string,
     inviteMode: raw.invite_mode as Assessment["inviteMode"],
+    webcamMode: (raw.webcam_mode as Assessment["webcamMode"]) ?? "off",
     locked: Boolean(raw.locked),
     codingEnabled: Boolean(raw.coding_enabled),
     stats: {
@@ -104,6 +107,11 @@ function normalizeRow(r: Raw): ResultRow {
     tabSwitches: Number(r.tab_switches ?? 0),
     fullscreenExits: Number(r.fullscreen_exits ?? 0),
     pasteEvents: Number(r.paste_events ?? 0),
+    snapshots: Number(r.snapshots ?? 0),
+    snapshotsNoFace: Number(r.snapshots_no_face ?? 0),
+    snapshotsMultiFace: Number(r.snapshots_multi_face ?? 0),
+    webcamMode: (r.webcam_mode as ResultRow["webcamMode"]) ?? "off",
+    webcamConsented: Boolean(r.webcam_consented),
     flagged: Boolean(r.flagged),
   };
 }
@@ -112,6 +120,7 @@ function toPayload(d: AssessmentDraft): Raw {
   return {
     title: d.title,
     invite_mode: d.inviteMode,
+    webcam_mode: d.webcamMode ?? "off",
     template: d.template ?? null,
     sections: d.template
       ? null
@@ -316,6 +325,25 @@ export const companyAssessmentService = {
         },
       };
     }),
+
+  cameraSnapshots: (
+    jobId: string,
+    driveId: string,
+    applicationId: string,
+  ): Promise<CameraSnapshots> =>
+    request<Raw>(`${base(jobId, driveId)}/results/${applicationId}/snapshots`).then((r) => ({
+      mode: (r.mode as CameraSnapshots["mode"]) ?? "off",
+      consentedAt: (r.consented_at as string | null) ?? null,
+      retentionDays: Number(r.retention_days ?? 30),
+      items: ((r.items as Raw[]) ?? []).map((i) => ({
+        id: i.id as string,
+        takenAt: i.taken_at as string,
+        offsetSeconds: Number(i.offset_seconds ?? 0),
+        faces: i.faces == null ? null : Number(i.faces),
+        question: (i.question as CameraSnapshot["question"]) ?? null,
+        url: (i.url as string | null) ?? null,
+      })),
+    })),
 
   resultDetail: (jobId: string, driveId: string, applicationId: string): Promise<ResultDetail> =>
     request<Raw>(`${base(jobId, driveId)}/results/${applicationId}`).then((r) => ({

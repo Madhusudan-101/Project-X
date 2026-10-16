@@ -33,10 +33,13 @@ export interface AssessmentSection {
   questions: AssessmentQuestion[];
 }
 
+export type WebcamMode = "off" | "optional" | "required";
+
 export interface Assessment {
   id: string;
   title: string;
   inviteMode: InviteMode;
+  webcamMode: WebcamMode;
   locked: boolean;
   codingEnabled: boolean;
   stats: { invited: number; started: number; submitted: number };
@@ -70,6 +73,7 @@ export interface SectionDraft {
 export interface AssessmentDraft {
   title: string;
   inviteMode: InviteMode;
+  webcamMode?: WebcamMode;
   template?: AssessmentTemplate;
   sections?: SectionDraft[];
 }
@@ -105,6 +109,13 @@ export interface ResultRow {
   tabSwitches: number;
   fullscreenExits: number;
   pasteEvents: number;
+  /** camera photos taken / ones where the browser saw nobody / several people */
+  snapshots: number;
+  snapshotsNoFace: number;
+  snapshotsMultiFace: number;
+  /** the camera policy this attempt started under */
+  webcamMode: WebcamMode;
+  webcamConsented: boolean;
   flagged: boolean;
 }
 
@@ -153,7 +164,10 @@ export type IntegrityEventType =
   | "fullscreen_enter"
   | "paste"
   | "copy"
-  | "cut";
+  | "cut"
+  | "camera_denied"
+  | "camera_lost"
+  | "camera_restored";
 
 export interface IntegrityEvent {
   type: IntegrityEventType;
@@ -244,4 +258,22 @@ export interface SimilarityCompare {
   comparable: boolean;
   a: SimilarityCompareSide;
   b: SimilarityCompareSide;
+}
+
+export interface CameraSnapshot {
+  id: string;
+  takenAt: string;
+  offsetSeconds: number;
+  /** faces the candidate's browser counted; null when it couldn't tell */
+  faces: number | null;
+  question: { section: number | null; position: number; title: string } | null;
+  /** short-lived signed URL; null if storage couldn't sign it */
+  url: string | null;
+}
+
+export interface CameraSnapshots {
+  mode: WebcamMode;
+  consentedAt: string | null;
+  retentionDays: number;
+  items: CameraSnapshot[];
 }

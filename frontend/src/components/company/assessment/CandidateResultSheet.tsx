@@ -6,6 +6,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { companyAssessmentService } from "@/services/api/company/assessment";
 import type { ResultDetail } from "@/types/company/assessment";
 import { fmtDuration } from "./format";
+import { CameraGallery } from "./CameraGallery";
 import { IntegrityTimelineCard } from "./IntegrityTimeline";
 
 const VERDICT: Record<string, string> = {
@@ -63,6 +64,13 @@ export function CandidateResultSheet({
                 value={`${data.candidate.pasteEvents} / ${data.candidate.fullscreenExits}`}
               />
             </dl>
+
+            <CameraGallery
+              jobId={jobId}
+              driveId={driveId}
+              applicationId={data.candidate.applicationId}
+              mode={data.candidate.webcamMode}
+            />
 
             <IntegrityTimelineCard timeline={data.events} />
 

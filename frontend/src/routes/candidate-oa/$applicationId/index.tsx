@@ -12,6 +12,7 @@ import {
   Loader2,
   Lock,
   Timer,
+  Video,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -59,6 +60,7 @@ function AssessmentInstructionsPage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [agreed, setAgreed] = useState(false);
+  const [cameraAgreed, setCameraAgreed] = useState(false);
 
   const {
     data: oa,
@@ -84,7 +86,7 @@ function AssessmentInstructionsPage() {
   const serverNow = now + skew;
 
   const startMutation = useMutation({
-    mutationFn: () => candidateAssessmentService.start(applicationId),
+    mutationFn: () => candidateAssessmentService.start(applicationId, cameraAgreed),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["candidate-oa"] });
       navigate({ to: "/candidate-oa/$applicationId/test", params: { applicationId } });
@@ -105,7 +107,9 @@ function AssessmentInstructionsPage() {
     oa?.state === "upcoming" && windowStart !== null && serverNow >= windowStart
       ? "open"
       : oa?.state;
-  const canStart = state === "open" && agreed;
+  const webcamMode = oa?.webcamMode ?? "off";
+  const cameraOk = webcamMode !== "required" || cameraAgreed;
+  const canStart = state === "open" && agreed && cameraOk;
   const sectionCount = oa?.sections.length ?? 0;
   const hasCoding = oa?.sections.some((x) => x.kind !== "mcq") ?? false;
 
@@ -348,6 +352,32 @@ function AssessmentInstructionsPage() {
                           this assessment on my own, honestly and without outside help.
                         </span>
                       </label>
+                      {webcamMode !== "off" && oa && (
+                        <label className="flex cursor-pointer items-start gap-3 rounded-md border border-border p-3 text-sm">
+                          <Checkbox
+                            checked={cameraAgreed}
+                            onCheckedChange={(v) => setCameraAgreed(v === true)}
+                            className="mt-0.5"
+                          />
+                          <span>
+                            <span className="flex items-center gap-1.5 font-medium">
+                              <Video className="h-4 w-4" />
+                              Camera monitoring{" "}
+                              {webcamMode === "required" ? "(required)" : "(optional)"}
+                            </span>
+                            <span className="mt-1 block text-muted-foreground">
+                              I agree that my camera is switched on during the assessment and a
+                              small photo is taken about every{" "}
+                              {Math.round(oa.snapshotIntervalSeconds / 60) || 1} minute
+                              {oa.snapshotIntervalSeconds >= 90 ? "s" : ""} and shown to the hiring
+                              team to check I am working alone. Photos are deleted after{" "}
+                              {oa.snapshotRetentionDays} days. No audio or video is recorded.
+                              {webcamMode === "optional" &&
+                                " If you don't agree, you can still take the assessment without it."}
+                            </span>
+                          </span>
+                        </label>
+                      )}
                       <div className="flex flex-wrap items-center gap-3">
                         <Button
                           disabled={!canStart || startMutation.isPending}
@@ -359,6 +389,11 @@ function AssessmentInstructionsPage() {
                           )}
                           Start assessment
                         </Button>
+                        {state === "open" && agreed && !cameraOk && (
+                          <p className="text-xs text-muted-foreground">
+                            This assessment needs camera monitoring. Tick the camera box to start.
+                          </p>
+                        )}
                         {state !== "open" && (
                           <p className="text-xs text-muted-foreground">
                             {state === "upcoming"

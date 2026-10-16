@@ -36,7 +36,7 @@ from ...crud import (
     list_drives_for_job,
 )
 from ...deps import db_client, require_company_role
-from ...services.candidate import oa_judge, oa_similarity
+from ...services.candidate import oa_judge, oa_similarity, oa_snapshots
 from ...services.candidate.oa_bank import template_sections
 from ...services.notifications import oa_emails
 from ..candidate.assessment import _first, _parse_ts, format_args, provision_template
@@ -76,6 +76,8 @@ class SectionIn(BaseModel):
 class AssessmentIn(BaseModel):
     title: str = Field(min_length=1, max_length=200)
     invite_mode: str = Field(default="invited", pattern="^(all|invited)$")
+    # Webcam snapshots during the test. 'required' blocks starting without agreeing to the camera.
+    webcam_mode: str = Field(default="off", pattern="^(off|optional|required)$")
     template: Optional[str] = Field(default=None, pattern="^(coding|analytics|aptitude)$")
     sections: Optional[List[SectionIn]] = Field(default=None, max_length=MAX_SECTIONS)
 
@@ -143,6 +145,7 @@ def _definition(assessment: dict) -> Dict[str, Any]:
         "id": assessment["id"],
         "title": assessment["title"],
         "invite_mode": assessment.get("invite_mode", "invited"),
+        "webcam_mode": assessment.get("webcam_mode") or "off",
         "locked": bool(attempts),
         "coding_enabled": oa_judge.judge_enabled(),
         "stats": {
@@ -275,14 +278,14 @@ def put_assessment(
     if existing:
         db_client.table("oa_sections").delete().eq("assessment_id", existing["id"]).execute()
         db_client.table("oa_assessments").update(
-            {"title": body.title, "invite_mode": body.invite_mode}
+            {"title": body.title, "invite_mode": body.invite_mode, "webcam_mode": body.webcam_mode}
         ).eq("id", existing["id"]).execute()
-        assessment = {**existing, "title": body.title, "invite_mode": body.invite_mode}
+        assessment = {**existing, "title": body.title, "invite_mode": body.invite_mode, "webcam_mode": body.webcam_mode}
     else:
         assessment = _first(
             db_client.table("oa_assessments").insert({
                 "drive_id": drive["id"], "title": body.title, "invite_mode": body.invite_mode,
-                "created_by": current_user["id"],
+                "webcam_mode": body.webcam_mode, "created_by": current_user["id"],
             }).execute()
         )
     try:
@@ -467,6 +470,11 @@ def _row(app_id: str, inv: Optional[dict], att: Optional[dict], person: dict) ->
         "tab_switches": tabs,
         "fullscreen_exits": int(att.get("fullscreen_exits") or 0) if att else 0,
         "paste_events": int(att.get("paste_events") or 0) if att else 0,
+        "snapshots": int(att.get("snapshots_taken") or 0) if att else 0,
+        "snapshots_no_face": int(att.get("snapshots_no_face") or 0) if att else 0,
+        "snapshots_multi_face": int(att.get("snapshots_multi_face") or 0) if att else 0,
+        "webcam_mode": (att.get("webcam_mode") or "off") if att else "off",
+        "webcam_consented": bool(att and att.get("webcam_consent_at")),
         "flagged": tabs > FLAG_TAB_SWITCHES,
     }
 
@@ -726,4 +734,42 @@ def similarity_compare(
         "similarity": match.similarity if match else 0.0, "raw_overlap": match.raw_overlap if match else 0.0,
         "level": match.level if match else None, "comparable": sa.language == sb.language and sa.usable and sb.usable,
         "a": side(sa), "b": side(sb),
+    }
+
+
+# ── Webcam snapshots ────────────────────────────────────────────────
+
+@router.get(_BASE + "/results/{application_id}/snapshots")
+def result_snapshots(
+    job_id: str, drive_id: str, application_id: str,
+    current_user: dict = Depends(require_company_role),
+) -> Dict[str, Any]:
+    """The candidate's camera snapshots with short-lived signed URLs (they expire in minutes)."""
+    job, drive = _owned_drive(job_id, drive_id, current_user)
+    assessment = _need_assessment(drive)
+    attempt = _first(db_client.table("oa_attempts").select("*").eq("application_id", application_id)
+                     .eq("assessment_id", assessment["id"]).limit(1).execute())
+    if not attempt:
+        raise HTTPException(status_code=404, detail="No attempt found for that applicant.")
+    rows = (
+        db_client.table("oa_snapshots").select("id, question_id, path, taken_at, faces")
+        .eq("attempt_id", attempt["id"]).order("taken_at", desc=False).limit(oa_snapshots.MAX_PER_ATTEMPT)
+        .execute().data or []
+    )
+    urls = oa_snapshots.signed_urls([r["path"] for r in rows])
+    sections = db_client.table("oa_sections").select("id, position").eq("assessment_id", assessment["id"]).execute().data or []
+    sec_pos = {x["id"]: x["position"] for x in sections}
+    qrows = db_client.table("oa_questions").select("id, section_id, position, title") \
+        .in_("section_id", list(sec_pos)).execute().data or [] if sec_pos else []
+    where = {q["id"]: {"section": sec_pos.get(q["section_id"]), "position": q["position"], "title": q["title"]} for q in qrows}
+    started = _parse_ts(attempt["started_at"])
+    return {
+        "mode": attempt.get("webcam_mode") or "off",
+        "consented_at": str(attempt["webcam_consent_at"]) if attempt.get("webcam_consent_at") else None,
+        "retention_days": oa_snapshots.retention_days(),
+        "items": [{
+            "id": r["id"], "taken_at": str(r["taken_at"]), "faces": r.get("faces"),
+            "offset_seconds": max(0, int((_parse_ts(r["taken_at"]) - started).total_seconds())),
+            "question": where.get(r.get("question_id")), "url": urls.get(r["path"]),
+        } for r in rows],
     }

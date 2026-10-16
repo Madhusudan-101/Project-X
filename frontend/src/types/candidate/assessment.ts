@@ -23,6 +23,10 @@ export interface OAOverview {
   totalQuestions: number;
   sections: OASection[];
   codingEnabled: boolean;
+  /** off | optional | required: whether snapshots are taken from the candidate's camera */
+  webcamMode: "off" | "optional" | "required";
+  snapshotIntervalSeconds: number;
+  snapshotRetentionDays: number;
   attempt: {
     status: "in_progress" | "submitted";
     currentSection: number;
@@ -69,6 +73,8 @@ export interface OASession {
   status: "in_progress" | "submitted";
   serverTime: string;
   codingEnabled: boolean;
+  /** `active` = the candidate agreed, so the browser should send snapshots */
+  webcam: { mode: "off" | "optional" | "required"; active: boolean; intervalSeconds: number };
   section: {
     position: number;
     totalSections: number;
@@ -126,7 +132,10 @@ export type OAEventType =
   | "fullscreen_enter"
   | "paste"
   | "copy"
-  | "cut";
+  | "cut"
+  | "camera_denied"
+  | "camera_lost"
+  | "camera_restored";
 
 /** What accompanies an event. Text is capped by the client and again by the server. */
 export interface OAEventExtra {

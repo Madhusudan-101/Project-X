@@ -36,7 +36,7 @@ from pydantic import BaseModel, Field
 
 from ...crud import get_application, get_company_names, get_drive_for_job_college, get_job
 from ...deps import _parse_ts, db_client, require_candidate_role
-from ...services.candidate import oa_judge, oa_signature
+from ...services.candidate import oa_judge, oa_signature, oa_snapshots
 from ...services.candidate.oa_bank import pick_template, template_sections
 
 log = logging.getLogger(__name__)
@@ -89,6 +89,9 @@ class OAOverviewOut(BaseModel):
     total_questions: int
     sections: List[OASectionOut]
     coding_enabled: bool = False
+    webcam_mode: str = "off"          # shown before starting so the candidate can consent (or not)
+    snapshot_interval_seconds: int = oa_snapshots.DEFAULT_INTERVAL_SECONDS
+    snapshot_retention_days: int = 30
     attempt: Optional[OAAttemptOut] = None
 
 
@@ -126,10 +129,17 @@ class OACurrentSectionOut(BaseModel):
     questions: List[OAQuestionOut]
 
 
+class OAWebcamOut(BaseModel):
+    mode: str = "off"                 # off | optional | required (the policy this attempt started under)
+    active: bool = False              # the candidate consented: the browser should send snapshots
+    interval_seconds: int = oa_snapshots.DEFAULT_INTERVAL_SECONDS
+
+
 class OASessionOut(BaseModel):
     status: str  # in_progress | submitted
     server_time: str
     coding_enabled: bool = False
+    webcam: OAWebcamOut = OAWebcamOut()
     section: Optional[OACurrentSectionOut] = None
 
 
@@ -140,7 +150,8 @@ class AnswerIn(BaseModel):
 
 
 EVENT_TYPES = ("tab_switch", "tab_return", "window_blur", "window_focus",
-               "fullscreen_exit", "fullscreen_enter", "paste", "copy", "cut")
+               "fullscreen_exit", "fullscreen_enter", "paste", "copy", "cut",
+               "camera_denied", "camera_lost", "camera_restored")
 # Only these three keep a running counter on oa_attempts (the rest are timeline-only).
 EVENT_COUNTERS = {"tab_switch": "tab_switches", "fullscreen_exit": "fullscreen_exits", "paste": "paste_events"}
 MAX_EVENTS_PER_ATTEMPT = 2000
@@ -527,6 +538,9 @@ def overview_route(
             for s in sections
         ],
         coding_enabled=oa_judge.judge_enabled(),
+        webcam_mode=assessment.get("webcam_mode") or "off",
+        snapshot_interval_seconds=oa_snapshots.interval_seconds(),
+        snapshot_retention_days=oa_snapshots.retention_days(),
         attempt=OAAttemptOut(
             status=attempt["status"],
             current_section=int(attempt["current_section"]),
@@ -538,9 +552,17 @@ def overview_route(
 
 # ── POST /candidate/oa/{application_id}/start ───────────────────────
 
+class StartIn(BaseModel):
+    # Agreement to camera monitoring, shown on the instructions page. Ignored when the
+    # assessment doesn't use the camera.
+    webcam_consent: bool = False
+
+
 @router.post("/{application_id}/start", response_model=OASessionOut)
 def start_route(
-    application_id: str, current_user: dict = Depends(require_candidate_role)
+    application_id: str,
+    body: Optional[StartIn] = None,
+    current_user: dict = Depends(require_candidate_role),
 ) -> OASessionOut:
     _, job, drive = _load_context(application_id, current_user)
     assessment = _ensure_assessment(job, drive)
@@ -558,6 +580,13 @@ def start_route(
             raise HTTPException(status_code=409, detail="The assessment window hasn't opened yet.")
         if state == "closed":
             raise HTTPException(status_code=409, detail="The assessment window has closed.")
+        mode = assessment.get("webcam_mode") or "off"
+        consent = bool(body and body.webcam_consent) and mode != "off"
+        if mode == "required" and not consent:
+            raise HTTPException(
+                status_code=409,
+                detail="This assessment requires camera monitoring. Agree to it on the instructions page to start.",
+            )
         now = _now().isoformat()
         try:
             attempt = _first(
@@ -569,6 +598,8 @@ def start_route(
                     "current_section": 1,
                     "started_at": now,
                     "section_started_at": now,
+                    "webcam_mode": mode,
+                    "webcam_consent_at": now if consent else None,
                 })
                 .execute()
             )
@@ -682,6 +713,11 @@ def _session(attempt: dict, sections: List[dict]) -> OASessionOut:
         status="in_progress",
         server_time=now,
         coding_enabled=oa_judge.judge_enabled(),
+        webcam=OAWebcamOut(
+            mode=attempt.get("webcam_mode") or "off",
+            active=bool(attempt.get("webcam_consent_at")) and (attempt.get("webcam_mode") or "off") != "off",
+            interval_seconds=oa_snapshots.interval_seconds(),
+        ),
         section=OACurrentSectionOut(
             position=section["position"],
             total_sections=len(sections),
@@ -835,3 +871,62 @@ def event_route(
     if update:
         db_client.table("oa_attempts").update(update).eq("id", attempt["id"]).execute()
     return {"ok": True}
+
+
+# ── POST /candidate/oa/{application_id}/snapshots ───────────────────
+
+class SnapshotIn(BaseModel):
+    # data URL or bare base64 of a small JPEG; validated again server-side
+    image: str = Field(min_length=100, max_length=oa_snapshots.MAX_BYTES * 2)
+    question_id: Optional[str] = Field(default=None, max_length=64)
+    # faces the browser counted (FaceDetector, where it exists). Untrusted: only used to
+    # point a reviewer at the frames worth looking at.
+    faces: Optional[int] = Field(default=None, ge=0, le=20)
+
+
+@router.post("/{application_id}/snapshots")
+def snapshot_route(
+    application_id: str,
+    body: SnapshotIn,
+    current_user: dict = Depends(require_candidate_role),
+) -> Dict[str, Any]:
+    attempt, sections = _active_attempt(application_id, current_user)
+    if attempt["status"] != "in_progress":
+        raise HTTPException(status_code=409, detail="The assessment has ended.")
+    if not attempt.get("webcam_consent_at") or (attempt.get("webcam_mode") or "off") == "off":
+        raise HTTPException(status_code=403, detail="Camera monitoring isn't enabled for this attempt.")
+    taken = int(attempt.get("snapshots_taken") or 0)
+    if taken >= oa_snapshots.MAX_PER_ATTEMPT:
+        return {"ok": True, "stored": False, "reason": "limit"}
+    now = _now()
+    last = _parse_ts(attempt.get("last_snapshot_at")) if attempt.get("last_snapshot_at") else None
+    if last and (now - last).total_seconds() < oa_snapshots.MIN_SECONDS_BETWEEN:
+        return {"ok": True, "stored": False, "reason": "too_soon"}
+    try:
+        data = oa_snapshots.decode_jpeg(body.image)
+    except oa_snapshots.BadSnapshot as e:
+        raise HTTPException(status_code=422, detail=str(e))
+
+    question_id = None
+    idx = int(attempt["current_section"]) - 1
+    if body.question_id and 0 <= idx < len(sections):
+        current = _questions_for([sections[idx]["id"]]).get(sections[idx]["id"], [])
+        question_id = body.question_id if any(q["id"] == body.question_id for q in current) else None
+
+    path = f"{attempt['assessment_id']}/{attempt['id']}/{int(now.timestamp() * 1000)}.jpg"
+    try:
+        oa_snapshots.upload(path, data)
+    except Exception as exc:  # noqa: BLE001 — storage hiccup must never break the test
+        log.warning("OA snapshot upload failed: %s", exc)
+        return {"ok": True, "stored": False, "reason": "storage"}
+    db_client.table("oa_snapshots").insert({
+        "attempt_id": attempt["id"], "question_id": question_id, "path": path,
+        "taken_at": now.isoformat(), "bytes": len(data), "faces": body.faces,
+    }).execute()
+    db_client.table("oa_attempts").update({
+        "snapshots_taken": taken + 1,
+        "snapshots_no_face": int(attempt.get("snapshots_no_face") or 0) + (1 if body.faces == 0 else 0),
+        "snapshots_multi_face": int(attempt.get("snapshots_multi_face") or 0) + (1 if (body.faces or 0) > 1 else 0),
+        "last_snapshot_at": now.isoformat(),
+    }).eq("id", attempt["id"]).execute()
+    return {"ok": True, "stored": True}

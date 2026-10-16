@@ -7,6 +7,8 @@ import {
   Maximize,
   Minimize,
   Scissors,
+  Video,
+  VideoOff,
   Waypoints,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -30,6 +32,9 @@ const LABEL: Record<IntegrityEventType, string> = {
   paste: "Pasted",
   copy: "Copied",
   cut: "Cut",
+  camera_denied: "Camera blocked",
+  camera_lost: "Camera turned off",
+  camera_restored: "Camera back on",
 };
 
 const ICON: Record<IntegrityEventType, typeof Eye> = {
@@ -42,9 +47,19 @@ const ICON: Record<IntegrityEventType, typeof Eye> = {
   paste: ClipboardPaste,
   copy: Copy,
   cut: Scissors,
+  camera_denied: VideoOff,
+  camera_lost: VideoOff,
+  camera_restored: Video,
 };
 
-const CONCERNING: IntegrityEventType[] = ["tab_switch", "window_blur", "fullscreen_exit", "paste"];
+const CONCERNING: IntegrityEventType[] = [
+  "tab_switch",
+  "window_blur",
+  "fullscreen_exit",
+  "paste",
+  "camera_denied",
+  "camera_lost",
+];
 
 function clock(seconds: number | null): string {
   if (seconds == null) return "—";
@@ -104,7 +119,11 @@ export function IntegrityTimelineCard({ timeline }: { timeline: IntegrityTimelin
               const Icon = ICON[e.type];
               const hasText = !!e.text;
               const bad =
-                isLargePaste(e) || e.type === "tab_switch" || e.type === "fullscreen_exit";
+                isLargePaste(e) ||
+                e.type === "tab_switch" ||
+                e.type === "fullscreen_exit" ||
+                e.type === "camera_denied" ||
+                e.type === "camera_lost";
               return (
                 <li key={i} className="rounded px-2 py-1 text-xs hover:bg-muted/50">
                   <div className="flex flex-wrap items-center gap-2">

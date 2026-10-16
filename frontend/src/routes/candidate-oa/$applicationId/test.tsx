@@ -2,7 +2,16 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Check, CheckCircle2, Circle, Loader2, Maximize, ShieldAlert, Timer } from "lucide-react";
+import {
+  Check,
+  CheckCircle2,
+  Circle,
+  Loader2,
+  Maximize,
+  ShieldAlert,
+  Timer,
+  VideoOff,
+} from "lucide-react";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -21,6 +30,8 @@ import { CodeEditor } from "@/components/candidate/oa/CodeEditor";
 import { CodingWorkspace } from "@/components/candidate/oa/CodingWorkspace";
 import { PromptText } from "@/components/candidate/oa/PromptText";
 import { useCandidateGuard } from "@/hooks/candidate/use-candidate-guard";
+import { CameraPreview } from "@/components/candidate/oa/CameraPreview";
+import { useProctorCamera } from "@/components/candidate/oa/useProctorCamera";
 import { candidateAssessmentService } from "@/services/api/candidate/assessment";
 import type {
   CodeLanguage,
@@ -227,6 +238,24 @@ function AssessmentRunnerPage() {
     [applicationId],
   );
 
+  // ── Camera snapshots (only when the company turned them on AND the candidate agreed) ──
+  const webcam = data?.webcam;
+  const camera = useProctorCamera({
+    enabled: inProgress && !!webcam?.active,
+    intervalSeconds: webcam?.intervalSeconds ?? 60,
+    onSnapshot: (image, faces) => {
+      candidateAssessmentService
+        .sendSnapshot(applicationId, { image, questionId: activeQuestionId.current, faces })
+        .catch(() => undefined);
+    },
+    onEvent: (type) => report(type),
+  });
+  const cameraBlocked =
+    inProgress &&
+    !!webcam?.active &&
+    webcam.mode === "required" &&
+    (camera.status === "denied" || camera.status === "lost");
+
   useEffect(() => {
     if (!inProgress) return;
     let hiddenAt = 0;
@@ -395,6 +424,7 @@ function AssessmentRunnerPage() {
 
           <div className="ml-auto flex items-center gap-4">
             <SaveIndicator state={saveState} />
+            {webcam?.active && <CameraPreview videoRef={camera.videoRef} status={camera.status} />}
             <div
               role="timer"
               aria-label="Time remaining in this section"
@@ -466,6 +496,39 @@ function AssessmentRunnerPage() {
             This assessment is open in another tab. Close the other one — your answers are saved on
             the server, so edits in two tabs can overwrite each other.
           </p>
+        )}
+        {webcam?.active &&
+          webcam.mode === "optional" &&
+          (camera.status === "denied" || camera.status === "lost") && (
+            <div className="flex items-center gap-2 rounded-md border border-amber-400/50 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:bg-amber-950/30 dark:text-amber-300">
+              <VideoOff className="h-3.5 w-3.5" />
+              Your camera is off. The assessment continues, and this has been noted.
+              <button type="button" onClick={camera.retry} className="ml-auto underline">
+                Turn camera on
+              </button>
+            </div>
+          )}
+        {cameraBlocked && (
+          <div
+            role="alertdialog"
+            aria-label="Camera required"
+            className="fixed inset-0 z-50 flex items-center justify-center bg-background/95 p-4 backdrop-blur"
+          >
+            <Card className="max-w-md space-y-4 p-8 text-center">
+              <VideoOff className="mx-auto h-10 w-10 text-destructive" />
+              <h2 className="font-display text-lg font-semibold">Camera access is required</h2>
+              <p className="text-sm text-muted-foreground">
+                This assessment is monitored by camera. Allow camera access in your browser (the
+                icon in the address bar), then try again. Your timer keeps running.
+              </p>
+              <Button
+                onClick={camera.retry}
+                className="bg-gradient-brand text-primary-foreground shadow-soft"
+              >
+                Turn camera on
+              </Button>
+            </Card>
+          </div>
         )}
         {!inFullscreen && typeof document !== "undefined" && document.fullscreenEnabled && (
           <button

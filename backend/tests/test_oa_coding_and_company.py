@@ -328,5 +328,88 @@ r = client.post(f"/candidate/oa/app-1/questions/{q['id']}/submit", json={"langua
 check("submit after the section expired is refused", r.status_code == 409, r.text)
 check("nothing was graded", not db.store.get("oa_submissions"))
 
+# ── 9. webcam snapshots ─────────────────────────────────────────────
+import base64
+from app.services.candidate import oa_snapshots as snaps
+stored_objs = {}
+snaps.upload = lambda path, data: stored_objs.__setitem__(path, data)
+snaps.signed_urls = lambda paths: {p: "https://signed.example/" + p for p in paths}
+JPEG = b"\xff\xd8\xff\xe0" + b"j" * 200 + b"\xff\xd9"
+IMG = "data:image/jpeg;base64," + base64.b64encode(JPEG).decode()
+def snap(**kw): return client.post("/candidate/oa/app-1/snapshots", json={"image": IMG, **kw})
+
+as_company(); seed()
+check("webcam_mode must be off|optional|required", put({**GOOD, "webcam_mode": "always"}).status_code == 422)
+r = put({**GOOD, "webcam_mode": "required"}).json()
+check("company can require the camera", r["webcam_mode"] == "required" and client.get(URL).json()["webcam_mode"] == "required", r)
+client.post(URL + "/invites", json={"all": True})
+as_candidate()
+ov = client.get("/candidate/oa/app-1").json()
+check("instructions page learns the camera policy", ov["webcam_mode"] == "required" and ov["snapshot_retention_days"] == 30, ov)
+r = client.post("/candidate/oa/app-1/start")
+check("required camera: can't start without consenting", r.status_code == 409 and not db.store.get("oa_attempts"), r.text)
+r = client.post("/candidate/oa/app-1/start", json={"webcam_consent": False})
+check("required camera: explicit 'no' is refused too", r.status_code == 409)
+r = client.post("/candidate/oa/app-1/start", json={"webcam_consent": True}).json()
+check("consent starts the attempt with the camera active", r["webcam"] == {"mode": "required", "active": True, "interval_seconds": 60}
+      and db.store["oa_attempts"][0]["webcam_consent_at"], r.get("webcam"))
+q1 = r["section"]["questions"][0]["id"]
+check("a snapshot is stored under the attempt and question", snap(question_id=q1, faces=1).json() == {"ok": True, "stored": True}
+      and len(stored_objs) == 1 and next(iter(stored_objs.values())) == JPEG and db.store["oa_snapshots"][0]["question_id"] == q1)
+check("snapshots closer than the server floor are dropped", snap().json() == {"ok": True, "stored": False, "reason": "too_soon"} and len(stored_objs) == 1)
+def age(): db.store["oa_attempts"][0]["last_snapshot_at"] = (NOW - timedelta(minutes=5)).isoformat()
+age()
+check("not a JPEG → 422", client.post("/candidate/oa/app-1/snapshots", json={"image": "data:image/png;base64," + base64.b64encode(JPEG).decode()}).status_code == 422)
+check("JPEG header only → 422", client.post("/candidate/oa/app-1/snapshots", json={"image": base64.b64encode(b"\xff\xd8\xff" + b"x" * 200).decode()}).status_code == 422)
+check("oversized → 422", client.post("/candidate/oa/app-1/snapshots", json={"image": base64.b64encode(JPEG + b"x" * 200_000).decode()}).status_code == 422)
+check("question outside the current section is not recorded", snap(question_id="nope", faces=0).json()["stored"] and db.store["oa_snapshots"][-1]["question_id"] is None)
+age(); snap(faces=3); age(); snap()
+a = db.store["oa_attempts"][0]
+check("counters: taken / no face / several faces", (a["snapshots_taken"], a["snapshots_no_face"], a["snapshots_multi_face"]) == (4, 1, 1), a)
+age(); a["snapshots_taken"] = snaps.MAX_PER_ATTEMPT
+check("per-attempt cap", snap().json() == {"ok": True, "stored": False, "reason": "limit"})
+a["snapshots_taken"] = 4
+client.post("/candidate/oa/app-1/events", json={"type": "camera_lost"})
+check("camera_lost lands on the timeline", db.store["oa_events"][-1]["type"] == "camera_lost")
+
+as_company()
+g = client.get(URL + "/results/app-1/snapshots").json()
+check("gallery: signed urls, time on the clock, question, face counts", g["mode"] == "required" and len(g["items"]) == 4
+      and all(i["url"].startswith("https://signed.example/") for i in g["items"]) and g["items"][0]["question"]["position"] == 1
+      and [i["faces"] for i in g["items"]] == [1, 0, 3, None] and g["retention_days"] == 30, g)
+row = client.get(URL + "/results").json()["rows"][0]
+check("results row carries the snapshot counters", (row["snapshots"], row["snapshots_no_face"], row["snapshots_multi_face"], row["webcam_consented"]) == (4, 1, 1, True), row)
+check("other company can't open the gallery", (lambda: (as_company("co-user-2"), client.get(URL + "/results/app-1/snapshots").status_code)[1])() == 404)
+as_company()
+check("no attempt → 404 gallery", client.get(URL + "/results/app-2/snapshots").status_code == 404)
+
+# optional: a candidate who declines is never photographed, even if their browser tries
+seed(); put({**GOOD, "webcam_mode": "optional"}); client.post(URL + "/invites", json={"all": True}); as_candidate()
+r = client.post("/candidate/oa/app-1/start").json()
+check("optional camera: can start without consenting, camera inactive", r["webcam"] == {"mode": "optional", "active": False, "interval_seconds": 60}, r["webcam"])
+check("no consent → snapshots refused", snap().status_code == 403 and not db.store.get("oa_snapshots"))
+# off: nothing to consent to
+seed(); put(GOOD); client.post(URL + "/invites", json={"all": True})
+r = client.post("/candidate/oa/app-1/start", json={"webcam_consent": True}).json()
+check("camera off: consent is ignored, no snapshots", r["webcam"]["active"] is False and db.store["oa_attempts"][0]["webcam_consent_at"] is None and snap().status_code == 403)
+
+# ── 10. retention purge ─────────────────────────────────────────────
+sys.path.insert(0, str(__import__("pathlib").Path(__file__).resolve().parents[1] / "scripts"))
+import purge_oa_snapshots as purge_mod  # noqa: E402
+purge_mod.db_client = db
+removed_paths = []
+snaps.delete = lambda paths: (removed_paths.extend(paths), None)[1]
+db.store["oa_snapshots"] = [
+    {"id": "old-1", "attempt_id": "x", "path": "a/b/1.jpg", "taken_at": (NOW - timedelta(days=45)).isoformat()},
+    {"id": "old-2", "attempt_id": "x", "path": "a/b/2.jpg", "taken_at": (NOW - timedelta(days=31)).isoformat()},
+    {"id": "new-1", "attempt_id": "x", "path": "a/b/3.jpg", "taken_at": (NOW - timedelta(days=2)).isoformat()},
+]
+check("purge dry run changes nothing", purge_mod.purge(30, dry_run=True) == (0, 0) and len(db.store["oa_snapshots"]) == 3 and not removed_paths)
+check("purge removes only snapshots past retention, files then rows", purge_mod.purge(30) == (2, 0)
+      and sorted(removed_paths) == ["a/b/1.jpg", "a/b/2.jpg"] and [r["id"] for r in db.store["oa_snapshots"]] == ["new-1"])
+snaps.delete = lambda paths: "storage down"
+db.store["oa_snapshots"].append({"id": "old-3", "attempt_id": "x", "path": "a/b/4.jpg", "taken_at": (NOW - timedelta(days=99)).isoformat()})
+check("a storage failure keeps the rows so the next run retries", purge_mod.purge(30) == (0, 1) and any(r["id"] == "old-3" for r in db.store["oa_snapshots"]))
+
 print("\n%d failed" % len(fails) if fails else "\nall passed")
 sys.exit(1 if fails else 0)

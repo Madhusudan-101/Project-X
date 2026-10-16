@@ -168,6 +168,10 @@ export function ResultsPanel({ jobId, driveId }: { jobId: string; driveId: strin
                   >
                     {r.flagged && <AlertTriangle className="h-3.5 w-3.5" />}
                     {r.tabSwitches} tab · {r.fullscreenExits} fs · {r.pasteEvents} paste
+                    {r.webcamMode !== "off" &&
+                      ` · ${r.snapshots} photo${r.snapshots === 1 ? "" : "s"}${
+                        r.snapshotsNoFace + r.snapshotsMultiFace > 0 ? " ⚠" : ""
+                      }`}
                   </span>
                 )}
               </TableCell>
