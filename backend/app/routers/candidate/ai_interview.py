@@ -31,10 +31,12 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 from postgrest.exceptions import APIError
 
+from ...crud import get_company_names
 from ...deps import db_client, require_candidate_role
+from ...services.ai_interview.invites import effective_status
 
 logger = logging.getLogger(__name__)
 
@@ -107,7 +109,9 @@ def _max_minutes() -> int:
 # ─── Schemas ──────────────────────────────────────────────────────────────────
 
 class StartSessionIn(BaseModel):
-    domain: str
+    # Exactly one of these: a practice track (domain) or an invitation from a company.
+    domain: Optional[str] = None
+    inviteId: Optional[str] = None
     # The candidate must explicitly accept the rules (and camera supervision).
     consent: bool
     # Separate, explicit permission for the AI interviewer to listen through the
@@ -116,6 +120,12 @@ class StartSessionIn(BaseModel):
     # Separate, explicit permission for the AI interviewer to view the camera feed.
     videoConsent: bool
     consentVersion: str
+
+    @model_validator(mode="after")
+    def _one_mode(self) -> "StartSessionIn":
+        if bool(self.domain) == bool(self.inviteId):
+            raise ValueError("Send either a practice domain or an inviteId, not both or neither.")
+        return self
 
 
 class InterviewConfigOut(BaseModel):
@@ -210,6 +220,7 @@ def _used_today(user_id: str) -> int:
             db_client.table("ai_voice_interview_sessions")
             .select("id", count="exact")
             .eq("student_id", user_id)
+            .is_("invite_id", "null")  # company interviews do not use up practice attempts
             .gte("started_at", day_start.isoformat())
             .execute()
         )
@@ -255,7 +266,103 @@ def _integrity_by_room(room_ids: list[str], student_id: str) -> dict[str, list[d
     return out
 
 
+INVITE_ID_RE = re.compile(r"^[0-9a-fA-F-]{36}$")
+
+
+def _claim_invite(invite_id: str, user: dict) -> tuple[dict, dict, str]:
+    """Check that this invitation is the caller's and still usable, then mark it started
+    (one attempt per invitation). Returns (invite, template, company name). The claim is a
+    conditional update, so two tabs cannot both start the same interview."""
+    if not INVITE_ID_RE.match(invite_id or ""):
+        raise HTTPException(status_code=404, detail="Interview invitation not found.")
+    rows = db_client.table("ai_interview_invites").select("*").eq("id", invite_id).limit(1).execute().data or []
+    inv = rows[0] if rows else None
+    email = (user.get("email") or "").strip().lower()
+    mine = inv and (inv.get("student_id") == user["id"] or (inv.get("email") or "").lower() == email)
+    if not mine:
+        raise HTTPException(status_code=404, detail="Interview invitation not found.")
+    status = effective_status(inv)
+    if status == "revoked":
+        raise HTTPException(status_code=409, detail="This invitation was withdrawn by the company.")
+    if status in ("started", "completed"):
+        raise HTTPException(status_code=409, detail="You have already taken this interview.")
+    if status == "expired":
+        raise HTTPException(status_code=410, detail="This invitation has expired.")
+    trows = db_client.table("ai_interview_templates").select("*").eq("id", inv["template_id"]).limit(1).execute().data or []
+    template = trows[0] if trows else None
+    if not template or template.get("status") != "active":
+        raise HTTPException(status_code=409, detail="This interview is no longer available.")
+    claimed = db_client.table("ai_interview_invites").update({
+        "status": "started",
+        "started_at": datetime.now(timezone.utc).isoformat(),
+        "student_id": user["id"],
+    }).eq("id", inv["id"]).eq("status", "invited").execute().data or []
+    if not claimed:
+        raise HTTPException(status_code=409, detail="This interview was just started in another window.")
+    company = get_company_names([inv["company_id"]]).get(inv["company_id"], "the company")
+    return claimed[0], template, company
+
+
+def _release_invite(invite_id: Optional[str]) -> None:
+    """Give the candidate their attempt back when the interview could not start."""
+    if not invite_id:
+        return
+    try:
+        db_client.table("ai_interview_invites").update(
+            {"status": "invited", "started_at": None, "room_id": None}
+        ).eq("id", invite_id).eq("status", "started").execute()
+    except Exception:  # noqa: BLE001
+        logger.exception("could not release invite %s", invite_id)
+
+
 # ─── Routes ───────────────────────────────────────────────────────────────────
+
+@router.get("/assignments")
+def my_assignments(current_user: dict = Depends(require_candidate_role)) -> list[dict]:
+    """Interviews companies have sent me (matched by my account or my email), safe for the
+    candidate to see: no rubric and no scoring details."""
+    uid = current_user["id"]
+    email = (current_user.get("email") or "").strip().lower()
+    found: dict[str, dict] = {}
+    for r in db_client.table("ai_interview_invites").select("*").eq("student_id", uid).execute().data or []:
+        found[r["id"]] = r
+    if email:
+        for r in db_client.table("ai_interview_invites").select("*").eq("email", email).execute().data or []:
+            if r.get("student_id") in (None, uid):
+                found[r["id"]] = r
+                if r.get("student_id") is None:  # first sign-in: attach the invitation to the account
+                    try:
+                        db_client.table("ai_interview_invites").update({"student_id": uid}).eq("id", r["id"]).execute()
+                    except Exception:  # noqa: BLE001
+                        logger.exception("could not attach invite to account")
+    invites = [i for i in found.values() if i.get("status") != "revoked"]
+    if not invites:
+        return []
+    templates = {
+        t["id"]: t for t in db_client.table("ai_interview_templates").select("*")
+        .in_("id", list({i["template_id"] for i in invites})).execute().data or []
+    }
+    companies = get_company_names(list({i["company_id"] for i in invites}))
+    out = []
+    for i in invites:
+        t = templates.get(i["template_id"])
+        status = effective_status(i)
+        if not t or (t["status"] == "archived" and status in ("invited", "expired")):
+            continue
+        out.append({
+            "id": i["id"],
+            "company_name": companies.get(i["company_id"], "A company"),
+            "role_title": t["role_title"],
+            "level": t.get("level", "junior"),
+            "duration_minutes": t["duration_minutes"],
+            "instructions": t.get("instructions") or "",
+            "expires_at": str(i.get("expires_at") or ""),
+            "status": status,
+        })
+    order = {"invited": 0, "started": 1, "completed": 2, "expired": 3}
+    out.sort(key=lambda r: (order.get(r["status"], 9), r["expires_at"]))
+    return out
+
 
 @router.get("/config", response_model=InterviewConfigOut)
 def get_interview_config(current_user: dict = Depends(require_candidate_role)):
@@ -277,7 +384,14 @@ async def start_session(
     body: StartSessionIn,
     current_user: dict = Depends(require_candidate_role),
 ) -> StartSessionOut:
-    if body.domain not in DOMAIN_LABELS:
+    """Start an interview. Two modes:
+
+    * practice: `domain` (one of the three tracks). Daily quota applies and the candidate
+      sees their own report.
+    * company: `inviteId`. One attempt per invitation, no daily quota, scored against the
+      company's rubric, and the report goes to the hiring team (not the candidate).
+    """
+    if body.inviteId is None and body.domain not in DOMAIN_LABELS:
         raise HTTPException(
             status_code=400,
             detail=f"Invalid domain. Must be one of: {', '.join(DOMAIN_LABELS)}",
@@ -305,25 +419,56 @@ async def start_session(
     url, key, secret = _livekit_creds()
     user_id = current_user["id"]
 
-    # Daily quota: counts every interview the student started since 00:00 UTC.
-    if _used_today(user_id) >= _daily_limit():
-        raise HTTPException(
-            status_code=429,
-            detail=f"Daily limit of {_daily_limit()} AI interviews reached. Try again tomorrow.",
-        )
+    invite: Optional[dict] = None
+    template: Optional[dict] = None
+    company_name = ""
+    if body.inviteId is not None:
+        invite, template, company_name = _claim_invite(body.inviteId, current_user)
+        domain, max_minutes = "custom", int(template["duration_minutes"])
+    else:
+        # Practice: counts every interview the student started since 00:00 UTC.
+        if _used_today(user_id) >= _daily_limit():
+            raise HTTPException(
+                status_code=429,
+                detail=f"Daily limit of {_daily_limit()} AI interviews reached. Try again tomorrow.",
+            )
+        domain, max_minutes = body.domain, _max_minutes()
+    invite_id = invite["id"] if invite else None
 
     room_name = f"ai-{uuid.uuid4().hex[:12]}"
-    max_minutes = _max_minutes()
     display_name = (
         current_user.get("name")
         or (current_user.get("email") or "").split("@")[0]
         or "Candidate"
     )
+    metadata: dict = {
+        "domain": domain,
+        "user_id": user_id,
+        "display_name": display_name,
+        "max_minutes": max_minutes,
+        # The agent listens only when audio_consent is true, and analyses
+        # video only when video_consent is true.
+        "audio_consent": True,
+        "video_consent": True,
+    }
+    if template is not None:
+        metadata.update({
+            "invite_id": invite_id,
+            "role_title": template["role_title"],
+            "level": template.get("level", "junior"),
+            "company_name": company_name,
+            # Frozen now: editing the template later never changes this interview.
+            "rubric": template.get("rubric") or [],
+        })
 
-    from livekit import api  # imported lazily so the app boots without the package
+    try:
+        from livekit import api  # imported lazily so the app boots without the package
 
-    agent_name = _cfg("AI_INTERVIEW_AGENT_NAME", "mirracle-interviewer")
-    lkapi = api.LiveKitAPI(url, key, secret)
+        agent_name = _cfg("AI_INTERVIEW_AGENT_NAME", "mirracle-interviewer")
+        lkapi = api.LiveKitAPI(url, key, secret)
+    except Exception:
+        _release_invite(invite_id)
+        raise
     try:
         # Unlike the standalone prototype, a room-creation failure is fatal:
         # the agent reads user_id/domain from this metadata and would otherwise
@@ -333,35 +478,36 @@ async def start_session(
                 name=room_name,
                 empty_timeout=60,
                 max_participants=2,  # the candidate + the agent
-                metadata=json.dumps({
-                    "domain": body.domain,
-                    "user_id": user_id,
-                    "display_name": display_name,
-                    "max_minutes": max_minutes,
-                    # The agent listens only when audio_consent is true, and analyses
-                    # video only when video_consent is true.
-                    "audio_consent": True,
-                    "video_consent": True,
-                }),
+                metadata=json.dumps(metadata),
             )
         )
     except Exception:
         logger.exception("LiveKit create_room failed")
         await lkapi.aclose()
+        _release_invite(invite_id)
         raise HTTPException(status_code=502, detail="Could not start the interview room")
 
+    session_row: dict = {
+        "room_id": room_name,
+        "student_id": user_id,
+        "domain": domain,
+        "consent_at": datetime.now(timezone.utc).isoformat(),
+        "audio_consent": True,
+        "video_consent": True,
+        "consent_version": CONSENT_VERSION,
+    }
+    if template is not None:
+        session_row.update({
+            "invite_id": invite_id,
+            "template_id": template["id"],
+            "role_title": template["role_title"],
+            "rubric_snapshot": template.get("rubric") or [],
+        })
     try:
-        db_client.table("ai_voice_interview_sessions").insert({
-            "room_id": room_name,
-            "student_id": user_id,
-            "domain": body.domain,
-            "consent_at": datetime.now(timezone.utc).isoformat(),
-            "audio_consent": True,
-            "video_consent": True,
-            "consent_version": CONSENT_VERSION,
-        }).execute()
+        db_client.table("ai_voice_interview_sessions").insert(session_row).execute()
     except APIError as e:
         await lkapi.aclose()
+        _release_invite(invite_id)
         logger.exception("ai_voice_interview_sessions insert failed")
         raise HTTPException(status_code=500, detail=f"Could not record session: {e.message}")
 
@@ -375,14 +521,22 @@ async def start_session(
         )
     except Exception:
         logger.exception("LiveKit create_dispatch failed")
-        # Do not charge the student's daily quota for an interview that never started.
+        # Do not charge the student's daily quota (or use up their one attempt)
+        # for an interview that never started.
         try:
             db_client.table("ai_voice_interview_sessions").delete().eq("room_id", room_name).execute()
         except Exception:  # noqa: BLE001
             logger.exception("could not remove failed session row")
+        _release_invite(invite_id)
         raise HTTPException(status_code=502, detail="Could not start the AI interviewer")
     finally:
         await lkapi.aclose()
+
+    if invite_id:
+        try:
+            db_client.table("ai_interview_invites").update({"room_id": room_name}).eq("id", invite_id).execute()
+        except Exception:  # noqa: BLE001
+            logger.exception("could not link invite to room")
 
     token = (
         api.AccessToken(key, secret)
@@ -485,6 +639,7 @@ def list_my_reports(current_user: dict = Depends(require_candidate_role)):
             db_client.table("ai_voice_interview_reports")
             .select(_LIST_COLUMNS)
             .eq("student_id", current_user["id"])
+            .eq("candidate_visible", True)
             .order("created_at", desc=True)
             .limit(REPORTS_LIMIT)
             .execute()
@@ -511,6 +666,7 @@ def get_my_report(room_id: str, current_user: dict = Depends(require_candidate_r
             .select(_LIST_COLUMNS + ", report_markdown, transcript")
             .eq("room_id", room_id)
             .eq("student_id", current_user["id"])
+            .eq("candidate_visible", True)
             .limit(1)
             .execute()
         )

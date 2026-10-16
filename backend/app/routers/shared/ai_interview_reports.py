@@ -44,6 +44,15 @@ def _score(v: Optional[float]) -> Optional[float]:
     return None if v is None else max(0.0, min(100.0, float(v)))
 
 
+class CompetencyScoreIn(BaseModel):
+    """One rubric competency as graded by the agent. Lenient on purpose: a model that
+    answers on a 0-10 scale or leaves a score out must not make the whole report fail."""
+    name: str = Field(default="", max_length=60)
+    score: Optional[float] = None  # 0-100
+    weight: Optional[float] = None
+    evidence: str = Field(default="", max_length=2000)
+
+
 class AiInterviewReportIn(BaseModel):
     room_id: str = Field(min_length=1, max_length=64)
     partial: bool = False
@@ -58,6 +67,7 @@ class AiInterviewReportIn(BaseModel):
     report_markdown: Optional[str] = None
     transcript: Optional[str] = None
     duration_seconds: Optional[int] = None
+    competency_scores: List[CompetencyScoreIn] = Field(default_factory=list, max_length=8)
 
 
 @router.post("/ai-interview-reports", status_code=201)
@@ -69,7 +79,7 @@ def ingest_ai_interview_report(
 
     sess = (
         db_client.table("ai_voice_interview_sessions")
-        .select("student_id, domain")
+        .select("student_id, domain, invite_id")
         .eq("room_id", body.room_id)
         .limit(1)
         .execute()
@@ -93,6 +103,12 @@ def ingest_ai_interview_report(
         "report_markdown": body.report_markdown,
         "transcript": body.transcript,
         "duration_seconds": body.duration_seconds,
+        "competency_scores": [
+            {"name": c.name, "score": _score(c.score), "weight": c.weight, "evidence": c.evidence}
+            for c in body.competency_scores
+        ],
+        # A company interview belongs to the hiring team: the candidate does not see its report.
+        "candidate_visible": not sess[0].get("invite_id"),
     }
 
     try:
@@ -110,6 +126,16 @@ def ingest_ai_interview_report(
         }).eq("room_id", body.room_id).execute()
     except Exception:  # noqa: BLE001
         logger.exception("ai_voice_interview_sessions status update failed")
+
+    invite_id = sess[0].get("invite_id")
+    if invite_id:
+        try:
+            db_client.table("ai_interview_invites").update({
+                "status": "completed",
+                "completed_at": datetime.now(timezone.utc).isoformat(),
+            }).eq("id", invite_id).execute()
+        except Exception:  # noqa: BLE001
+            logger.exception("ai_interview_invites completion update failed")
 
     return {"ok": True, "id": (res.data or [{}])[0].get("id")}
 

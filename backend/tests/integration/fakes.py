@@ -29,6 +29,7 @@ UNIQUE: Dict[str, List[tuple]] = {
     "job_weights": [("job_id",)],
     "oa_attempts": [("application_id",)],
     "profiles": [("id",)],
+    "ai_interview_invites": [("template_id", "email")],
 }
 
 # table -> {embedded resource: foreign key column on this table}
@@ -40,7 +41,9 @@ DEFAULTS: Dict[str, Callable[[], dict]] = {
     "applications": lambda: {"status": "applied", "applied_at": now_iso(), "updated_at": now_iso()},
     "job_drives": lambda: {"status": "draft"},
     "application_analyses": lambda: {"generated_at": now_iso()},
-    "ai_voice_interview_sessions": lambda: {"started_at": now_iso()},
+    "ai_voice_interview_sessions": lambda: {"started_at": now_iso(), "status": "started"},
+    "ai_interview_invites": lambda: {"status": "invited"},
+    "ai_interview_templates": lambda: {"status": "draft", "version": 1},
     "oa_attempts": lambda: {"status": "in_progress", "tab_switches": 0},
     "oa_invites": lambda: {"status": "invited"},
     "oa_assessments": lambda: {"invite_mode": "invited"},

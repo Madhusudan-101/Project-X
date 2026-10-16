@@ -49,6 +49,10 @@ class _Query:
     def eq(self, c, v):
         self.filters.append(lambda r: r.get(c) == v); return self
 
+    def is_(self, c, v):
+        want = None if v in ("null", None) else v
+        self.filters.append(lambda r: r.get(c) == want); return self
+
     def in_(self, c, vs):
         self.filters.append(lambda r: r.get(c) in vs); return self
 
