@@ -727,6 +727,52 @@ def create_scheduled_meeting(
     return _row_to_meeting(row, user_id)
 
 
+class RescheduleIn(BaseModel):
+    scheduled_at: datetime
+
+    @field_validator("scheduled_at")
+    @classmethod
+    def not_in_the_past(cls, v: datetime) -> datetime:
+        if v.tzinfo is None:
+            v = v.replace(tzinfo=timezone.utc)
+        if v < datetime.now(timezone.utc) - timedelta(minutes=1):
+            raise ValueError("scheduled_at cannot be in the past")
+        return v
+
+
+@router.patch("/peer-meetings/{meeting_id}", response_model=ScheduledMeetingOut)
+def reschedule_meeting(
+    body: RescheduleIn,
+    meeting_id: str = Path(..., min_length=8),
+    current_user: dict = Depends(get_current_user),
+) -> ScheduledMeetingOut:
+    """Move a meeting nobody has joined yet to a new time. Only the person who booked it. The invitee is
+    told, and reminders start again for the new time."""
+    user_id = current_user["id"]
+    peer_safety.require_peer_ready(user_id)
+    try:
+        res = db_client.table("peer_scheduled_meetings").select("*").eq("id", meeting_id).maybe_single().execute()
+    except APIError as e:
+        raise HTTPException(status_code=500, detail=f"Lookup failed: {e.message}")
+    row = getattr(res, "data", None) if res is not None else None
+    if not row:
+        raise HTTPException(status_code=404, detail="Meeting not found")
+    if row["creator_id"] != user_id:
+        raise HTTPException(status_code=403, detail="Only the person who booked this meeting can move it")
+    if row["status"] != "scheduled":
+        raise HTTPException(status_code=409, detail="This meeting can no longer be moved.")
+    updated = db_client.table("peer_scheduled_meetings").update({
+        "scheduled_at": body.scheduled_at.astimezone(timezone.utc).isoformat(),
+        "reminded_day_at": None, "reminded_soon_at": None, "invited_emailed_at": None,
+    }).eq("id", meeting_id).execute().data[0]
+    if updated.get("invitee_id"):
+        try:
+            peer_notify.send_rescheduled(updated, user_id, updated["invitee_id"])
+        except Exception:  # noqa: BLE001
+            logger.exception("peer reschedule email failed")
+    return _row_to_meeting(updated, user_id)
+
+
 @router.delete("/peer-meetings/{meeting_id}", status_code=204)
 def cancel_scheduled_meeting(
     meeting_id: str = Path(..., min_length=8),

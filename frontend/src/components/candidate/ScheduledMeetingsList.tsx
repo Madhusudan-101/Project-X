@@ -19,15 +19,21 @@ import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { peerService, type ScheduledMeeting, type ScheduledMeetingStatus } from "@/services/api/candidate/peer";
+import {
+  peerService,
+  type ScheduledMeeting,
+  type ScheduledMeetingStatus,
+} from "@/services/api/candidate/peer";
 import { usePeerInterviewStore } from "@/store/candidate/peerInterview";
 import { ApiClientError } from "@/services/api/client";
 import { reservePeerMeetTab, untilParam } from "@/lib/peerMeetTab";
+import { downloadIcs } from "@/lib/ics";
+import { RescheduleDialog } from "@/components/candidate/peer/RescheduleDialog";
 
 const JOIN_WINDOW_BEFORE_MS = 5 * 60 * 1000; // matches backend JOIN_GRACE_MINUTES_BEFORE
 
 function isJoinable(m: ScheduledMeeting, now: number): boolean {
-  if (m.status === "cancelled" || m.status === "completed" || m.status === "expired") return false;
+  if (["cancelled", "completed", "expired", "no_show"].includes(m.status)) return false;
   const start = new Date(m.scheduled_at).getTime();
   const end = start + m.duration_minutes * 60_000 + 60 * 60_000; // + backend AFTER grace
   return now >= start - JOIN_WINDOW_BEFORE_MS && now <= end;
@@ -38,7 +44,10 @@ function statusBadge(s: ScheduledMeetingStatus): { label: string; className: str
     case "live":
       return { label: "Live", className: "border-success/30 bg-success/10 text-success" };
     case "waiting":
-      return { label: "Waiting for participant", className: "border-warning/30 bg-warning/10 text-warning" };
+      return {
+        label: "Waiting for participant",
+        className: "border-warning/30 bg-warning/10 text-warning",
+      };
     case "scheduled":
       return { label: "Upcoming", className: "border-primary/30 bg-primary/10 text-primary" };
     case "completed":
@@ -47,6 +56,8 @@ function statusBadge(s: ScheduledMeetingStatus): { label: string; className: str
       return { label: "Cancelled", className: "border-border text-muted-foreground" };
     case "expired":
       return { label: "Expired", className: "border-border text-muted-foreground" };
+    case "no_show":
+      return { label: "Nobody came", className: "border-border text-muted-foreground" };
   }
 }
 
@@ -66,6 +77,7 @@ function relativeStart(m: ScheduledMeeting, now: number): string {
 
 export function ScheduledMeetingsList({ refreshKey = 0 }: { refreshKey?: number }) {
   const [meetings, setMeetings] = useState<ScheduledMeeting[] | null>(null);
+  const [moving, setMoving] = useState<ScheduledMeeting | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [now, setNow] = useState(() => Date.now());
   const setActiveRoom = usePeerInterviewStore((s) => s.setActiveRoom);
@@ -190,9 +202,7 @@ export function ScheduledMeetingsList({ refreshKey = 0 }: { refreshKey?: number 
       <div className="mb-3 flex items-center justify-between">
         <div>
           <h3 className="font-display text-sm font-semibold">Scheduled Peer Interviews</h3>
-          <p className="text-xs text-muted-foreground">
-            Meetings you created or were invited to.
-          </p>
+          <p className="text-xs text-muted-foreground">Meetings you created or were invited to.</p>
         </div>
         <Badge variant="outline">{sorted.length}</Badge>
       </div>
@@ -201,10 +211,7 @@ export function ScheduledMeetingsList({ refreshKey = 0 }: { refreshKey?: number 
           const joinable = isJoinable(m, now);
           const when = new Date(m.scheduled_at);
           return (
-            <li
-              key={m.id}
-              className="rounded-lg border border-border/60 bg-card p-3"
-            >
+            <li key={m.id} className="rounded-lg border border-border/60 bg-card p-3">
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-2">
@@ -258,6 +265,21 @@ export function ScheduledMeetingsList({ refreshKey = 0 }: { refreshKey?: number 
                     <LogIn className="mr-1.5 h-3.5 w-3.5" />
                     Join
                   </Button>
+                  {isJoinable(m, now) || m.status === "scheduled" ? (
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => downloadIcs(m)}
+                      aria-label={`Add ${m.title || "this meeting"} to my calendar`}
+                    >
+                      Add to calendar
+                    </Button>
+                  ) : null}
+                  {m.role === "creator" && m.status === "scheduled" && (
+                    <Button size="sm" variant="ghost" onClick={() => setMoving(m)}>
+                      Reschedule
+                    </Button>
+                  )}
                   {m.role === "creator" && (
                     <Button
                       size="sm"
@@ -275,6 +297,13 @@ export function ScheduledMeetingsList({ refreshKey = 0 }: { refreshKey?: number 
           );
         })}
       </ul>
+      <RescheduleDialog
+        meeting={moving}
+        onClose={() => setMoving(null)}
+        onMoved={(moved) =>
+          setMeetings((all) => (all ?? []).map((x) => (x.id === moved.id ? moved : x)))
+        }
+      />
     </Card>
   );
 }

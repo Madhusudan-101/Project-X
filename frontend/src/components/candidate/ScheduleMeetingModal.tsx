@@ -28,6 +28,7 @@ import {
 import { peerService, type ScheduledMeeting } from "@/services/api/candidate/peer";
 import { ApiClientError } from "@/services/api/client";
 import { usePeerInterviewStore } from "@/store/candidate/peerInterview";
+import { browserTimezone } from "@/components/candidate/peer/PeerSettingsDialog";
 
 interface Props {
   open: boolean;
@@ -161,7 +162,10 @@ export function ScheduleMeetingModal({
 
             <div className="space-y-4 px-6 py-5">
               <div>
-                <Label htmlFor="schedule-title" className="text-xs font-medium text-muted-foreground">
+                <Label
+                  htmlFor="schedule-title"
+                  className="text-xs font-medium text-muted-foreground"
+                >
                   Topic (optional)
                 </Label>
                 <Input
@@ -176,7 +180,10 @@ export function ScheduleMeetingModal({
 
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
                 <div className="sm:col-span-2">
-                  <Label htmlFor="schedule-when" className="text-xs font-medium text-muted-foreground">
+                  <Label
+                    htmlFor="schedule-when"
+                    className="text-xs font-medium text-muted-foreground"
+                  >
                     Date &amp; time
                   </Label>
                   <Input
@@ -188,9 +195,15 @@ export function ScheduleMeetingModal({
                     required
                     className="mt-1"
                   />
+                  <p className="mt-1 text-xs text-muted-foreground" data-testid="schedule-timezone">
+                    Your timezone: {browserTimezone()}
+                  </p>
                 </div>
                 <div>
-                  <Label htmlFor="schedule-duration" className="text-xs font-medium text-muted-foreground">
+                  <Label
+                    htmlFor="schedule-duration"
+                    className="text-xs font-medium text-muted-foreground"
+                  >
                     Duration (min)
                   </Label>
                   <Input
@@ -207,7 +220,10 @@ export function ScheduleMeetingModal({
               </div>
 
               <div>
-                <Label htmlFor="schedule-invitee" className="text-xs font-medium text-muted-foreground">
+                <Label
+                  htmlFor="schedule-invitee"
+                  className="text-xs font-medium text-muted-foreground"
+                >
                   Invite a specific candidate by email (optional)
                 </Label>
                 <Input
@@ -220,9 +236,9 @@ export function ScheduleMeetingModal({
                   className="mt-1"
                 />
                 <p className="mt-1 text-xs text-muted-foreground">
-                  If they use Mirracle with this email, the meeting will show
-                  up on their dashboard automatically. Otherwise, share the
-                  room ID with them yourself.
+                  They need a Mirracle account that uses this email. We email them the invitation
+                  and the meeting shows up on their dashboard. Leave this empty to create an open
+                  meeting that any candidate can join.
                 </p>
               </div>
 
@@ -248,7 +264,12 @@ export function ScheduleMeetingModal({
               {errorMsg && <p className="text-xs text-destructive">{errorMsg}</p>}
 
               <div className="flex justify-end gap-2 pt-1">
-                <Button type="button" variant="ghost" onClick={() => closeAll(false)} disabled={submitting}>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  onClick={() => closeAll(false)}
+                  disabled={submitting}
+                >
                   Cancel
                 </Button>
                 <Button
@@ -318,14 +339,14 @@ function ConfirmationPanel({
             </Button>
           </div>
           <p className="mt-2 text-xs text-muted-foreground">
-            Share this room ID with your peer or tell them to sign in and click
-            Peer Interview → Join with a room ID.
+            Share this room ID with your peer or tell them to sign in and click Peer Interview →
+            Join with a room ID.
           </p>
         </div>
 
         <p className="text-xs text-muted-foreground">
-          The meeting will appear on your dashboard. Join will unlock 5 minutes
-          before the scheduled start time.
+          The meeting will appear on your dashboard. Join will unlock 5 minutes before the scheduled
+          start time.
         </p>
 
         <div className="flex justify-end gap-2">

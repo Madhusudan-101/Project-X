@@ -122,6 +122,20 @@ def send_cancellation(meeting: dict, creator_id: str, invitee_id: str) -> str:
     )
 
 
+def send_rescheduled(meeting: dict, creator_id: str, invitee_id: str) -> str:
+    prefs = get_preferences(invitee_id)
+    _, creator_first = _contact(creator_id)
+    host = _host_label(meeting, creator_first)
+    when = format_time(datetime.fromisoformat(str(meeting["scheduled_at"]).replace("Z", "+00:00")), prefs["timezone"])
+    return _send(
+        invitee_id, "A peer interview was moved", "A peer interview was moved",
+        f"<p>{html.escape(host[0].upper() + host[1:])} moved your practice interview to <b>{html.escape(when)}</b> "
+        f"({int(meeting['duration_minutes'])} minutes).</p>"
+        "<p>If the new time does not work for you, ask them to pick another one.</p>",
+        kind="invites",
+    )
+
+
 def send_reminder(meeting: dict, student_id: str, *, soon: bool) -> str:
     prefs = get_preferences(student_id)
     when = format_time(datetime.fromisoformat(str(meeting["scheduled_at"]).replace("Z", "+00:00")), prefs["timezone"])

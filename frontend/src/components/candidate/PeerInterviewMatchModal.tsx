@@ -42,10 +42,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import {
-  peerService,
-  type MatchmakingStatus,
-} from "@/services/api/candidate/peer";
+import { peerService, type MatchmakingStatus } from "@/services/api/candidate/peer";
 import { usePeerInterviewStore } from "@/store/candidate/peerInterview";
 import { useAuthStore } from "@/store/auth";
 import { ApiClientError } from "@/services/api/client";
@@ -98,10 +95,7 @@ export function PeerInterviewMatchModal({ open, onOpenChange }: Props) {
   const session = useAuthStore((s) => s.session);
 
   const displayName =
-    session?.user?.firstName ??
-    session?.user?.name?.split(" ")[0] ??
-    session?.user?.email ??
-    "You";
+    session?.user?.firstName ?? session?.user?.name?.split(" ")[0] ?? session?.user?.email ?? "You";
   const initials = useMemo(
     () => initialsFrom(session?.user?.name ?? displayName),
     [session, displayName],
@@ -109,6 +103,14 @@ export function PeerInterviewMatchModal({ open, onOpenChange }: Props) {
 
   const [mode, setMode] = useState<Mode>("choose");
   const [keepPrivate, setKeepPrivate] = useState(true);
+  // Start from the person's saved default (private unless they changed it in their settings).
+  useEffect(() => {
+    if (!open) return;
+    peerService
+      .getPreferences()
+      .then((p) => setKeepPrivate(p.default_private))
+      .catch(() => undefined);
+  }, [open]);
   const [status, setStatus] = useState<MatchmakingStatus | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [waitingSecs, setWaitingSecs] = useState(0);
@@ -313,9 +315,7 @@ export function PeerInterviewMatchModal({ open, onOpenChange }: Props) {
       } catch (err) {
         tab.abort();
         setJoining(false);
-        toast.error(
-          err instanceof Error ? err.message : "Could not join Peer Interview.",
-        );
+        toast.error(err instanceof Error ? err.message : "Could not join Peer Interview.");
       }
     },
     [joinInput, keepPrivate, onOpenChange, setActiveRoom],
@@ -451,10 +451,7 @@ function ChoosePanel({
       </div>
 
       <div className="space-y-3 px-6 pb-6 pt-4">
-        <Button
-          className="h-11 w-full bg-gradient-brand text-primary-foreground"
-          onClick={onFind}
-        >
+        <Button className="h-11 w-full bg-gradient-brand text-primary-foreground" onClick={onFind}>
           <Radar className="mr-2 h-4 w-4" />
           Find a partner now
         </Button>
@@ -481,7 +478,8 @@ function ChoosePanel({
               />
             </div>
             <p className="mt-1 text-xs text-muted-foreground">
-              Your peer sees you as “Anonymous Candidate.” Mirracle still uses your profile for your report.
+              Your peer sees you as “Anonymous Candidate.” Mirracle still uses your profile for your
+              report.
             </p>
           </div>
         </label>
@@ -530,9 +528,7 @@ function FindPanel({
           {isMatched ? "Partner found" : "Searching"}
         </div>
         <DialogTitle className="text-center font-display text-lg">
-          {isMatched
-            ? "You're paired — opening the room…"
-            : "Finding an interview partner…"}
+          {isMatched ? "You're paired — opening the room…" : "Finding an interview partner…"}
         </DialogTitle>
         <DialogDescription className="text-center">
           {isMatched
@@ -565,9 +561,7 @@ function FindPanel({
         </p>
       )}
 
-      {errorMsg && (
-        <p className="mt-6 text-center text-xs text-destructive">{errorMsg}</p>
-      )}
+      {errorMsg && <p className="mt-6 text-center text-xs text-destructive">{errorMsg}</p>}
 
       {isMatched && status?.room_id && (
         <div className="mx-6 mt-6 rounded-xl border border-primary/30 bg-card p-3">
@@ -694,15 +688,7 @@ function JoinExistingPanel({
 
 // ─── Bits shared with schedule modal ──────────────────────────────────────
 
-function MiniChip({
-  initials,
-  label,
-  peer,
-}: {
-  initials: string;
-  label: string;
-  peer?: boolean;
-}) {
+function MiniChip({ initials, label, peer }: { initials: string; label: string; peer?: boolean }) {
   return (
     <div
       className={`flex items-center gap-2 rounded-full border py-1 pl-1 pr-3 text-xs ${

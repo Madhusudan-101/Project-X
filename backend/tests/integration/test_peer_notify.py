@@ -209,3 +209,43 @@ def test_times_name_their_timezone():
     assert peer_notify.format_time(when, None) == "Mon 04 Mar 2030, 12:00 (UTC)"
     assert peer_notify.format_time(when, "Nowhere/Land") == "Mon 04 Mar 2030, 12:00 (UTC)"
     assert peer_notify.valid_timezone("Europe/Paris") and not peer_notify.valid_timezone("nope") and not peer_notify.valid_timezone(None)
+
+
+# ── rescheduling ─────────────────────────────────────────────────────────────
+def _move(peer, who, m, minutes_ahead):
+    return peer.client.patch(f"/candidate/peer-meetings/{m['id']}", headers=peer.h[who],
+                             json={"scheduled_at": iso(now() + timedelta(minutes=minutes_ahead))})
+
+
+def test_the_host_can_move_a_meeting_and_the_invitee_is_told(peer):
+    m = book(peer, invitee=BOB, minutes_ahead=120)
+    peer.mail.clear()
+    r = _move(peer, ALICE, m, 600)
+    assert r.status_code == 200
+    new = datetime.fromisoformat(r.json()["scheduled_at"].replace("Z", "+00:00"))
+    assert abs((new - (now() + timedelta(minutes=600))).total_seconds()) < 5
+    assert [x["to"] for x in peer.mail] == ["bob@test.dev"] and "moved" in peer.mail[0]["subject"].lower()
+
+
+def test_moving_restarts_the_reminders(peer):
+    m = book(peer, invitee=BOB, minutes_ahead=10)
+    maintain(peer)
+    assert peer.db.one("peer_scheduled_meetings", id=m["id"])["reminded_soon_at"]
+    _move(peer, ALICE, m, 12)
+    row = peer.db.one("peer_scheduled_meetings", id=m["id"])
+    assert row["reminded_soon_at"] is None and row["reminded_day_at"] is None
+
+
+def test_only_the_host_can_move_it_and_only_before_anyone_joined(peer):
+    m = book(peer, invitee=BOB)
+    assert _move(peer, BOB, m, 300).status_code == 403
+    assert _move(peer, CAROL, m, 300).status_code == 403
+    peer.db.one("peer_scheduled_meetings", id=m["id"])["status"] = "waiting"
+    assert _move(peer, ALICE, m, 300).status_code == 409
+    assert peer.client.patch("/candidate/peer-meetings/no-such-meeting", headers=peer.h[ALICE],
+                             json={"scheduled_at": iso(now() + timedelta(hours=1))}).status_code == 404
+
+
+def test_a_meeting_cannot_be_moved_into_the_past(peer):
+    m = book(peer)
+    assert _move(peer, ALICE, m, -30).status_code == 422

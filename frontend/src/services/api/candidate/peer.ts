@@ -22,7 +22,8 @@ export type ScheduledMeetingStatus =
   | "live"
   | "cancelled"
   | "completed"
-  | "expired";
+  | "expired"
+  | "no_show";
 
 export interface ScheduledMeeting {
   id: string;
@@ -49,6 +50,14 @@ export interface PublicScheduledMeeting {
   is_open: boolean; // no invitee -> any authed student may join
   is_authorized: boolean; // caller may join THIS meeting
   can_join_now: boolean; // is_authorized AND inside join window
+}
+
+export interface PeerPreferences {
+  default_private: boolean;
+  /** An IANA timezone such as "Asia/Kolkata", or null to use the browser's. */
+  timezone: string | null;
+  email_invites: boolean;
+  email_reminders: boolean;
 }
 
 export interface CreateScheduledMeetingIn {
@@ -140,6 +149,22 @@ export const peerService = {
         body,
       }),
     );
+  },
+
+  /** Move a meeting nobody has joined yet. The invitee is emailed. */
+  rescheduleMeeting(id: string, scheduledAtIso: string): Promise<ScheduledMeeting> {
+    return request<ScheduledMeeting>(`/candidate/peer-meetings/${id}`, {
+      method: "PATCH",
+      body: { scheduled_at: scheduledAtIso },
+    });
+  },
+
+  getPreferences(): Promise<PeerPreferences> {
+    return request<PeerPreferences>("/candidate/peer-preferences");
+  },
+
+  setPreferences(prefs: PeerPreferences): Promise<PeerPreferences> {
+    return request<PeerPreferences>("/candidate/peer-preferences", { method: "PUT", body: prefs });
   },
 
   cancelScheduledMeeting(id: string): Promise<void> {

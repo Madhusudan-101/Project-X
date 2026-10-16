@@ -78,6 +78,7 @@ import { BlockedPeopleDialog } from "@/components/candidate/peer/BlockedPeopleDi
 import { PeerSuspensionNotice } from "@/components/candidate/peer/PeerSuspensionNotice";
 import { PeerGuidelinesGate } from "@/components/candidate/peer/PeerGuidelinesDialog";
 import { PeerFeedbackDialog } from "@/components/candidate/peer/PeerFeedbackDialog";
+import { PeerSettingsDialog } from "@/components/candidate/peer/PeerSettingsDialog";
 import { peerSafetyService } from "@/services/api/candidate/peerSafety";
 import { PrepPlanDialog } from "@/components/candidate/PrepPlanDialog";
 import { ApplicationFormModal } from "@/components/candidate/ApplicationFormModal";
@@ -1173,6 +1174,7 @@ function RecentPeerInterviewsCard({
 }) {
   const [reportRoom, setReportRoom] = useState<string | null>(null);
   const [blockedOpen, setBlockedOpen] = useState(false);
+  const [settingsOpen, setPeerSettingsOpen] = useState(false);
   if (reports === null) {
     return (
       <Card className="p-5">
@@ -1203,6 +1205,9 @@ function RecentPeerInterviewsCard({
       <div className="mb-3 flex items-center justify-between">
         <h3 className="font-display font-semibold">Recent peer interviews</h3>
         <div className="flex items-center gap-2">
+          <Button variant="ghost" size="sm" onClick={() => setPeerSettingsOpen(true)}>
+            Settings
+          </Button>
           <Button variant="ghost" size="sm" onClick={() => setBlockedOpen(true)}>
             Blocked people
           </Button>
@@ -1211,6 +1216,7 @@ function RecentPeerInterviewsCard({
       </div>
       <PeerReportDialog roomId={reportRoom} onClose={() => setReportRoom(null)} />
       <BlockedPeopleDialog open={blockedOpen} onOpenChange={setBlockedOpen} />
+      <PeerSettingsDialog open={settingsOpen} onOpenChange={setPeerSettingsOpen} />
       <ul className="space-y-2">
         {shown.map((r) => {
           const when = new Date(r.created_at);
