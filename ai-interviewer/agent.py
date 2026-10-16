@@ -64,8 +64,15 @@ async def entrypoint(ctx: agents.JobContext):
         max_minutes = int(meta.get("max_minutes") or os.getenv("AI_INTERVIEW_MAX_MINUTES", "20"))
     except ValueError:
         max_minutes = 20
+    # A company interview carries the hiring team's rubric (frozen by the backend when the candidate
+    # started). Practice interviews carry none and use a built-in track.
     interview_workflow, generate_report = create_workflow(
-        room_name=ctx.job.room.name, initial_domain=initial_domain
+        room_name=ctx.job.room.name,
+        initial_domain=initial_domain,
+        rubric=meta.get("rubric"),
+        role_title=str(meta.get("role_title") or ""),
+        company_name=str(meta.get("company_name") or ""),
+        level=str(meta.get("level") or ""),
     )
 
     # 2) Wrap it as an LLM for LiveKit via the LangChain plugin
