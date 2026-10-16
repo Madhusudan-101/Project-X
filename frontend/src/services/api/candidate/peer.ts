@@ -68,6 +68,18 @@ export interface PeerHistoryItem {
   can_report_or_rate: boolean;
 }
 
+/** Topics a person can ask to be matched on. The matcher prefers a partner on the same topic but never
+ * makes anyone wait for it; "any" means no preference. */
+export const MATCH_TOPICS = [
+  { id: "any", label: "Any topic" },
+  { id: "software", label: "Software engineering" },
+  { id: "data", label: "Data and analytics" },
+  { id: "product", label: "Product" },
+  { id: "design", label: "Design" },
+  { id: "business", label: "Business" },
+] as const;
+export type MatchTopic = (typeof MATCH_TOPICS)[number]["id"];
+
 export interface PeerPreferences {
   default_private: boolean;
   /** An IANA timezone such as "Asia/Kolkata", or null to use the browser's. */
@@ -128,11 +140,11 @@ export const peerService = {
   },
 
   /** Enter or poll the matchmaking queue. Idempotent — safe to call every 2s. */
-  requestMatch(keepPrivate: boolean): Promise<MatchmakingStatus> {
+  requestMatch(keepPrivate: boolean, topic: MatchTopic = "any"): Promise<MatchmakingStatus> {
     return withGuidelines(() =>
       request<MatchmakingStatus>("/candidate/peer-matchmaking/request", {
         method: "POST",
-        body: { keep_private: keepPrivate },
+        body: { keep_private: keepPrivate, topic: topic === "any" ? null : topic },
       }),
     );
   },

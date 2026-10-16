@@ -11,6 +11,7 @@
 import React, { useCallback } from 'react';
 import { HiXMark, HiArrowDownTray } from 'react-icons/hi2';
 import { printReport } from '../utils/printReport.js';
+import { useDialogBehavior } from '../hooks/useDialogBehavior.js';
 
 function recommendationTone(rec) {
   const r = (rec || '').toLowerCase();
@@ -30,6 +31,7 @@ function StatCard({ label, value }) {
 }
 
 function InterviewReport({ report, isFinal, onClose }) {
+  const closeRef = useDialogBehavior(onClose);
   const handleDownloadPdf = useCallback(() => {
     printReport(report);
   }, [report]);
@@ -38,13 +40,18 @@ function InterviewReport({ report, isFinal, onClose }) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm px-4">
-      <div className="glass-strong rounded-3xl p-6 md:p-8 w-full max-w-2xl max-h-[90vh] overflow-y-auto animate-fade-in">
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="interview-report-title"
+        className="glass-strong rounded-3xl p-6 md:p-8 w-full max-w-2xl max-h-[90vh] overflow-y-auto animate-fade-in"
+      >
         <div className="flex items-center justify-between mb-1">
-          <h2 className="text-lg font-bold text-white">
+          <h2 id="interview-report-title" className="text-lg font-bold text-white">
             {isFinal ? 'Final Interview Report' : 'Your Feedback Report'}
           </h2>
-          <button onClick={onClose} className="text-slate-400 hover:text-white">
-            <HiXMark className="text-xl" />
+          <button ref={closeRef} onClick={onClose} aria-label="Close report" className="text-slate-400 hover:text-white">
+            <HiXMark className="text-xl" aria-hidden="true" />
           </button>
         </div>
         <p className="text-slate-400 text-sm mb-4">

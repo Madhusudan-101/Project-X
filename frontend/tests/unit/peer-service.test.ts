@@ -40,3 +40,30 @@ describe("untilParam (the meeting's scheduled end handed to PeerMeet)", () => {
     expect(untilParam("")).toBeNull();
   });
 });
+
+describe("matching topic", () => {
+  it("sends the chosen topic, or null for 'any topic'", async () => {
+    await peerService.requestMatch(true, "data");
+    expect(requestMock).toHaveBeenLastCalledWith("/candidate/peer-matchmaking/request", {
+      method: "POST",
+      body: { keep_private: true, topic: "data" },
+    });
+    await peerService.requestMatch(false);
+    expect(requestMock).toHaveBeenLastCalledWith("/candidate/peer-matchmaking/request", {
+      method: "POST",
+      body: { keep_private: false, topic: null },
+    });
+  });
+
+  it("offers exactly the topics the backend accepts", async () => {
+    const { MATCH_TOPICS } = await import("@/services/api/candidate/peer");
+    expect(MATCH_TOPICS.map((t) => t.id).sort()).toEqual([
+      "any",
+      "business",
+      "data",
+      "design",
+      "product",
+      "software",
+    ]);
+  });
+});

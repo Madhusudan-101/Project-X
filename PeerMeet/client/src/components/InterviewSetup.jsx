@@ -8,6 +8,7 @@
  * Reuses the existing glassmorphism design language.
  */
 
+import { useDialogBehavior } from '../hooks/useDialogBehavior.js';
 import React, { useState } from 'react';
 import { HiSparkles } from 'react-icons/hi2';
 
@@ -24,6 +25,7 @@ const EXPERIENCES = ['Fresher', '0-2 Years', '2-5 Years', '5+ Years'];
 const DURATIONS = [15, 30, 45, 60];
 
 function InterviewSetup({ onSubmit, onSkip }) {
+  const firstFieldRef = useDialogBehavior(onSkip);
   const [domain, setDomain] = useState('DSA');
   const [customDomain, setCustomDomain] = useState('');
   const [useCustom, setUseCustom] = useState(false);
@@ -48,10 +50,15 @@ function InterviewSetup({ onSubmit, onSkip }) {
 
   return (
     <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4">
-      <div className="glass-strong rounded-3xl p-6 md:p-8 w-full max-w-lg max-h-[90vh] overflow-y-auto animate-fade-in">
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="interview-setup-title"
+        className="glass-strong rounded-3xl p-6 md:p-8 w-full max-w-lg max-h-[90vh] overflow-y-auto animate-fade-in"
+      >
         <div className="flex items-center gap-2 mb-1">
-          <HiSparkles className="text-violet-300 text-xl" />
-          <h2 className="text-lg font-bold text-white">Interview Setup</h2>
+          <HiSparkles className="text-violet-300 text-xl" aria-hidden="true" />
+          <h2 id="interview-setup-title" className="text-lg font-bold text-white">Interview Setup</h2>
         </div>
         <p className="text-slate-400 text-sm mb-6">
           Configure this AI-assisted mock interview. Both participants will see
@@ -63,6 +70,7 @@ function InterviewSetup({ onSubmit, onSkip }) {
         <div className="flex gap-2 mb-2">
           <select
             id="interview-domain"
+            ref={firstFieldRef}
             value={domain}
             onChange={(e) => setDomain(e.target.value)}
             disabled={useCustom}

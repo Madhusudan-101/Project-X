@@ -42,7 +42,12 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { peerService, type MatchmakingStatus } from "@/services/api/candidate/peer";
+import {
+  MATCH_TOPICS,
+  peerService,
+  type MatchTopic,
+  type MatchmakingStatus,
+} from "@/services/api/candidate/peer";
 import { usePeerInterviewStore } from "@/store/candidate/peerInterview";
 import { useAuthStore } from "@/store/auth";
 import { ApiClientError } from "@/services/api/client";
@@ -104,6 +109,7 @@ export function PeerInterviewMatchModal({ open, onOpenChange }: Props) {
 
   const [mode, setMode] = useState<Mode>("choose");
   const [keepPrivate, setKeepPrivate] = useState(true);
+  const [topic, setTopic] = useState<MatchTopic>("any");
   // Start from the person's saved default (private unless they changed it in their settings).
   useEffect(() => {
     if (!open) return;
@@ -164,7 +170,7 @@ export function PeerInterviewMatchModal({ open, onOpenChange }: Props) {
       if (inflightRef.current || cancelledRef.current) return;
       inflightRef.current = true;
       try {
-        const res = await peerService.requestMatch(keepPrivate);
+        const res = await peerService.requestMatch(keepPrivate, topic);
         if (cancelledRef.current) return;
         setStatus(res);
         if (isFirst && res.status === "waiting") {
@@ -347,6 +353,8 @@ export function PeerInterviewMatchModal({ open, onOpenChange }: Props) {
               displayName={displayName}
               keepPrivate={keepPrivate}
               setKeepPrivate={setKeepPrivate}
+              topic={topic}
+              setTopic={setTopic}
               onFind={() => {
                 // Reserve the target tab NOW (inside the user click) so
                 // the browser accepts the eventual navigation as
@@ -434,6 +442,8 @@ function ChoosePanel({
   displayName,
   keepPrivate,
   setKeepPrivate,
+  topic,
+  setTopic,
   onFind,
   onJoin,
   onSchedule,
@@ -442,6 +452,8 @@ function ChoosePanel({
   displayName: string;
   keepPrivate: boolean;
   setKeepPrivate: (v: boolean) => void;
+  topic: MatchTopic;
+  setTopic: (t: MatchTopic) => void;
   onFind: () => void;
   onJoin: () => void;
   onSchedule: () => void;
@@ -466,6 +478,26 @@ function ChoosePanel({
       </div>
 
       <div className="space-y-3 px-6 pb-6 pt-4">
+        <div className="space-y-1.5">
+          <Label htmlFor="peer-topic" className="text-xs font-medium text-muted-foreground">
+            What would you like to practise?
+          </Label>
+          <select
+            id="peer-topic"
+            className="h-10 w-full rounded-md border bg-card px-3 text-sm"
+            value={topic}
+            onChange={(e) => setTopic(e.target.value as MatchTopic)}
+          >
+            {MATCH_TOPICS.map((t) => (
+              <option key={t.id} value={t.id}>
+                {t.label}
+              </option>
+            ))}
+          </select>
+          <p className="text-xs text-muted-foreground">
+            We try to pair you with someone on the same topic, but we never make you wait for it.
+          </p>
+        </div>
         <Button className="h-11 w-full bg-gradient-brand text-primary-foreground" onClick={onFind}>
           <Radar className="mr-2 h-4 w-4" />
           Find a partner now
