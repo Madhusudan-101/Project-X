@@ -141,7 +141,8 @@ class _FakeLK:
     async def aclose(self): pass
 
 
-CONSENT = {"consent": True, "videoConsent": True, "consentVersion": cand.CONSENT_VERSION}
+CONSENT = {"consent": True, "audioConsent": True, "videoConsent": True,
+           "consentVersion": cand.CONSENT_VERSION}
 
 STUDENT, OTHER = "11111111-1111-1111-1111-111111111111", "22222222-2222-2222-2222-222222222222"
 
@@ -290,7 +291,7 @@ def test_config_requires_auth():
 
 
 def test_session_requires_explicit_consent(env):
-    r = env.client.post(f"{URL}/session", json={"domain": "dsa", "consent": False, "videoConsent": True,
+    r = env.client.post(f"{URL}/session", json={"domain": "dsa", "consent": False, "audioConsent": True, "videoConsent": True,
                                                 "consentVersion": cand.CONSENT_VERSION})
     assert r.status_code == 400 and "accept" in r.json()["detail"].lower()
     assert env.client.post(f"{URL}/session", json={"domain": "dsa"}).status_code == 422
@@ -299,8 +300,8 @@ def test_session_requires_explicit_consent(env):
 
 
 def test_session_rejects_stale_rules_version(env):
-    r = env.client.post(f"{URL}/session", json={"domain": "dsa", "consent": True, "videoConsent": True,
-                                                "consentVersion": "old"})
+    r = env.client.post(f"{URL}/session", json={"domain": "dsa", "consent": True, "audioConsent": True,
+                                                "videoConsent": True, "consentVersion": "old"})
     assert r.status_code == 409
     assert env.store.tables.get("ai_voice_interview_sessions", []) == []
 
@@ -382,19 +383,19 @@ def test_reports_include_integrity_summary_and_timeline(env):
     env.client.post("/internal/ai-interview-reports", json={"room_id": room, "overall_score": 70}, headers=AUTH)
 
     detail = env.client.get(f"{URL}/reports/{room}").json()
-    assert detail["integrity"] == {"tab_switches": 2, "camera_lost": 1, "video_flags": 0, "total": 3}
+    assert detail["integrity"] == {"tab_switches": 2, "camera_lost": 1, "mic_lost": 0, "video_flags": 0, "total": 3}
     assert [(e["kind"], e["offset_seconds"]) for e in detail["integrity_events"]] == [
         ("tab_hidden", 10), ("window_blur", 20), ("camera_lost", 30), ("camera_restored", 35)]
 
     listed = env.client.get(f"{URL}/reports").json()
-    assert listed[0]["integrity"] == {"tab_switches": 2, "camera_lost": 1, "video_flags": 0, "total": 3}
+    assert listed[0]["integrity"] == {"tab_switches": 2, "camera_lost": 1, "mic_lost": 0, "video_flags": 0, "total": 3}
 
 
 def test_report_without_events_has_clean_summary(env):
     room = _start(env)
     env.client.post("/internal/ai-interview-reports", json={"room_id": room}, headers=AUTH)
     d = env.client.get(f"{URL}/reports/{room}").json()
-    assert d["integrity"] == {"tab_switches": 0, "camera_lost": 0, "video_flags": 0, "total": 0}
+    assert d["integrity"] == {"tab_switches": 0, "camera_lost": 0, "mic_lost": 0, "video_flags": 0, "total": 0}
     assert d["integrity_events"] == []
 
 
@@ -402,12 +403,13 @@ def test_report_without_events_has_clean_summary(env):
 
 def test_session_requires_explicit_video_consent(env):
     r = env.client.post(f"{URL}/session", json={"domain": "dsa", "consent": True,
-                                                "videoConsent": False,
+                                                "audioConsent": True, "videoConsent": False,
                                                 "consentVersion": cand.CONSENT_VERSION})
     assert r.status_code == 400 and "camera" in r.json()["detail"].lower()
     r = env.client.post(f"{URL}/session", json={"domain": "dsa", "consent": True,
+                                                "audioConsent": True,
                                                 "consentVersion": cand.CONSENT_VERSION})
-    assert r.status_code == 422
+    assert r.status_code == 422  # videoConsent missing entirely
     assert env.store.tables.get("ai_voice_interview_sessions", []) == []
     assert _FakeLK.created == [] and _FakeLK.dispatched == []
 
@@ -476,6 +478,47 @@ def test_reports_count_video_flags_and_label_the_source(env):
     _agent_events(env, room, "multiple_faces", "camera_blocked", at=50)
     env.client.post("/internal/ai-interview-reports", json={"room_id": room}, headers=AUTH)
     d = env.client.get(f"{URL}/reports/{room}").json()
-    assert d["integrity"] == {"tab_switches": 1, "camera_lost": 0, "video_flags": 2, "total": 3}
+    assert d["integrity"] == {"tab_switches": 1, "camera_lost": 0, "mic_lost": 0, "video_flags": 2, "total": 3}
     assert [(e["kind"], e["source"]) for e in d["integrity_events"]] == [
         ("tab_hidden", "browser"), ("multiple_faces", "agent"), ("camera_blocked", "agent")]
+
+
+# ─── Audio consent + microphone events ────────────────────────────────────────
+
+def test_session_requires_explicit_audio_consent(env):
+    body = {"domain": "dsa", "consent": True, "videoConsent": True,
+            "consentVersion": cand.CONSENT_VERSION}
+    r = env.client.post(f"{URL}/session", json={**body, "audioConsent": False})
+    assert r.status_code == 400 and "microphone" in r.json()["detail"].lower()
+    assert env.client.post(f"{URL}/session", json=body).status_code == 422  # field missing
+    assert env.store.tables.get("ai_voice_interview_sessions", []) == []
+    assert _FakeLK.created == [] and _FakeLK.dispatched == []
+
+
+def test_audio_consent_is_recorded_and_told_to_the_agent(env):
+    import json
+    _start(env)
+    assert env.store.tables["ai_voice_interview_sessions"][0]["audio_consent"] is True
+    assert json.loads(_FakeLK.created[0].metadata)["audio_consent"] is True
+
+
+def test_every_consent_is_needed_independently(env):
+    full = {"domain": "dsa", "consent": True, "audioConsent": True, "videoConsent": True,
+            "consentVersion": cand.CONSENT_VERSION}
+    for missing in ("consent", "audioConsent", "videoConsent"):
+        r = env.client.post(f"{URL}/session", json={**full, missing: False})
+        assert r.status_code == 400, missing
+    assert env.store.tables.get("ai_voice_interview_sessions", []) == []
+    assert env.client.post(f"{URL}/session", json=full).status_code == 200
+
+
+def test_microphone_dropouts_are_saved_and_counted(env):
+    room = _start(env)
+    assert _events(env, room, "mic_lost", at=70).json() == {"accepted": 1}
+    assert _events(env, room, "mic_restored", at=80).json() == {"accepted": 1}
+    env.client.post("/internal/ai-interview-reports", json={"room_id": room}, headers=AUTH)
+    d = env.client.get(f"{URL}/reports/{room}").json()
+    assert d["integrity"] == {"tab_switches": 0, "camera_lost": 0, "mic_lost": 1,
+                              "video_flags": 0, "total": 1}
+    assert [(e["kind"], e["offset_seconds"]) for e in d["integrity_events"]] == [
+        ("mic_lost", 70), ("mic_restored", 80)]

@@ -15,6 +15,7 @@ from livekit.plugins import (
 )
 from livekit.plugins.turn_detector.multilingual import MultilingualModel
 
+from consent import has_audio_consent, has_video_consent
 from graph import create_workflow  # <-- our compiled LangGraph app
 from video_monitor import start_video_check
 
@@ -51,8 +52,14 @@ async def entrypoint(ctx: agents.JobContext):
     except json.JSONDecodeError:
         pass
     initial_domain = meta.get("domain")
+    # The interviewer listens only if the candidate explicitly allowed it. Without
+    # that there is no interview: do not start the voice pipeline or open the mic.
+    if not has_audio_consent(meta):
+        print("Candidate did not consent to audio: not starting the interview")
+        ctx.shutdown(reason="no audio consent")
+        return
     # True only if the candidate explicitly allowed the interviewer to view their camera.
-    video_consent = meta.get("video_consent") is True
+    video_consent = has_video_consent(meta)
     try:
         max_minutes = int(meta.get("max_minutes") or os.getenv("AI_INTERVIEW_MAX_MINUTES", "20"))
     except ValueError:

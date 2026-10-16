@@ -16,45 +16,60 @@ type DeviceState = "asking" | "ready" | "denied" | "missing";
 
 const HEARD_LEVEL = 0.06;
 
+const stateFromError = (e: unknown): DeviceState => {
+  const name = e instanceof DOMException ? e.name : "";
+  return name === "NotFoundError" || name === "OverconstrainedError" ? "missing" : "denied";
+};
+
 /**
- * Pre-join camera and microphone test. Opens both only to show a preview and a
- * level meter, then releases them so the LiveKit room can take over on join.
+ * Pre-join camera and microphone test. Each device is requested on its own, so the
+ * candidate sees exactly which permission is missing and can fix it. Both must be
+ * granted to join. The devices are opened only for the preview and meter, then
+ * released so the LiveKit room can take over on join.
  */
 export function DeviceCheck({ domain, onBack, onJoin }: Props) {
-  const [state, setState] = useState<DeviceState>("asking");
+  const [micState, setMicState] = useState<DeviceState>("asking");
+  const [camState, setCamState] = useState<DeviceState>("asking");
   const [mics, setMics] = useState<MediaDeviceInfo[]>([]);
   const [cams, setCams] = useState<MediaDeviceInfo[]>([]);
   const [micId, setMicId] = useState<string | undefined>();
   const [camId, setCamId] = useState<string | undefined>();
+  const [attempt, setAttempt] = useState(0);
   const [level, setLevel] = useState(0);
   const [heard, setHeard] = useState(false);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const role = domainInfo(domain)?.role;
 
+  const refreshDeviceLists = async () => {
+    try {
+      const all = await navigator.mediaDevices.enumerateDevices();
+      setMics(all.filter((d) => d.kind === "audioinput"));
+      setCams(all.filter((d) => d.kind === "videoinput"));
+    } catch {
+      /* the lists only feed the pickers */
+    }
+  };
+
+  // Microphone: permission + level meter.
   useEffect(() => {
-    const video = videoRef.current;
     let stream: MediaStream | null = null;
     let ctx: AudioContext | null = null;
     let raf = 0;
     let cancelled = false;
-    setState("asking");
+    setMicState("asking");
     setHeard(false);
 
     (async () => {
       try {
         stream = await navigator.mediaDevices.getUserMedia({
           audio: micId ? { deviceId: { exact: micId } } : true,
-          video: camId ? { deviceId: { exact: camId } } : true,
         });
         if (cancelled) {
           stream.getTracks().forEach((t) => t.stop());
           return;
         }
-        const all = await navigator.mediaDevices.enumerateDevices();
-        setMics(all.filter((d) => d.kind === "audioinput"));
-        setCams(all.filter((d) => d.kind === "videoinput"));
-        if (video) video.srcObject = stream;
-        setState("ready");
+        void refreshDeviceLists();
+        setMicState("ready");
         ctx = new AudioContext();
         const analyser = ctx.createAnalyser();
         analyser.fftSize = 512;
@@ -70,11 +85,7 @@ export function DeviceCheck({ domain, onBack, onJoin }: Props) {
         };
         loop();
       } catch (e) {
-        if (cancelled) return;
-        const name = e instanceof DOMException ? e.name : "";
-        setState(
-          name === "NotFoundError" || name === "OverconstrainedError" ? "missing" : "denied",
-        );
+        if (!cancelled) setMicState(stateFromError(e));
       }
     })();
 
@@ -82,41 +93,76 @@ export function DeviceCheck({ domain, onBack, onJoin }: Props) {
       cancelled = true;
       cancelAnimationFrame(raf);
       stream?.getTracks().forEach((t) => t.stop());
-      if (video) video.srcObject = null;
       void ctx?.close();
     };
-  }, [micId, camId]);
+  }, [micId, attempt]);
 
-  const problem =
-    state === "missing"
-      ? "No camera or microphone found. Connect one and reload this page."
-      : "Blocked. Allow the camera and microphone in your browser's site settings, then retry.";
+  // Camera: permission + live preview.
+  useEffect(() => {
+    const video = videoRef.current;
+    let stream: MediaStream | null = null;
+    let cancelled = false;
+    setCamState("asking");
+
+    (async () => {
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: camId ? { deviceId: { exact: camId } } : true,
+        });
+        if (cancelled) {
+          stream.getTracks().forEach((t) => t.stop());
+          return;
+        }
+        void refreshDeviceLists();
+        if (video) video.srcObject = stream;
+        setCamState("ready");
+      } catch (e) {
+        if (!cancelled) setCamState(stateFromError(e));
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+      stream?.getTracks().forEach((t) => t.stop());
+      if (video) video.srcObject = null;
+    };
+  }, [camId, attempt]);
+
+  const detail = (state: DeviceState, noun: "camera" | "microphone") =>
+    state === "ready"
+      ? `${noun === "camera" ? "Camera" : "Microphone"} allowed`
+      : state === "asking"
+        ? `Waiting for your browser's ${noun} permission`
+        : state === "missing"
+          ? `No ${noun} found. Connect one, then retry.`
+          : `${noun === "camera" ? "Camera" : "Microphone"} blocked. Allow the ${noun} in your browser's site settings, then retry.`;
 
   const checks = [
     {
-      ok: state === "ready",
-      pending: state === "asking",
-      label: "Camera and microphone access",
-      detail:
-        state === "ready"
-          ? "Permission granted"
-          : state === "asking"
-            ? "Waiting for your browser permission"
-            : problem,
+      ok: camState === "ready",
+      pending: camState === "asking",
+      label: "Camera permission",
+      detail: detail(camState, "camera"),
     },
     {
-      ok: state === "ready",
-      pending: state === "asking",
-      label: "Camera preview",
-      detail: state === "ready" ? "Keep your face centered and well lit" : "No video yet",
+      ok: micState === "ready",
+      pending: micState === "asking",
+      label: "Microphone permission",
+      detail: detail(micState, "microphone"),
     },
     {
       ok: heard,
-      pending: state === "ready" && !heard,
+      pending: micState === "ready" && !heard,
       label: "Voice detected",
       detail: heard ? "We can hear you" : "Say a few words and watch the meter move",
     },
   ];
+  const ready = camState === "ready" && micState === "ready";
+  const failed =
+    camState === "denied" ||
+    camState === "missing" ||
+    micState === "denied" ||
+    micState === "missing";
 
   const picker = (
     id: string,
@@ -154,8 +200,9 @@ export function DeviceCheck({ domain, onBack, onJoin }: Props) {
         </p>
         <h2 className="mt-1 font-display text-xl font-semibold">Test your camera and microphone</h2>
         <p className="mt-1 text-sm text-muted-foreground">
-          Interview for <span className="font-medium text-foreground">{role}</span>. Your camera
-          must stay on for the whole session, and the interviewer must be able to hear you.
+          Interview for <span className="font-medium text-foreground">{role}</span>. Your browser
+          will ask for camera and microphone access. You must allow both, and keep both on for the
+          whole session.
         </p>
       </div>
 
@@ -171,9 +218,9 @@ export function DeviceCheck({ domain, onBack, onJoin }: Props) {
               aria-label="Camera preview"
               className="h-full w-full -scale-x-100 object-cover"
             />
-            {state !== "ready" && (
+            {camState !== "ready" && (
               <div className="absolute inset-0 flex items-center justify-center gap-2 text-sm text-background/70">
-                {state === "asking" ? (
+                {camState === "asking" ? (
                   <>
                     <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> Starting camera…
                   </>
@@ -228,6 +275,11 @@ export function DeviceCheck({ domain, onBack, onJoin }: Props) {
               </li>
             ))}
           </ul>
+          {failed && (
+            <Button variant="outline" size="sm" onClick={() => setAttempt((n) => n + 1)}>
+              Retry permissions
+            </Button>
+          )}
         </div>
       </div>
 
@@ -237,7 +289,7 @@ export function DeviceCheck({ domain, onBack, onJoin }: Props) {
         </Button>
         <Button
           className="bg-gradient-brand text-primary-foreground"
-          disabled={state !== "ready"}
+          disabled={!ready}
           onClick={() => onJoin({ micId, camId })}
         >
           Join interview

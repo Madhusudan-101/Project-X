@@ -26,10 +26,15 @@ const CONFIG: AiInterviewConfig = {
   consentVersion: "v-test",
 };
 
-/** Both the rules consent and the separate camera-analysis consent are required to start. */
-const acceptBoth = async (user: ReturnType<typeof userEvent.setup>) => {
-  await user.click(screen.getByLabelText(/i have read the rules/i));
-  await user.click(screen.getByLabelText(/allow the ai interviewer to view my camera/i));
+const RULES = /i have read the rules/i;
+const AUDIO = /allow the ai interviewer to listen through my microphone/i;
+const VIDEO = /allow the ai interviewer to view my camera/i;
+
+/** The rules consent and the separate microphone and camera consents are all required to start. */
+const acceptAll = async (user: ReturnType<typeof userEvent.setup>) => {
+  await user.click(screen.getByLabelText(RULES));
+  await user.click(screen.getByLabelText(AUDIO));
+  await user.click(screen.getByLabelText(VIDEO));
 };
 
 type RoomProp = Parameters<typeof MeetingRoom>[0]["room"];
@@ -47,7 +52,9 @@ const makeRoom = (over: Partial<RoomProp> = {}): RoomProp =>
     interviewerSpeaking: false,
     selfVideo: null,
     cameraLost: false,
+    micLost: false,
     retryCamera: vi.fn(),
+    retryMic: vi.fn(),
     reportIntegrity: vi.fn(),
     videoFlag: null,
     needsAudioUnlock: false,
@@ -116,24 +123,35 @@ describe("InterviewBriefing", () => {
     expect(screen.getByText(/does not look at your expression, gaze or appearance/i)).toBeTruthy();
   });
 
-  it("will not continue with only the rules consent: camera permission is required too", async () => {
-    const user = userEvent.setup();
-    setup("ai_ml");
-    await user.click(screen.getByLabelText(/i have read the rules/i));
-    const btn = screen.getByRole("button", { name: /continue to equipment check/i });
-    expect((btn as HTMLButtonElement).disabled).toBe(true);
-    await user.click(screen.getByLabelText(/allow the ai interviewer to view my camera/i));
-    expect((btn as HTMLButtonElement).disabled).toBe(false);
+  it("asks for microphone and camera permission as separate, explicit consents", () => {
+    setup();
+    expect(screen.getByLabelText(AUDIO)).toBeTruthy();
+    expect(screen.getByLabelText(VIDEO)).toBeTruthy();
+    expect(screen.getByText(/transcript is saved to my account/i)).toBeTruthy();
   });
 
-  it("will not continue with only the camera consent", async () => {
+  it.each([
+    ["the rules", [AUDIO, VIDEO]],
+    ["microphone permission", [RULES, VIDEO]],
+    ["camera permission", [RULES, AUDIO]],
+  ])("will not continue when %s is missing", async (_missing, ticked) => {
     const user = userEvent.setup();
     setup("ai_ml");
-    await user.click(screen.getByLabelText(/allow the ai interviewer to view my camera/i));
+    for (const label of ticked) await user.click(screen.getByLabelText(label));
     expect(
       (screen.getByRole("button", { name: /continue to equipment check/i }) as HTMLButtonElement)
         .disabled,
     ).toBe(true);
+  });
+
+  it("continues once all three are given, and un-ticking one blocks it again", async () => {
+    const user = userEvent.setup();
+    setup("ai_ml");
+    await acceptAll(user);
+    const btn = screen.getByRole("button", { name: /continue to equipment check/i });
+    expect((btn as HTMLButtonElement).disabled).toBe(false);
+    await user.click(screen.getByLabelText(AUDIO));
+    expect((btn as HTMLButtonElement).disabled).toBe(true);
   });
 
   it("keeps Continue disabled until a track is chosen and consent is given", async () => {
@@ -141,7 +159,7 @@ describe("InterviewBriefing", () => {
     const { onContinue } = setup("ai_ml");
     const btn = screen.getByRole("button", { name: /continue to equipment check/i });
     expect((btn as HTMLButtonElement).disabled).toBe(true);
-    await acceptBoth(user);
+    await acceptAll(user);
     expect((btn as HTMLButtonElement).disabled).toBe(false);
     await user.click(btn);
     expect(onContinue).toHaveBeenCalledOnce();
@@ -150,7 +168,7 @@ describe("InterviewBriefing", () => {
   it("stays disabled with consent but no track", async () => {
     const user = userEvent.setup();
     setup(null);
-    await acceptBoth(user);
+    await acceptAll(user);
     const btn = screen.getByRole("button", { name: /continue to equipment check/i });
     expect((btn as HTMLButtonElement).disabled).toBe(true);
     expect(screen.getByText(/choose an interview track/i)).toBeTruthy();
@@ -193,7 +211,7 @@ describe("InterviewBriefing live config", () => {
   it("blocks starting when today's interviews are used up", async () => {
     const user = userEvent.setup();
     base({ ...CONFIG, usedToday: 3, remainingToday: 0 });
-    await acceptBoth(user);
+    await acceptAll(user);
     expect(screen.getByText(/used all 3 interviews for today/i)).toBeTruthy();
     expect(
       (screen.getByRole("button", { name: /continue to equipment check/i }) as HTMLButtonElement)
@@ -204,7 +222,7 @@ describe("InterviewBriefing live config", () => {
   it("cannot continue until the config has loaded", async () => {
     const user = userEvent.setup();
     base(null);
-    await acceptBoth(user);
+    await acceptAll(user);
     expect(screen.getByText("Loading…")).toBeTruthy();
     expect(
       (screen.getByRole("button", { name: /continue to equipment check/i }) as HTMLButtonElement)
@@ -237,7 +255,13 @@ describe("aiInterviewService", () => {
     await aiInterviewService.startSession("dsa", "v-test");
     expect(requestMock).toHaveBeenCalledWith("/candidate/ai-interview/session", {
       method: "POST",
-      body: { domain: "dsa", consent: true, videoConsent: true, consentVersion: "v-test" },
+      body: {
+        domain: "dsa",
+        consent: true,
+        audioConsent: true,
+        videoConsent: true,
+        consentVersion: "v-test",
+      },
     });
   });
 
@@ -278,18 +302,18 @@ describe("IntegrityBlock", () => {
     render(
       <IntegrityBlock
         report={report({
-          integrity: { tab_switches: 0, camera_lost: 0, video_flags: 0, total: 0 },
+          integrity: { tab_switches: 0, camera_lost: 0, mic_lost: 0, video_flags: 0, total: 0 },
         })}
       />,
     );
-    expect(screen.getByText(/no tab switches or camera interruptions/i)).toBeTruthy();
+    expect(screen.getByText(/no tab switches or device interruptions/i)).toBeTruthy();
   });
 
   it("lists flagged events with timestamps", () => {
     render(
       <IntegrityBlock
         report={report({
-          integrity: { tab_switches: 1, camera_lost: 1, video_flags: 0, total: 2 },
+          integrity: { tab_switches: 1, camera_lost: 1, mic_lost: 0, video_flags: 0, total: 2 },
           integrity_events: [
             { kind: "tab_hidden", offset_seconds: 75 },
             { kind: "camera_lost", offset_seconds: 130 },
@@ -315,7 +339,7 @@ describe("IntegrityBlock video flags", () => {
             room_id: "r",
             domain: "dsa",
             per_question: [],
-            integrity: { tab_switches: 0, camera_lost: 0, video_flags: 2, total: 2 },
+            integrity: { tab_switches: 0, camera_lost: 0, mic_lost: 0, video_flags: 2, total: 2 },
             integrity_events: [
               { kind: "multiple_faces", offset_seconds: 61, source: "agent" },
               { kind: "no_face", offset_seconds: 200, source: "agent" },
@@ -329,6 +353,32 @@ describe("IntegrityBlock video flags", () => {
     expect(screen.getByText("1:01")).toBeTruthy();
     expect(screen.getByText("Interviewer could not see a face")).toBeTruthy();
     expect(screen.getByText("3:20")).toBeTruthy();
+  });
+});
+
+describe("IntegrityBlock microphone events", () => {
+  it("counts and lists microphone interruptions", () => {
+    render(
+      <IntegrityBlock
+        report={
+          {
+            id: "1",
+            room_id: "r",
+            domain: "dsa",
+            per_question: [],
+            integrity: { tab_switches: 0, camera_lost: 0, mic_lost: 1, video_flags: 0, total: 1 },
+            integrity_events: [
+              { kind: "mic_lost", offset_seconds: 90, source: "browser" },
+              { kind: "mic_restored", offset_seconds: 100, source: "browser" },
+            ],
+          } as AiInterviewReportDetail
+        }
+      />,
+    );
+    expect(screen.getByText(/1 microphone interruption recorded/i)).toBeTruthy();
+    expect(screen.getByText("Microphone stopped")).toBeTruthy();
+    expect(screen.getByText("Microphone restored")).toBeTruthy();
+    expect(screen.getByText("1:30")).toBeTruthy();
   });
 });
 
@@ -365,66 +415,105 @@ describe("WaitingRoom", () => {
 });
 
 describe("DeviceCheck", () => {
-  const stubMedia = () => {
-    const track = { stop: vi.fn() };
-    const getUserMedia = vi.fn().mockResolvedValue({ getTracks: () => [track] });
-    const enumerateDevices = vi.fn().mockResolvedValue([]);
-    vi.stubGlobal("navigator", { mediaDevices: { getUserMedia, enumerateDevices } });
-    class FakeCtx {
-      createAnalyser() {
-        return { fftSize: 0, getByteTimeDomainData: (b: Uint8Array) => b.fill(128) };
-      }
-      createMediaStreamSource() {
-        return { connect: vi.fn() };
-      }
-      close() {
-        return Promise.resolve();
-      }
+  const FakeCtx = class {
+    createAnalyser() {
+      return { fftSize: 0, getByteTimeDomainData: (b: Uint8Array) => b.fill(128) };
     }
+    createMediaStreamSource() {
+      return { connect: vi.fn() };
+    }
+    close() {
+      return Promise.resolve();
+    }
+  };
+
+  /** getUserMedia that can grant or refuse each device independently, like a real browser. */
+  const stubMedia = (opts: { audio?: string; video?: string } = {}) => {
+    const track = { stop: vi.fn() };
+    const getUserMedia = vi.fn(async (c: { audio?: unknown; video?: unknown }) => {
+      const err = c.audio ? opts.audio : opts.video;
+      if (err) throw new DOMException("x", err);
+      return { getTracks: () => [track] };
+    });
+    vi.stubGlobal("navigator", {
+      mediaDevices: { getUserMedia, enumerateDevices: vi.fn().mockResolvedValue([]) },
+    });
     vi.stubGlobal("AudioContext", FakeCtx);
     return { getUserMedia, track };
   };
 
-  it("requests camera and microphone, enables Join, and releases devices on unmount", async () => {
+  const joinBtn = () =>
+    screen.getByRole("button", { name: /join interview/i }) as HTMLButtonElement;
+  const renderCheck = (onJoin = vi.fn()) =>
+    render(<DeviceCheck domain="ai_ml" onBack={vi.fn()} onJoin={onJoin} />);
+
+  it("asks for the camera and the microphone separately, and enables Join only when both are allowed", async () => {
     const { getUserMedia, track } = stubMedia();
     const onJoin = vi.fn();
-    const { unmount } = render(<DeviceCheck domain="ai_ml" onBack={vi.fn()} onJoin={onJoin} />);
-    const join = screen.getByRole("button", { name: /join interview/i }) as HTMLButtonElement;
-    expect(join.disabled).toBe(true);
-    await waitFor(() => expect(join.disabled).toBe(false));
-    expect(getUserMedia).toHaveBeenCalledWith({ audio: true, video: true });
-    expect(screen.getByLabelText("Camera preview")).toBeTruthy();
-    expect(screen.getByText("Keep your face centered and well lit")).toBeTruthy();
-    await userEvent.setup().click(join);
+    const { unmount } = renderCheck(onJoin);
+    expect(joinBtn().disabled).toBe(true);
+    await waitFor(() => expect(joinBtn().disabled).toBe(false));
+    expect(getUserMedia).toHaveBeenCalledWith({ audio: true });
+    expect(getUserMedia).toHaveBeenCalledWith({ video: true });
+    expect(screen.getByText("Camera allowed")).toBeTruthy();
+    expect(screen.getByText("Microphone allowed")).toBeTruthy();
+    await userEvent.setup().click(joinBtn());
     expect(onJoin).toHaveBeenCalledWith({ micId: undefined, camId: undefined });
     unmount();
-    expect(track.stop).toHaveBeenCalled();
+    expect(track.stop).toHaveBeenCalled(); // both devices are released for the call
   });
 
   it("keeps the camera preview muted so the mic is never played back", async () => {
     stubMedia();
-    render(<DeviceCheck domain="ai_ml" onBack={vi.fn()} onJoin={vi.fn()} />);
-    const video = screen.getByLabelText("Camera preview") as HTMLVideoElement;
-    expect(video.muted).toBe(true);
-    await screen.findByText("Permission granted");
+    renderCheck();
+    expect((screen.getByLabelText("Camera preview") as HTMLVideoElement).muted).toBe(true);
+    await screen.findByText("Microphone allowed");
   });
 
-  it("explains blocked permissions and keeps Join disabled", async () => {
-    const getUserMedia = vi.fn().mockRejectedValue(new DOMException("no", "NotAllowedError"));
-    vi.stubGlobal("navigator", { mediaDevices: { getUserMedia, enumerateDevices: vi.fn() } });
-    render(<DeviceCheck domain="ai_ml" onBack={vi.fn()} onJoin={vi.fn()} />);
-    await screen.findByText(/blocked\. allow the camera and microphone/i);
-    expect(
-      (screen.getByRole("button", { name: /join interview/i }) as HTMLButtonElement).disabled,
-    ).toBe(true);
+  it("blocks Join and names the microphone when only the microphone is refused", async () => {
+    stubMedia({ audio: "NotAllowedError" });
+    renderCheck();
+    await screen.findByText(/microphone blocked\. allow the microphone/i);
+    expect(screen.getByText("Camera allowed")).toBeTruthy();
+    expect(joinBtn().disabled).toBe(true);
+  });
+
+  it("blocks Join and names the camera when only the camera is refused", async () => {
+    stubMedia({ video: "NotAllowedError" });
+    renderCheck();
+    await screen.findByText(/camera blocked\. allow the camera/i);
+    expect(screen.getByText("Microphone allowed")).toBeTruthy();
     expect(screen.getByText("Camera unavailable")).toBeTruthy();
+    expect(joinBtn().disabled).toBe(true);
   });
 
-  it("reports missing hardware", async () => {
-    const getUserMedia = vi.fn().mockRejectedValue(new DOMException("none", "NotFoundError"));
-    vi.stubGlobal("navigator", { mediaDevices: { getUserMedia, enumerateDevices: vi.fn() } });
-    render(<DeviceCheck domain="ai_ml" onBack={vi.fn()} onJoin={vi.fn()} />);
-    await screen.findByText(/no camera or microphone found/i);
+  it("reports missing hardware per device", async () => {
+    stubMedia({ audio: "NotFoundError" });
+    renderCheck();
+    await screen.findByText(/no microphone found/i);
+    expect(joinBtn().disabled).toBe(true);
+  });
+
+  it("lets the candidate retry after fixing a blocked permission", async () => {
+    const user = userEvent.setup();
+    const media = stubMedia({ audio: "NotAllowedError" });
+    renderCheck();
+    await screen.findByText(/microphone blocked/i);
+    expect(joinBtn().disabled).toBe(true);
+
+    // The candidate allows the microphone in their browser settings, then retries.
+    const granted = { getTracks: () => [{ stop: vi.fn() }] };
+    media.getUserMedia.mockImplementation(async () => granted);
+    await user.click(screen.getByRole("button", { name: /retry permissions/i }));
+    await waitFor(() => expect(joinBtn().disabled).toBe(false));
+    expect(screen.queryByRole("button", { name: /retry permissions/i })).toBeNull();
+  });
+
+  it("does not offer a retry while everything is allowed", async () => {
+    stubMedia();
+    renderCheck();
+    await waitFor(() => expect(joinBtn().disabled).toBe(false));
+    expect(screen.queryByRole("button", { name: /retry permissions/i })).toBeNull();
   });
 });
 
@@ -571,6 +660,15 @@ describe("MeetingRoom", () => {
   it("shows no alert when the video check is clear", () => {
     render(<MeetingRoom room={makeRoom({ videoFlag: null })} domain="ai_ml" />);
     expect(screen.queryByRole("alert")).toBeNull();
+  });
+
+  it("warns when the microphone stops and lets the candidate restore it", async () => {
+    const room = makeRoom({ micLost: true });
+    render(<MeetingRoom room={room} domain="ai_ml" />);
+    expect(screen.getByRole("alert").textContent).toMatch(/microphone stopped/i);
+    await userEvent.setup().click(screen.getByRole("button", { name: /restore microphone/i }));
+    expect(room.retryMic).toHaveBeenCalledOnce();
+    expect(room.retryCamera).not.toHaveBeenCalled();
   });
 
   it("warns when the camera stops and lets the candidate restore it", async () => {

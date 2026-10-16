@@ -21,6 +21,8 @@ export type IntegrityKind =
   | "window_blur"
   | "camera_lost"
   | "camera_restored"
+  | "mic_lost"
+  | "mic_restored"
   /** Seen by the AI interviewer's video check (only with the candidate's consent). */
   | "no_face"
   | "multiple_faces"
@@ -37,6 +39,7 @@ export interface IntegrityEvent {
 export interface IntegritySummary {
   tab_switches: number;
   camera_lost: number;
+  mic_lost: number;
   video_flags: number;
   total: number;
 }

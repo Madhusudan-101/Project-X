@@ -320,3 +320,29 @@ def test_with_consent_the_track_is_read_and_a_confirmed_problem_is_flagged_and_r
     assert states[:2] == [FLAGGED, CLEARED]  # candidate is told when it starts and when it clears
     assert all(p[1]["topic"] == "integrity" for p in published)
     assert len(sent) == 1  # only the flag goes to the backend, not the clear
+
+
+# ─── audio consent ────────────────────────────────────────────────────────────
+
+def test_audio_and_video_consent_are_separate_and_need_an_explicit_true():
+    import consent
+
+    assert consent.has_audio_consent({"audio_consent": True})
+    assert not consent.has_audio_consent({})
+    assert not consent.has_audio_consent({"video_consent": True})  # video consent is not audio consent
+    for not_true in (False, None, "true", 1, "yes", []):
+        assert not consent.has_audio_consent({"audio_consent": not_true})
+        assert not consent.has_video_consent({"video_consent": not_true})
+    assert consent.has_video_consent({"video_consent": True})
+    assert not consent.has_video_consent({"audio_consent": True})
+
+
+def test_agent_refuses_to_start_the_voice_pipeline_without_audio_consent():
+    """agent.py needs the full voice stack to import, so check its ordering from source:
+    the consent guard must come before the pipeline is built or started."""
+    src = open(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "agent.py")).read()
+    guard = src.index("if not has_audio_consent(meta):")
+    after_guard = src[guard:]
+    assert "ctx.shutdown(reason=\"no audio consent\")" in after_guard.split("video_consent =")[0]
+    for pipeline_step in ("create_workflow(", "AgentSession(", "session.start(", "start_video_check("):
+        assert src.index(pipeline_step, src.index("async def entrypoint")) > guard, pipeline_step

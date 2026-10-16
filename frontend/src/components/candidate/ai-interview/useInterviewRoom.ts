@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { LocalVideoTrack, Room } from "livekit-client";
+import type { LocalAudioTrack, LocalVideoTrack, Room } from "livekit-client";
 import { ApiClientError } from "@/services/api/client";
 import { aiInterviewService } from "@/services/api/candidate/aiInterview";
 import type {
@@ -15,6 +15,8 @@ export interface CaptionLine {
   who: "you" | "interviewer";
   text: string;
 }
+
+type DeviceKind = "camera" | "mic";
 
 export interface DevicePick {
   micId?: string;
@@ -59,7 +61,8 @@ export function useInterviewRoom() {
   const unmountedRef = useRef(false);
   const roomNameRef = useRef<string | null>(null);
   const startedAtRef = useRef(0);
-  const cameraLostRef = useRef(false);
+  const lostRef = useRef<Record<DeviceKind, boolean>>({ camera: false, mic: false });
+  const deviceTrackRef = useRef<Partial<Record<DeviceKind, LocalAudioTrack | LocalVideoTrack>>>({});
   const pendingEventsRef = useRef<{ kind: IntegrityKind; offsetSeconds: number }[]>([]);
   const flushingRef = useRef(false);
   /** True once the call is being closed, so unpublishing tracks is not reported as a camera fault. */
@@ -77,6 +80,7 @@ export function useInterviewRoom() {
   const [interviewerSpeaking, setInterviewerSpeaking] = useState(false);
   const [selfVideo, setSelfVideo] = useState<LocalVideoTrack | null>(null);
   const [cameraLost, setCameraLost] = useState(false);
+  const [micLost, setMicLost] = useState(false);
   const [videoFlag, setVideoFlag] = useState<VideoFlagKind | null>(null);
 
   const stopTimer = () => {
@@ -117,6 +121,26 @@ export function useInterviewRoom() {
     [flushIntegrity],
   );
 
+  const markLost = useCallback(
+    (device: DeviceKind) => {
+      if (endingRef.current || lostRef.current[device]) return;
+      lostRef.current[device] = true;
+      (device === "camera" ? setCameraLost : setMicLost)(true);
+      reportIntegrity(device === "camera" ? "camera_lost" : "mic_lost");
+    },
+    [reportIntegrity],
+  );
+
+  const markRestored = useCallback(
+    (device: DeviceKind) => {
+      if (!lostRef.current[device]) return;
+      lostRef.current[device] = false;
+      (device === "camera" ? setCameraLost : setMicLost)(false);
+      reportIntegrity(device === "camera" ? "camera_restored" : "mic_restored");
+    },
+    [reportIntegrity],
+  );
+
   const teardown = useCallback(() => {
     endingRef.current = true;
     stopTimer();
@@ -147,7 +171,9 @@ export function useInterviewRoom() {
       setInterviewerSpeaking(false);
       setSelfVideo(null);
       setCameraLost(false);
-      cameraLostRef.current = false;
+      setMicLost(false);
+      lostRef.current = { camera: false, mic: false };
+      deviceTrackRef.current = {};
       endingRef.current = false;
       setVideoFlag(null);
       pendingEventsRef.current = [];
@@ -155,7 +181,7 @@ export function useInterviewRoom() {
       setPhase("connecting");
       try {
         const session = await aiInterviewService.startSession(domain, consentVersion);
-        const { Room, RoomEvent } = await import("livekit-client");
+        const { Room, RoomEvent, TrackEvent } = await import("livekit-client");
         if (unmountedRef.current) return;
 
         const room = new Room({ adaptiveStream: false, dynacast: false });
@@ -186,25 +212,25 @@ export function useInterviewRoom() {
             notice.state === "flagged" ? notice.kind : cur === notice.kind ? null : cur,
           );
         });
+        // A camera or microphone can drop out mid-interview (unplugged, permission revoked,
+        // taken by another app). LiveKit then emits "ended" on the track and tries to restart
+        // it; it never unpublishes. So watch each device track for ended / restarted.
         room.on(RoomEvent.LocalTrackPublished, (pub) => {
-          if (pub.track?.kind === "video") {
-            setSelfVideo(pub.track as LocalVideoTrack);
-            setCameraLost(false);
-            if (cameraLostRef.current) {
-              cameraLostRef.current = false;
-              reportIntegrity("camera_restored");
-            }
-          }
+          const track = pub.track;
+          if (track?.kind !== "video" && track?.kind !== "audio") return;
+          const device: DeviceKind = track.kind === "video" ? "camera" : "mic";
+          const local = track as LocalVideoTrack | LocalAudioTrack;
+          deviceTrackRef.current[device] = local;
+          if (device === "camera") setSelfVideo(local as LocalVideoTrack);
+          local.on(TrackEvent.Ended, () => markLost(device));
+          local.on(TrackEvent.Restarted, () => markRestored(device));
+          markRestored(device); // a (re)published track means the device is back
         });
         room.on(RoomEvent.LocalTrackUnpublished, (pub) => {
-          if (pub.track?.kind === "video") {
-            setSelfVideo(null);
-            setCameraLost(true);
-            if (!cameraLostRef.current) {
-              cameraLostRef.current = true;
-              reportIntegrity("camera_lost");
-            }
-          }
+          const kind = pub.track?.kind;
+          if (kind === "video") setSelfVideo(null);
+          if (kind === "video") markLost("camera");
+          if (kind === "audio") markLost("mic");
         });
         room.on(RoomEvent.AudioPlaybackStatusChanged, () => {
           setNeedsAudioUnlock(!room.canPlaybackAudio);
@@ -288,7 +314,7 @@ export function useInterviewRoom() {
         );
       }
     },
-    [teardown, reportIntegrity, flushIntegrity],
+    [teardown, flushIntegrity, markLost, markRestored],
   );
 
   const end = useCallback(() => {
@@ -307,14 +333,33 @@ export function useInterviewRoom() {
     setMuted(nextMuted);
   }, [muted]);
 
-  /** Re-enable the camera after it was lost (unplugged, revoked, or stopped by the browser). */
-  const retryCamera = useCallback(async () => {
-    try {
-      await roomRef.current?.localParticipant.setCameraEnabled(true);
-    } catch {
-      setCameraLost(true);
-    }
-  }, []);
+  /**
+   * Bring a lost camera or microphone back: restart its track on the current device and
+   * unmute it, or publish it again if the track is gone. Stays "lost" if the device still fails.
+   */
+  const retryDevice = useCallback(
+    async (device: DeviceKind) => {
+      const lp = roomRef.current?.localParticipant;
+      if (!lp) return;
+      const track = deviceTrackRef.current[device];
+      try {
+        if (track) {
+          await track.restartTrack();
+          await track.unmute();
+          markRestored(device);
+        } else if (device === "camera") {
+          await lp.setCameraEnabled(true);
+        } else {
+          await lp.setMicrophoneEnabled(true);
+        }
+      } catch {
+        /* still lost; the banner stays and the candidate can try again */
+      }
+    },
+    [markRestored],
+  );
+  const retryCamera = useCallback(() => retryDevice("camera"), [retryDevice]);
+  const retryMic = useCallback(() => retryDevice("mic"), [retryDevice]);
 
   const unlockAudio = useCallback(async () => {
     await roomRef.current?.startAudio();
@@ -331,6 +376,7 @@ export function useInterviewRoom() {
     setInterviewerSpeaking(false);
     setSelfVideo(null);
     setCameraLost(false);
+    setMicLost(false);
     setVideoFlag(null);
     setError(null);
     setPhase("setup");
@@ -348,8 +394,10 @@ export function useInterviewRoom() {
     interviewerSpeaking,
     selfVideo,
     cameraLost,
+    micLost,
     videoFlag,
     retryCamera,
+    retryMic,
     reportIntegrity,
     needsAudioUnlock,
     audioHostRef,

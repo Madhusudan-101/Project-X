@@ -97,6 +97,22 @@ export function MeetingRoom({ room, domain }: { room: Room; domain: AiInterviewD
         </div>
       )}
 
+      {room.micLost && (
+        <div
+          role="alert"
+          className="flex flex-wrap items-center gap-3 border-b border-destructive/60 bg-destructive/25 px-5 py-2.5 text-sm"
+        >
+          <TriangleAlert className="h-4 w-4 shrink-0" aria-hidden />
+          <span className="flex-1">
+            Your microphone stopped, so the interviewer cannot hear you. Restore it to continue.
+            This has been flagged.
+          </span>
+          <Button size="sm" variant="secondary" onClick={room.retryMic}>
+            Restore microphone
+          </Button>
+        </div>
+      )}
+
       {(away || room.cameraLost) && (
         <div
           role="alert"

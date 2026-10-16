@@ -6,6 +6,10 @@
 --       when the candidate accepted the interview rules, and which version
 --       of the rules they accepted. Set by POST /candidate/ai-interview/session.
 --
+--   ai_voice_interview_sessions.audio_consent
+--       the candidate explicitly allowed the AI interviewer to listen through
+--       their microphone and transcribe their voice. Required to start.
+--
 --   ai_voice_interview_sessions.video_consent
 --       the candidate explicitly allowed the AI interviewer to view their camera
 --       feed. The agent analyses video only when this is true, and the backend
@@ -13,7 +17,7 @@
 --
 --   ai_voice_interview_integrity_events
 --       supervision signals during a live interview: reported by the candidate's
---       browser (tab left, window blurred, camera lost / restored) or by the
+--       browser (tab left, window blurred, camera or microphone lost / restored) or by the
 --       interviewer agent's video check (no face, more than one person, camera
 --       blocked). `source` says which. Written only by the backend (service
 --       role). Students can SELECT their own rows. No video or images are stored.
@@ -22,6 +26,7 @@
 alter table public.ai_voice_interview_sessions
   add column if not exists consent_at      timestamptz,
   add column if not exists consent_version text,
+  add column if not exists audio_consent   boolean not null default false,
   add column if not exists video_consent   boolean not null default false;
 
 create table if not exists public.ai_voice_interview_integrity_events (
@@ -31,6 +36,7 @@ create table if not exists public.ai_voice_interview_integrity_events (
   student_id     uuid         not null references public.profiles(id) on delete cascade,
   kind           text         not null
                               check (kind in ('tab_hidden','window_blur','camera_lost','camera_restored',
+                                              'mic_lost','mic_restored',
                                               'no_face','multiple_faces','camera_blocked')),
   source         text         not null default 'browser' check (source in ('browser','agent')),
   offset_seconds integer      not null check (offset_seconds >= 0),
@@ -47,6 +53,7 @@ alter table public.ai_voice_interview_integrity_events
 alter table public.ai_voice_interview_integrity_events
   add constraint ai_voice_interview_integrity_events_kind_check
   check (kind in ('tab_hidden','window_blur','camera_lost','camera_restored',
+                  'mic_lost','mic_restored',
                   'no_face','multiple_faces','camera_blocked'));
 
 alter table public.ai_voice_interview_integrity_events

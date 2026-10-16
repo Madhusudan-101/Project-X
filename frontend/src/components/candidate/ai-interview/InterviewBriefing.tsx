@@ -35,7 +35,7 @@ const SUPERVISION = [
   "This session is supervised. Your camera is live in the interview room from start to finish.",
   "With your permission, the AI interviewer views your camera to check that your face is visible and that you are alone. You are told on screen if there is a problem.",
   "Leaving the interview tab or window is detected and flagged on screen while it happens.",
-  "If your camera stops, you are asked to restore it. Repeated violations can invalidate the interview.",
+  "If your camera or microphone stops, you are asked to restore it. Repeated violations can invalidate the interview.",
 ];
 
 const DATA_NOTES = [
@@ -71,6 +71,7 @@ export function InterviewBriefing({
   onRetryConfig,
 }: Props) {
   const [agreed, setAgreed] = useState(false);
+  const [audioAgreed, setAudioAgreed] = useState(false);
   const [videoAgreed, setVideoAgreed] = useState(false);
   const selected = domain ? domainInfo(domain) : null;
 
@@ -203,7 +204,22 @@ export function InterviewBriefing({
             />
             <span>
               I have read the rules. I agree to complete this interview on my own, without outside
-              help, and to have my voice transcribed and saved.
+              help.
+            </span>
+          </label>
+          <label
+            htmlFor="ai-audio-consent"
+            className="flex cursor-pointer items-start gap-3 text-sm"
+          >
+            <Checkbox
+              id="ai-audio-consent"
+              checked={audioAgreed}
+              onCheckedChange={(v) => setAudioAgreed(v === true)}
+              className="mt-0.5"
+            />
+            <span>
+              I allow the AI interviewer to listen through my microphone during the interview and to
+              transcribe my voice. I understand the transcript is saved to my account.
             </span>
           </label>
           <label
@@ -239,7 +255,14 @@ export function InterviewBriefing({
           {error && <p className="text-sm text-destructive">{error}</p>}
           <Button
             className="w-full bg-gradient-brand text-primary-foreground"
-            disabled={!agreed || !videoAgreed || !domain || !config || config.remainingToday === 0}
+            disabled={
+              !agreed ||
+              !audioAgreed ||
+              !videoAgreed ||
+              !domain ||
+              !config ||
+              config.remainingToday === 0
+            }
             onClick={onContinue}
           >
             Continue to equipment check

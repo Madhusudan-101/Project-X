@@ -53,11 +53,19 @@ REPORTS_LIMIT = 50
 
 # Bump when the rules shown on the briefing screen change materially. Candidates
 # must accept the current version to start; the version is stored with the session.
-CONSENT_VERSION = "2026-10-video-v2"
+CONSENT_VERSION = "2026-10-av-v3"
 
 # Signals the browser may report. "tab_hidden" and "window_blur" both mean the
-# candidate left the interview page; camera_* track the mandatory camera.
-INTEGRITY_KINDS = ("tab_hidden", "window_blur", "camera_lost", "camera_restored")
+# candidate left the interview page; camera_* and mic_* track the mandatory
+# camera and microphone dropping out and coming back.
+INTEGRITY_KINDS = (
+    "tab_hidden",
+    "window_blur",
+    "camera_lost",
+    "camera_restored",
+    "mic_lost",
+    "mic_restored",
+)
 TAB_LEFT_KINDS = ("tab_hidden", "window_blur")
 # Signals only the AI interviewer's video check may report (via the internal
 # webhook), and only for candidates who consented to video analysis. Objective
@@ -102,6 +110,9 @@ class StartSessionIn(BaseModel):
     domain: str
     # The candidate must explicitly accept the rules (and camera supervision).
     consent: bool
+    # Separate, explicit permission for the AI interviewer to listen through the
+    # microphone and transcribe the candidate's voice.
+    audioConsent: bool
     # Separate, explicit permission for the AI interviewer to view the camera feed.
     videoConsent: bool
     consentVersion: str
@@ -137,6 +148,7 @@ class IntegrityEventOut(BaseModel):
 class IntegritySummary(BaseModel):
     tab_switches: int = 0
     camera_lost: int = 0
+    mic_lost: int = 0
     video_flags: int = 0
     total: int = 0
 
@@ -210,8 +222,15 @@ def _used_today(user_id: str) -> int:
 def _summarize_integrity(events: list[dict]) -> dict:
     tab = sum(1 for e in events if e.get("kind") in TAB_LEFT_KINDS)
     cam = sum(1 for e in events if e.get("kind") == "camera_lost")
+    mic = sum(1 for e in events if e.get("kind") == "mic_lost")
     vid = sum(1 for e in events if e.get("kind") in VIDEO_KINDS)
-    return {"tab_switches": tab, "camera_lost": cam, "video_flags": vid, "total": tab + cam + vid}
+    return {
+        "tab_switches": tab,
+        "camera_lost": cam,
+        "mic_lost": mic,
+        "video_flags": vid,
+        "total": tab + cam + mic + vid,
+    }
 
 
 def _integrity_by_room(room_ids: list[str], student_id: str) -> dict[str, list[dict]]:
@@ -268,6 +287,11 @@ async def start_session(
             status_code=400,
             detail="You must accept the interview rules and camera supervision to start.",
         )
+    if not body.audioConsent:
+        raise HTTPException(
+            status_code=400,
+            detail="You must allow the AI interviewer to listen through your microphone to start.",
+        )
     if not body.videoConsent:
         raise HTTPException(
             status_code=400,
@@ -314,7 +338,9 @@ async def start_session(
                     "user_id": user_id,
                     "display_name": display_name,
                     "max_minutes": max_minutes,
-                    # The agent analyses video only when this is true.
+                    # The agent listens only when audio_consent is true, and analyses
+                    # video only when video_consent is true.
+                    "audio_consent": True,
                     "video_consent": True,
                 }),
             )
@@ -330,6 +356,7 @@ async def start_session(
             "student_id": user_id,
             "domain": body.domain,
             "consent_at": datetime.now(timezone.utc).isoformat(),
+            "audio_consent": True,
             "video_consent": True,
             "consent_version": CONSENT_VERSION,
         }).execute()
