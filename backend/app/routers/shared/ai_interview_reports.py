@@ -22,7 +22,11 @@ from typing import Any, List, Optional
 from fastapi import APIRouter, Header, HTTPException
 from pydantic import BaseModel, Field
 
+from ...crud import get_company_names, get_profiles_basic
 from ...deps import db_client
+from ...services.ai_interview.maintenance import run_maintenance
+from ...services.ai_interview.people import company_owner_email, display_name
+from ...services.notifications import ai_interview_emails
 from ..candidate.ai_interview import MAX_EVENTS_PER_SESSION, VIDEO_KINDS
 
 logger = logging.getLogger(__name__)
@@ -42,6 +46,24 @@ def _verify_secret(authorization: Optional[str]) -> None:
 
 def _score(v: Optional[float]) -> Optional[float]:
     return None if v is None else max(0.0, min(100.0, float(v)))
+
+
+def _notify_finished(inv: dict, *, partial: bool) -> None:
+    """Tell the hiring team the report is ready and confirm to the candidate it arrived. Best effort."""
+    try:
+        trows = db_client.table("ai_interview_templates").select("role_title").eq("id", inv["template_id"]).limit(1).execute().data or []
+        role = trows[0]["role_title"] if trows else "the role"
+        company = get_company_names([inv["company_id"]]).get(inv["company_id"], "the company")
+        person = (get_profiles_basic([inv.get("student_id")]).get(inv.get("student_id")) if inv.get("student_id") else None)
+        owner = company_owner_email(inv["company_id"])
+        if owner:
+            ai_interview_emails.send_report_ready(
+                to=owner, company=company, role=role, partial=partial,
+                candidate=display_name(person, inv["email"]),
+            )
+        ai_interview_emails.send_submission_confirmation(to=inv["email"], company=company, role=role)
+    except Exception:  # noqa: BLE001
+        logger.exception("finish notifications failed")
 
 
 class CompetencyScoreIn(BaseModel):
@@ -130,10 +152,15 @@ def ingest_ai_interview_report(
     invite_id = sess[0].get("invite_id")
     if invite_id:
         try:
+            rows = db_client.table("ai_interview_invites").select("*").eq("id", invite_id).limit(1).execute().data or []
+            inv = rows[0] if rows else None
+            already_done = bool(inv and inv.get("status") == "completed")
             db_client.table("ai_interview_invites").update({
                 "status": "completed",
                 "completed_at": datetime.now(timezone.utc).isoformat(),
             }).eq("id", invite_id).execute()
+            if inv and not already_done:  # an agent retry must not email people twice
+                _notify_finished(inv, partial=body.partial)
         except Exception:  # noqa: BLE001
             logger.exception("ai_interview_invites completion update failed")
 
@@ -206,3 +233,11 @@ def ingest_video_integrity(
             logger.exception("video integrity insert failed")
             raise HTTPException(status_code=500, detail=f"Insert failed: {e}")
     return {"accepted": len(batch)}
+
+
+@router.post("/ai-interview/maintenance")
+def ai_interview_maintenance(authorization: Optional[str] = Header(None)) -> dict:
+    """Scheduled upkeep: expiry reminders, closing stuck interviews, optional transcript retention.
+    Call it every 15 minutes from any scheduler, with the shared secret."""
+    _verify_secret(authorization)
+    return run_maintenance()

@@ -135,3 +135,67 @@ PRESETS: Dict[str, Dict[str, Any]] = {
          "Floyd's tortoise and hare."),
     ]),
 }
+
+
+def normalize_draft(raw: Any) -> List[Dict[str, Any]]:
+    """Turn a model-drafted rubric into a valid one, or an empty list if nothing is usable.
+
+    The model's output is never trusted: names are de-duplicated, text is trimmed, at most
+    MAX_COMPETENCIES are kept, and the weights are rescaled to whole numbers that add up to 100
+    (every competency keeps at least 1).
+    """
+    items = raw.get("competencies") if isinstance(raw, dict) else raw
+    if not isinstance(items, list):
+        return []
+    kept: List[Dict[str, Any]] = []
+    seen: set[str] = set()
+    for it in items:
+        if not isinstance(it, dict):
+            continue
+        name = str(it.get("name") or "").strip()[:60]
+        if len(name) < 2 or name.lower() in seen:
+            continue
+        try:
+            w = float(it.get("weight"))
+        except (TypeError, ValueError):
+            w = 10.0
+        qs = it.get("questions") if isinstance(it.get("questions"), list) else []
+        try:
+            c = CompetencyIn(
+                name=name,
+                description=str(it.get("description") or "")[:500],
+                weight=1,
+                questions=[str(q).strip()[:300] for q in qs if str(q).strip()][:MAX_QUESTIONS],
+                expected_concepts=str(it.get("expected_concepts") or "")[:600],
+            )
+        except ValueError:
+            continue
+        seen.add(name.lower())
+        kept.append({**c.model_dump(), "_w": max(w, 0.0)})
+        if len(kept) == MAX_COMPETENCIES:
+            break
+    if not kept:
+        return []
+    total = sum(k["_w"] for k in kept) or float(len(kept))
+    raw_shares = [(k["_w"] or 0.0) * 100 / total if total else 100 / len(kept) for k in kept]
+    # Give each at least 1, then largest-remainder to land on exactly 100.
+    floors = [max(1, int(x)) for x in raw_shares]
+    diff = 100 - sum(floors)
+    order = sorted(range(len(kept)), key=lambda i: raw_shares[i] - int(raw_shares[i]), reverse=True)
+    i = 0
+    while diff != 0 and kept:
+        idx = order[i % len(order)] if diff > 0 else order[::-1][i % len(order)]
+        if diff > 0:
+            floors[idx] += 1
+            diff -= 1
+        elif floors[idx] > 1:
+            floors[idx] -= 1
+            diff += 1
+        i += 1
+        if i > 1000:
+            break
+    out = []
+    for k, w in zip(kept, floors):
+        k.pop("_w")
+        out.append({**k, "weight": w})
+    return out

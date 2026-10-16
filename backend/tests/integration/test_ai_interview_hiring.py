@@ -4,143 +4,14 @@ candidate side (assignments, starting from an invite), next to practice intervie
 Runs against the in-memory Supabase fake in this folder, with LiveKit stubbed.
 """
 import json
-from datetime import datetime, timedelta, timezone
 
 import pytest
 
-from app.routers.candidate import ai_interview as cand
+from ai_interview_support import (  # noqa: F401  (fixtures are used by name)
+    AUTH, BASE, CAND, FakeLK, active, candidate, cand, consents, emails, first_invite_id, hr, invite,
+    iso, livekit, make_template, report, room_of, rows, rubric, start, template_body,
+)
 from app.services.notifications import ai_interview_emails
-
-BASE = "/company/ai-interviews"
-CAND = "/candidate/ai-interview"
-AUTH = {"Authorization": "Bearer test-ai-secret"}
-
-
-def iso(days=0, hours=0):
-    return (datetime.now(timezone.utc) + timedelta(days=days, hours=hours)).isoformat()
-
-
-# ── LiveKit stub ────────────────────────────────────────────────────
-class FakeLK:
-    created, dispatched = [], []
-    fail_room = fail_dispatch = False
-
-    def __init__(self, *a):
-        self.room = self
-        self.agent_dispatch = self
-
-    async def create_room(self, req):
-        if FakeLK.fail_room:
-            raise RuntimeError("livekit down")
-        FakeLK.created.append(req)
-
-    async def create_dispatch(self, req):
-        if FakeLK.fail_dispatch:
-            raise RuntimeError("dispatch failed")
-        FakeLK.dispatched.append(req)
-
-    async def aclose(self):
-        pass
-
-
-@pytest.fixture(autouse=True)
-def livekit(monkeypatch):
-    from livekit import api
-    monkeypatch.setenv("LIVEKIT_URL", "wss://test.livekit.cloud")
-    monkeypatch.setenv("LIVEKIT_API_KEY", "devkey")
-    monkeypatch.setenv("LIVEKIT_API_SECRET", "s" * 40)
-    monkeypatch.setenv("AI_INTERVIEW_SHARED_SECRET", "test-ai-secret")
-    monkeypatch.setattr(api, "LiveKitAPI", FakeLK)
-    FakeLK.created, FakeLK.dispatched = [], []
-    FakeLK.fail_room = FakeLK.fail_dispatch = False
-
-
-@pytest.fixture(autouse=True)
-def emails(monkeypatch):
-    sent = []
-    monkeypatch.setattr(ai_interview_emails, "send_email",
-                        lambda to, subject, html: sent.append((to, subject, html)) or "sent")
-    return sent
-
-
-# ── helpers ─────────────────────────────────────────────────────────
-def rubric():
-    return [
-        {"name": "System design", "description": "Designs for scale.", "weight": 60,
-         "questions": ["How would you design a URL shortener?"], "expected_concepts": "Sharding; caching."},
-        {"name": "Communication", "weight": 40},
-    ]
-
-
-def template_body(**over):
-    body = dict(title="Backend round 1", role_title="Backend Engineer", level="mid",
-                duration_minutes=25, instructions="Be on time.", rubric=rubric(), status="active")
-    body.update(over)
-    return body
-
-
-def make_template(env, h, **over):
-    r = env.client.post(BASE, headers=h, json=template_body(**over))
-    assert r.status_code == 201, r.text
-    return r.json()
-
-
-def rows(env, table):
-    return env.db.tables.get(table, [])
-
-
-def consents(**over):
-    return {"consent": True, "audioConsent": True, "videoConsent": True,
-            "consentVersion": cand.CONSENT_VERSION, **over}
-
-
-def invite(env, h, tid, *emails, **over):
-    r = env.client.post(f"{BASE}/{tid}/invites", headers=h, json={"emails": list(emails), **over})
-    assert r.status_code == 200, r.text
-    return r.json()
-
-
-def first_invite_id(env, h, tid):
-    return env.client.get(f"{BASE}/{tid}/invites", headers=h).json()[0]["id"]
-
-
-@pytest.fixture
-def hr(env):
-    h, company = env.company_user("hr-1", "Acme")
-    return h, company
-
-
-@pytest.fixture
-def active(env, hr):
-    """An active template with one candidate invited by email (no account yet)."""
-    h, _ = hr
-    t = make_template(env, h)
-    invite(env, h, t["id"], "ada@x.dev")
-    return h, t, first_invite_id(env, h, t["id"])
-
-
-def candidate(env, uid="stu-1", email="ada@x.dev"):
-    return env.user(uid, "candidate", email=email)
-
-
-def start(env, ch, inv_id, **over):
-    return env.client.post(f"{CAND}/session", headers=ch, json={"inviteId": inv_id, **consents(**over)})
-
-
-def room_of(env, inv_id):
-    return env.db.one("ai_interview_invites", id=inv_id)["room_id"]
-
-
-def report(env, room, **over):
-    body = {"room_id": room, "overall_score": 71, "technical_score": 70, "communication_score": 75,
-            "strengths": ["clear"], "weaknesses": ["depth"], "final_recommendation": "Hire",
-            "report_markdown": "# Report", "transcript": "Q1 A1",
-            "competency_scores": [
-                {"name": "System design", "score": 68, "weight": 60, "evidence": "Sharded by hash."},
-                {"name": "Communication", "score": 77, "weight": 40, "evidence": "Clear."}]}
-    body.update(over)
-    return env.client.post("/internal/ai-interview-reports", json=body, headers=AUTH)
-
 
 # ═══ access control ═════════════════════════════════════════════════
 def test_company_endpoints_need_a_company_account(env):
@@ -592,7 +463,7 @@ def test_results_scoreboard_only_lists_candidates_who_took_it(env, hr):
     res = env.client.get(f"{BASE}/{t['id']}/results", headers=h).json()
     assert [r["email"] for r in res["rows"]] == ["ada@x.dev"]
     assert res["rows"][0]["status"] == "started" and res["rows"][0]["overall_score"] is None
-    assert res["summary"] == {"taken": 1, "reported": 0, "average_score": None, "flagged": 0}
+    assert res["summary"] == {"taken": 1, "reported": 0, "average_score": None, "flagged": 0, "incomplete": 0}
 
 
 def test_results_show_scores_competencies_recommendation_and_integrity(env, active):
@@ -607,7 +478,7 @@ def test_results_show_scores_competencies_recommendation_and_integrity(env, acti
     assert row["overall_score"] == 71 and row["recommendation"] == "Hire" and row["status"] == "completed"
     assert [(c["name"], c["score"]) for c in row["competencies"]] == [("System design", 68), ("Communication", 77)]
     assert row["integrity"] == {"tab_switches": 1, "camera_lost": 0, "mic_lost": 0, "video_flags": 1, "total": 2}
-    assert res["summary"] == {"taken": 1, "reported": 1, "average_score": 71.0, "flagged": 1}
+    assert res["summary"] == {"taken": 1, "reported": 1, "average_score": 71.0, "flagged": 1, "incomplete": 0}
 
 
 def test_candidate_detail_has_the_full_report_consent_record_and_integrity_timeline(env, active):
@@ -663,7 +534,7 @@ def test_the_hiring_team_records_and_clears_its_own_decision(env, active):
     h, t, inv_id, ch, room = finished(env, active)
     url = f"{BASE}/{t['id']}/results/{inv_id}/decision"
     r = env.client.put(url, headers=h, json={"decision": "advance", "note": "  Strong on design.  "})
-    assert r.json() == {"decision": "advance", "note": "Strong on design."}
+    assert r.json() == {"decision": "advance", "note": "Strong on design.", "application_status": None, "candidate_email": None}
     inv = env.db.one("ai_interview_invites", id=inv_id)
     assert inv["decision"] == "advance" and inv["decided_by"] == "hr-1" and inv["decided_at"]
     listed = env.client.get(f"{BASE}/{t['id']}/invites", headers=h).json()[0]

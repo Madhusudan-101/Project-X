@@ -23,6 +23,7 @@ Practice interviews are a separate path and never appear here.
 from __future__ import annotations
 
 import logging
+import os
 import re
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Literal, Optional
@@ -32,10 +33,12 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 
 from ...crud import (
     _escape_like,
+    get_application,
     get_company_by_owner_id,
     get_job,
     get_profiles_basic,
     list_applications_for_job,
+    update_application_status_for_company,
 )
 from ...deps import db_client, require_company_role
 from ...services.ai_interview.rubric import (
@@ -46,6 +49,7 @@ from ...services.ai_interview.rubric import (
     validate_rubric,
     with_percentages,
 )
+from ...services.ai_interview import rubric_draft
 from ...services.ai_interview.invites import effective_status, parse_ts as _parse
 from ...services.notifications import ai_interview_emails
 from ..candidate.ai_interview import _summarize_integrity
@@ -54,6 +58,15 @@ log = logging.getLogger(__name__)
 router = APIRouter(prefix="/company/ai-interviews", tags=["company-ai-interviews"])
 
 MAX_INVITES_PER_REQUEST = 100
+
+
+def _daily_invite_cap() -> int:
+    """Invitations one company may create per day (each interview costs speech, voice and model usage)."""
+    try:
+        return max(1, int(os.getenv("AI_INTERVIEW_COMPANY_DAILY_INVITES") or 200))
+    except ValueError:
+        return 200
+
 EMAIL_RE = re.compile(r"^[^@\s,;]+@[^@\s,;]+\.[^@\s,;]+$")
 
 Level = Literal["intern", "junior", "mid", "senior"]
@@ -116,7 +129,30 @@ class InviteIn(BaseModel):
 
 class DecisionIn(BaseModel):
     decision: Optional[Literal["advance", "hold", "reject"]] = None  # null clears it
+    note: str = Field(default="", max_length=1000)  # internal: never sent to the candidate
+    # Tell the candidate the outcome by email (advance or reject only; never for hold).
+    notify_candidate: bool = False
+    candidate_message: str = Field(default="", max_length=500)
+
+
+class RetakeIn(BaseModel):
+    expires_in_days: int = Field(default=7, ge=1, le=30)
+
+
+class ExtendIn(BaseModel):
+    days: int = Field(default=7, ge=1, le=30)
+
+
+class IntegrityReviewIn(BaseModel):
+    review: Optional[Literal["dismissed", "confirmed"]] = None  # null clears it
     note: str = Field(default="", max_length=1000)
+
+
+class DraftIn(BaseModel):
+    role_title: str = Field(min_length=2, max_length=120)
+    level: Level = "junior"
+    description: str = Field(default="", max_length=6000)
+    job_id: Optional[str] = None
 
 
 # ── Helpers ─────────────────────────────────────────────────────────
@@ -230,6 +266,26 @@ def presets(current_user: dict = Depends(require_company_role)) -> List[Dict[str
          "competencies": with_percentages(p["competencies"])}
         for pid, p in PRESETS.items()
     ]
+
+
+@router.post("/draft-rubric")
+async def draft_rubric_route(body: DraftIn, current_user: dict = Depends(require_company_role)) -> Dict[str, Any]:
+    """A starting rubric drafted by AI from the role and (optionally) the job description.
+    The company edits it before saving; nothing is stored here."""
+    company = _company(current_user)
+    description = body.description
+    if body.job_id:
+        job = get_job(body.job_id)
+        if not job or job.get("company_id") != company["id"]:
+            raise HTTPException(status_code=400, detail="That job does not belong to your company.")
+        description = description.strip() or (job.get("description") or "")
+    try:
+        rubric = await rubric_draft.draft_rubric(body.role_title.strip(), body.level, description)
+    except RuntimeError:
+        raise HTTPException(status_code=503, detail="Drafting a rubric needs an AI key on the server (GEMINI_API_KEY).")
+    except ValueError:
+        raise HTTPException(status_code=502, detail="Could not draft a rubric this time. Try again, or build it by hand.")
+    return {"competencies": with_percentages(rubric)}
 
 
 # ── Templates ───────────────────────────────────────────────────────
@@ -349,6 +405,14 @@ def invite(
     if template["status"] != "active":
         raise HTTPException(status_code=409, detail="Activate this interview before inviting candidates.")
     wanted, invalid = _targets(body, template, company)
+    day_start = _now().replace(hour=0, minute=0, second=0, microsecond=0)
+    made_today = db_client.table("ai_interview_invites").select("id", count="exact") \
+        .eq("company_id", company["id"]).gte("created_at", _iso(day_start)).execute().count or 0
+    if made_today + len(wanted) > _daily_invite_cap():
+        raise HTTPException(
+            status_code=429,
+            detail=f"Your company can send {_daily_invite_cap()} invitations a day. Try again tomorrow, or contact us for more.",
+        )
     existing = {
         r["email"]: r
         for r in db_client.table("ai_interview_invites").select("*").eq("template_id", template["id"]).execute().data or []
@@ -407,6 +471,9 @@ def _invite_row(inv: dict, person: Optional[dict], report: Optional[dict]) -> Di
         "email_status": inv.get("email_status"),
         "decision": inv.get("decision"),
         "overall_score": report.get("overall_score") if report else None,
+        "retakes": int(inv.get("retakes") or 0),
+        "accommodation_request": inv.get("accommodation_request"),
+        "integrity_review": inv.get("integrity_review"),
     }
 
 
@@ -442,6 +509,87 @@ def revoke_invite(
     if inv["status"] in ("started", "completed"):
         raise HTTPException(status_code=409, detail="The candidate has already started this interview.")
     db_client.table("ai_interview_invites").update({"status": "revoked"}).eq("id", inv["id"]).execute()
+
+
+@router.post("/{template_id}/invites/{invite_id}/retake")
+def retake_invite(
+    template_id: str, invite_id: str, body: RetakeIn = RetakeIn(),
+    current_user: dict = Depends(require_company_role),
+) -> Dict[str, Any]:
+    """Give a candidate another attempt, for example after a technical failure. The earlier attempt stays
+    on record (it is listed on the candidate's report). The candidate is emailed a fresh invitation."""
+    company, template = _template(template_id, current_user)
+    inv = _invite(template, invite_id)
+    if effective_status(inv) not in ("started", "completed"):
+        raise HTTPException(status_code=409, detail="Only a candidate who has started can be given another attempt.")
+    if template["status"] != "active":
+        raise HTTPException(status_code=409, detail="Activate this interview before allowing a retake.")
+    if inv.get("room_id"):  # close a session that never finished so it cannot linger
+        db_client.table("ai_voice_interview_sessions").update(
+            {"status": "abandoned", "ended_at": _iso(_now()), "ended_reason": "retake"}
+        ).eq("room_id", inv["room_id"]).eq("status", "started").execute()
+    row = db_client.table("ai_interview_invites").update({
+        "status": "invited", "expires_at": _iso(_now() + timedelta(days=body.expires_in_days)),
+        "started_at": None, "completed_at": None, "room_id": None,
+        "retakes": int(inv.get("retakes") or 0) + 1,
+        "decision": None, "decision_note": None, "decided_by": None, "decided_at": None,
+        "integrity_review": None, "integrity_note": None,
+        "reminded_at": None, "candidate_notified_at": None,
+    }).eq("id", inv["id"]).execute().data[0]
+    status = ai_interview_emails.send_invite(
+        invite_id=row["id"], to=row["email"], company=company["name"], role=template["role_title"],
+        duration_minutes=template["duration_minutes"], expires_at=row["expires_at"],
+        instructions=template.get("instructions") or "", retake=True,
+    )
+    db_client.table("ai_interview_invites").update(
+        {"last_emailed_at": _iso(_now()), "email_status": status}
+    ).eq("id", row["id"]).execute()
+    return {"email": status, "retakes": row["retakes"]}
+
+
+@router.post("/{template_id}/invites/{invite_id}/extend")
+def extend_invite(
+    template_id: str, invite_id: str, body: ExtendIn = ExtendIn(),
+    current_user: dict = Depends(require_company_role),
+) -> Dict[str, Any]:
+    """Give an open or expired invitation a new deadline (for example after an accommodation request)."""
+    company, template = _template(template_id, current_user)
+    inv = _invite(template, invite_id)
+    if effective_status(inv) not in ("invited", "expired"):
+        raise HTTPException(status_code=409, detail="Only an invitation the candidate has not used can be extended.")
+    row = db_client.table("ai_interview_invites").update({
+        "expires_at": _iso(_now() + timedelta(days=body.days)), "reminded_at": None,
+    }).eq("id", inv["id"]).execute().data[0]
+    return {"expires_at": row["expires_at"], "email": _send(template, company, row, reminder=True)}
+
+
+@router.get("/{template_id}/applicants")
+def linked_job_applicants(template_id: str, current_user: dict = Depends(require_company_role)) -> List[Dict[str, Any]]:
+    """Applicants of the linked job, so the hiring team can pick who to invite."""
+    company, template = _template(template_id, current_user)
+    if not template.get("job_id"):
+        raise HTTPException(status_code=400, detail="Link this interview to a job to see its applicants.")
+    job = get_job(template["job_id"])
+    if not job or job.get("company_id") != company["id"]:
+        raise HTTPException(status_code=400, detail="The linked job no longer belongs to your company.")
+    apps = list_applications_for_job(job["id"])
+    people = get_profiles_basic([a["student_id"] for a in apps])
+    invited = {
+        i["email"] for i in db_client.table("ai_interview_invites").select("email, status")
+        .eq("template_id", template["id"]).execute().data or [] if i["status"] != "revoked"
+    }
+    out = []
+    for a in apps:
+        p = people.get(a["student_id"]) or {}
+        email = (p.get("email") or "").strip().lower()
+        if not email:
+            continue
+        name = p.get("name") or " ".join(x for x in (p.get("first_name"), p.get("last_name")) if x) or None
+        out.append({
+            "application_id": a["id"], "name": name, "email": email,
+            "application_status": a.get("status"), "already_invited": email in invited,
+        })
+    return out
 
 
 # ── Results ─────────────────────────────────────────────────────────
@@ -488,6 +636,8 @@ def results(template_id: str, current_user: dict = Depends(require_company_role)
             "partial": bool(report.get("partial")) if report else False,
             "competencies": _competencies(report),
             "integrity": _summarize_integrity(events.get(inv.get("room_id") or "", [])),
+            # Finished (or swept) but no report was produced: the hiring team can allow a retake.
+            "incomplete": inv["status"] == "completed" and report is None,
         })
     rows.sort(key=lambda r: (r["completed_at"] or r["started_at"] or ""), reverse=True)
     scored = [r["overall_score"] for r in rows if r["overall_score"] is not None]
@@ -497,10 +647,30 @@ def results(template_id: str, current_user: dict = Depends(require_company_role)
             "taken": len(rows),
             "reported": len(scored),
             "average_score": round(sum(scored) / len(scored), 1) if scored else None,
-            "flagged": sum(1 for r in rows if r["integrity"]["total"] > 0),
+            "flagged": sum(1 for r in rows if r["integrity"]["total"] > 0 and not r.get("integrity_review") == "dismissed"),
+            "incomplete": sum(1 for r in rows if r["incomplete"]),
         },
         "rows": rows,
     }
+
+
+def _previous_attempts(inv: dict) -> List[Dict[str, Any]]:
+    """Earlier attempts at this invitation (kept when a retake is allowed), oldest first."""
+    sessions = [
+        s for s in db_client.table("ai_voice_interview_sessions")
+        .select("room_id, started_at, status, ended_reason").eq("invite_id", inv["id"]).execute().data or []
+        if s["room_id"] != inv.get("room_id")
+    ]
+    sessions.sort(key=lambda s: str(s.get("started_at") or ""))
+    out = []
+    for s in sessions:
+        r = _report_for(s["room_id"])
+        out.append({
+            "started_at": s.get("started_at"), "ended_reason": s.get("ended_reason"),
+            "overall_score": r.get("overall_score") if r else None,
+            "partial": bool(r.get("partial")) if r else False, "has_report": r is not None,
+        })
+    return out
 
 
 @router.get("/{template_id}/results/{invite_id}")
@@ -554,6 +724,9 @@ def result_detail(
             "decision": inv.get("decision"), "note": inv.get("decision_note") or "",
             "decided_at": inv.get("decided_at"),
         },
+        "integrity_review": {"review": inv.get("integrity_review"), "note": inv.get("integrity_note") or ""},
+        "previous_attempts": _previous_attempts(inv),
+        "accommodation": {"request": inv.get("accommodation_request"), "at": inv.get("accommodation_at")},
     }
 
 
@@ -561,15 +734,65 @@ def result_detail(
 def set_decision(
     template_id: str, invite_id: str, body: DecisionIn, current_user: dict = Depends(require_company_role),
 ) -> Dict[str, Any]:
-    _, template = _template(template_id, current_user)
+    """Record the hiring team's own decision. Optionally moves the linked job application forward
+    (advance to shortlisted, reject to rejected, never backwards) and emails the candidate the outcome."""
+    company, template = _template(template_id, current_user)
     inv = _invite(template, invite_id)
     if inv["status"] not in ("started", "completed"):
         raise HTTPException(status_code=409, detail="Record a decision after the candidate has taken the interview.")
     cleared = body.decision is None
+    previous = inv.get("decision")
     db_client.table("ai_interview_invites").update({
         "decision": body.decision,
         "decision_note": None if cleared else (body.note.strip() or None),
         "decided_by": None if cleared else current_user["id"],
         "decided_at": None if cleared else _iso(_now()),
     }).eq("id", inv["id"]).execute()
-    return {"decision": body.decision, "note": "" if cleared else body.note.strip()}
+
+    application_status = None
+    if body.decision in ("advance", "reject") and inv.get("application_id"):
+        app = get_application(inv["application_id"])
+        if app and app.get("company_id") == company["id"]:
+            target = "shortlisted" if body.decision == "advance" else "rejected"
+            movable = (
+                ("applied", "scoring", "scored") if body.decision == "advance"
+                else ("applied", "scoring", "scored", "shortlisted", "in_interview")
+            )
+            if app.get("status") in movable:
+                update_application_status_for_company(app["id"], company["id"], target)
+                application_status = target
+
+    candidate_email = None
+    if body.notify_candidate and body.decision in ("advance", "reject"):
+        if inv.get("candidate_notified_at") and previous == body.decision:
+            candidate_email = "already_sent"
+        else:
+            candidate_email = ai_interview_emails.send_outcome(
+                to=inv["email"], company=company["name"], role=template["role_title"],
+                decision=body.decision, message=body.candidate_message.strip(),
+            )
+            if candidate_email == "sent":
+                db_client.table("ai_interview_invites").update(
+                    {"candidate_notified_at": _iso(_now())}
+                ).eq("id", inv["id"]).execute()
+    return {
+        "decision": body.decision, "note": "" if cleared else body.note.strip(),
+        "application_status": application_status, "candidate_email": candidate_email,
+    }
+
+
+@router.put("/{template_id}/results/{invite_id}/integrity-review")
+def set_integrity_review(
+    template_id: str, invite_id: str, body: IntegrityReviewIn, current_user: dict = Depends(require_company_role),
+) -> Dict[str, Any]:
+    """A person's call on the integrity flags: dismissed (a false alarm) or confirmed. Flags alone are not a verdict."""
+    _, template = _template(template_id, current_user)
+    inv = _invite(template, invite_id)
+    if inv["status"] not in ("started", "completed"):
+        raise HTTPException(status_code=409, detail="Review flags after the candidate has taken the interview.")
+    cleared = body.review is None
+    db_client.table("ai_interview_invites").update({
+        "integrity_review": body.review,
+        "integrity_note": None if cleared else (body.note.strip() or None),
+    }).eq("id", inv["id"]).execute()
+    return {"review": body.review, "note": "" if cleared else body.note.strip()}

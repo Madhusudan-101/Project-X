@@ -28,7 +28,7 @@ import os
 import re
 import uuid
 from datetime import datetime, timedelta, timezone
-from typing import Any, List, Optional
+from typing import Any, List, Literal, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field, model_validator
@@ -36,7 +36,9 @@ from postgrest.exceptions import APIError
 
 from ...crud import get_company_names
 from ...deps import db_client, require_candidate_role
-from ...services.ai_interview.invites import effective_status
+from ...services.ai_interview.invites import effective_status, parse_ts
+from ...services.ai_interview.people import company_owner_email
+from ...services.notifications import ai_interview_emails
 
 logger = logging.getLogger(__name__)
 
@@ -268,19 +270,74 @@ def _integrity_by_room(room_ids: list[str], student_id: str) -> dict[str, list[d
 
 INVITE_ID_RE = re.compile(r"^[0-9a-fA-F-]{36}$")
 
+# A candidate may cancel a session only this soon after it began, and only if the interviewer
+# never joined. Rejoining after a dropped connection is allowed until the time limit plus grace.
+ABORT_WINDOW = timedelta(minutes=5)
+REJOIN_GRACE = timedelta(minutes=2)
 
-def _claim_invite(invite_id: str, user: dict) -> tuple[dict, dict, str]:
-    """Check that this invitation is the caller's and still usable, then mark it started
-    (one attempt per invitation). Returns (invite, template, company name). The claim is a
-    conditional update, so two tabs cannot both start the same interview."""
+
+def _mint_token(key: str, secret: str, user_id: str, name: str, room: str, ttl_minutes: int) -> str:
+    from livekit import api
+
+    return (
+        api.AccessToken(key, secret)
+        .with_identity(user_id)
+        .with_name(name)
+        .with_ttl(timedelta(minutes=max(1, ttl_minutes)))
+        .with_grants(api.VideoGrants(
+            room_join=True,
+            room=room,
+            can_publish=True,
+            can_subscribe=True,
+            can_publish_data=False,
+        ))
+        .to_jwt()
+    )
+
+
+def _my_session(room_id: str, user: dict) -> dict:
+    """The caller's own live session, or a clear error. Never reveals another student's room."""
+    if not ROOM_ID_RE.match(room_id):
+        raise HTTPException(status_code=400, detail="Invalid room id")
+    rows = (
+        db_client.table("ai_voice_interview_sessions").select("*")
+        .eq("room_id", room_id).eq("student_id", user["id"]).limit(1).execute().data or []
+    )
+    if not rows:
+        raise HTTPException(status_code=404, detail="Interview session not found")
+    sess = rows[0]
+    reports = db_client.table("ai_voice_interview_reports").select("id").eq("room_id", room_id).limit(1).execute().data
+    if sess.get("status") != "started" or reports:
+        raise HTTPException(status_code=409, detail="This interview has already finished.")
+    return sess
+
+
+def _limit_minutes(sess: dict) -> int:
+    """How long this session may run: the company's duration, or the practice default."""
+    if sess.get("template_id"):
+        rows = db_client.table("ai_interview_templates").select("duration_minutes")             .eq("id", sess["template_id"]).limit(1).execute().data or []
+        if rows:
+            return int(rows[0]["duration_minutes"])
+    return _max_minutes()
+
+
+def _my_invite(invite_id: str, user: dict) -> dict:
+    """An invitation that belongs to the caller (by account or email), or 404."""
     if not INVITE_ID_RE.match(invite_id or ""):
         raise HTTPException(status_code=404, detail="Interview invitation not found.")
     rows = db_client.table("ai_interview_invites").select("*").eq("id", invite_id).limit(1).execute().data or []
     inv = rows[0] if rows else None
     email = (user.get("email") or "").strip().lower()
-    mine = inv and (inv.get("student_id") == user["id"] or (inv.get("email") or "").lower() == email)
-    if not mine:
+    if not inv or not (inv.get("student_id") == user["id"] or (inv.get("email") or "").lower() == email):
         raise HTTPException(status_code=404, detail="Interview invitation not found.")
+    return inv
+
+
+def _claim_invite(invite_id: str, user: dict) -> tuple[dict, dict, str]:
+    """Check that this invitation is the caller's and still usable, then mark it started
+    (one attempt per invitation). Returns (invite, template, company name). The claim is a
+    conditional update, so two tabs cannot both start the same interview."""
+    inv = _my_invite(invite_id, user)
     status = effective_status(inv)
     if status == "revoked":
         raise HTTPException(status_code=409, detail="This invitation was withdrawn by the company.")
@@ -358,6 +415,7 @@ def my_assignments(current_user: dict = Depends(require_candidate_role)) -> list
             "instructions": t.get("instructions") or "",
             "expires_at": str(i.get("expires_at") or ""),
             "status": status,
+            "accommodation_requested": bool(i.get("accommodation_request")),
         })
     order = {"invited": 0, "started": 1, "completed": 2, "expired": 3}
     out.sort(key=lambda r: (order.get(r["status"], 9), r["expires_at"]))
@@ -538,26 +596,139 @@ async def start_session(
         except Exception:  # noqa: BLE001
             logger.exception("could not link invite to room")
 
-    token = (
-        api.AccessToken(key, secret)
-        .with_identity(user_id)
-        .with_name(display_name)
-        .with_ttl(timedelta(minutes=max_minutes + 5))
-        .with_grants(api.VideoGrants(
-            room_join=True,
-            room=room_name,
-            can_publish=True,
-            can_subscribe=True,
-            can_publish_data=False,
-        ))
-    )
-
     return StartSessionOut(
         serverUrl=url,
         roomName=room_name,
-        participantToken=token.to_jwt(),
+        participantToken=_mint_token(key, secret, user_id, display_name, room_name, max_minutes + 5),
         maxMinutes=max_minutes,
     )
+
+
+class AbortIn(BaseModel):
+    reason: Literal["interviewer_missing"]
+
+
+@router.post("/session/{room_id}/abort")
+async def abort_session(
+    room_id: str,
+    body: AbortIn,
+    current_user: dict = Depends(require_candidate_role),
+) -> dict:
+    """Cancel a session whose AI interviewer never joined, and give the attempt back.
+
+    Allowed only in the first few minutes, and only after the backend has checked with LiveKit that
+    nobody but the candidate is in the room. So it cannot be used to see the questions and retry.
+    """
+    sess = _my_session(room_id, current_user)
+    started = parse_ts(sess.get("started_at"))
+    if started is not None and datetime.now(timezone.utc) - started > ABORT_WINDOW:
+        raise HTTPException(status_code=409, detail="It is too late to cancel this interview.")
+
+    url, key, secret = _livekit_creds()
+    from livekit import api
+
+    lkapi = api.LiveKitAPI(url, key, secret)
+    try:
+        try:
+            listed = await lkapi.room.list_participants(api.ListParticipantsRequest(room=room_id))
+            others = [p for p in listed.participants if p.identity != current_user["id"]]
+        except Exception:  # noqa: BLE001 - the room is already gone: nobody is in it
+            others = []
+        if others:
+            raise HTTPException(status_code=409, detail="The interviewer is in the room, so this interview cannot be cancelled.")
+        try:
+            await lkapi.room.delete_room(api.DeleteRoomRequest(room=room_id))
+        except Exception:  # noqa: BLE001
+            logger.warning("could not delete room %s while aborting", room_id)
+    finally:
+        await lkapi.aclose()
+
+    invite_id = sess.get("invite_id")
+    if invite_id:
+        db_client.table("ai_voice_interview_sessions").update({
+            "status": "abandoned",
+            "ended_at": datetime.now(timezone.utc).isoformat(),
+            "ended_reason": "interviewer_unavailable",
+        }).eq("room_id", room_id).execute()
+        _release_invite(invite_id)
+    else:
+        # Practice: remove the row so it does not count against today's limit.
+        db_client.table("ai_voice_interview_sessions").delete().eq("room_id", room_id).execute()
+    return {"released": True, "kind": "company" if invite_id else "practice"}
+
+
+@router.post("/session/{room_id}/rejoin", response_model=StartSessionOut)
+async def rejoin_session(
+    room_id: str,
+    current_user: dict = Depends(require_candidate_role),
+) -> StartSessionOut:
+    """A fresh join token for the candidate's own live interview after a dropped connection.
+    Only while the interview is unfinished, the room still exists, and time remains."""
+    sess = _my_session(room_id, current_user)
+    started = parse_ts(sess.get("started_at")) or datetime.now(timezone.utc)
+    limit = _limit_minutes(sess)
+    now = datetime.now(timezone.utc)
+    if now > started + timedelta(minutes=limit) + REJOIN_GRACE:
+        raise HTTPException(status_code=410, detail="The interview time is over.")
+
+    url, key, secret = _livekit_creds()
+    from livekit import api
+
+    lkapi = api.LiveKitAPI(url, key, secret)
+    try:
+        try:
+            rooms = (await lkapi.room.list_rooms(api.ListRoomsRequest(names=[room_id]))).rooms
+        except Exception:  # noqa: BLE001
+            logger.exception("LiveKit list_rooms failed")
+            raise HTTPException(status_code=502, detail="Could not reach the interview room.")
+    finally:
+        await lkapi.aclose()
+    if not rooms:
+        raise HTTPException(status_code=410, detail="The interview has ended.")
+
+    left = started + timedelta(minutes=limit) - now
+    minutes_left = max(1, int(-(-left.total_seconds() // 60)))
+    display_name = current_user.get("name") or (current_user.get("email") or "").split("@")[0] or "Candidate"
+    return StartSessionOut(
+        serverUrl=url,
+        roomName=room_id,
+        participantToken=_mint_token(key, secret, current_user["id"], display_name, room_id, minutes_left + 5),
+        maxMinutes=minutes_left,
+    )
+
+
+class AccommodationIn(BaseModel):
+    message: str = Field(min_length=5, max_length=1000)
+
+
+@router.post("/assignments/{invite_id}/accommodation")
+def request_accommodation(
+    invite_id: str,
+    body: AccommodationIn,
+    current_user: dict = Depends(require_candidate_role),
+) -> dict:
+    """Ask the hiring team for an accommodation (extra time, no camera, another format) before starting.
+    The request is saved on the invitation and emailed to the company, who can extend the deadline."""
+    inv = _my_invite(invite_id, current_user)
+    if effective_status(inv) not in ("invited", "expired"):
+        raise HTTPException(status_code=409, detail="You can only ask before you start the interview.")
+    message = body.message.strip()
+    db_client.table("ai_interview_invites").update({
+        "accommodation_request": message,
+        "accommodation_at": datetime.now(timezone.utc).isoformat(),
+    }).eq("id", inv["id"]).execute()
+    emailed = "skipped"
+    to = company_owner_email(inv["company_id"])
+    if to:
+        trows = db_client.table("ai_interview_templates").select("role_title").eq("id", inv["template_id"]).limit(1).execute().data or []
+        emailed = ai_interview_emails.send_accommodation_request(
+            to=to,
+            company=get_company_names([inv["company_id"]]).get(inv["company_id"], "your company"),
+            role=(trows[0]["role_title"] if trows else "the role"),
+            candidate_email=inv["email"],
+            message=message,
+        )
+    return {"ok": True, "company_emailed": emailed == "sent"}
 
 
 @router.post("/session/{room_id}/integrity-events", response_model=IntegrityEventsOut)
