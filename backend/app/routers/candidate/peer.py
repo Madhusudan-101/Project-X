@@ -986,6 +986,56 @@ def list_my_peer_reports(
     return out
 
 
+HISTORY_LIMIT = 40
+
+
+@router.get("/peer-history")
+def peer_history(current_user: dict = Depends(get_current_user)) -> list[dict]:
+    """Every peer session I was part of (matched or scheduled), newest first, with what I can still do:
+    the report, a rating, reporting or blocking the other person. Partners are named only if they were
+    not anonymous. Not gated by the guidelines: it only shows my own past."""
+    uid = current_user["id"]
+    items: list[dict] = []
+    tickets = (
+        db_client.table("peer_matchmaking_tickets").select("room_id, status, matched_with, matched_at, created_at")
+        .eq("student_id", uid).in_("status", ["matched", "completed", "expired"]).execute().data or []
+    )
+    for t in tickets:
+        if t.get("room_id") and t.get("matched_with"):
+            items.append({"room_id": t["room_id"], "kind": "matched", "title": None,
+                          "when": t.get("matched_at") or t.get("created_at"),
+                          "status": "completed" if t["status"] == "completed" else "ended"})
+    meetings = (
+        db_client.table("peer_scheduled_meetings").select("*")
+        .or_(f"creator_id.eq.{uid},invitee_id.eq.{uid},second_joiner_id.eq.{uid}").execute().data or []
+    )
+    for m in meetings:
+        items.append({"room_id": m["room_id"], "kind": "scheduled", "title": m.get("title"),
+                      "when": m["scheduled_at"], "status": m["status"]})
+    items.sort(key=lambda i: str(i["when"] or ""), reverse=True)
+    items = items[:HISTORY_LIMIT]
+
+    reports = {
+        r["room_id"]: r["id"]
+        for r in (db_client.table("peer_interview_reports").select("id, room_id").eq("student_id", uid).execute().data or [])
+    }
+    rated = {r["room_id"] for r in (db_client.table("peer_feedback").select("room_id").eq("student_id", uid).execute().data or [])}
+    blocked = peer_safety.blocked_with(uid)
+    out = []
+    for i in items:
+        partner = peer_safety.partner_in_room(uid, i["room_id"])
+        out.append({
+            **i,
+            "partner_label": partner["label"] if partner else None,
+            "report_id": reports.get(i["room_id"]),
+            "has_report": i["room_id"] in reports,
+            "rated": i["room_id"] in rated,
+            "blocked": bool(partner and partner["id"] in blocked),
+            "can_report_or_rate": bool(partner),
+        })
+    return out
+
+
 class PreferencesIn(BaseModel):
     default_private: bool = True
     timezone: Optional[str] = Field(default=None, max_length=64)

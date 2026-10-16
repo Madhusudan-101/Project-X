@@ -48,6 +48,7 @@ import { useAuthStore } from "@/store/auth";
 import { ApiClientError } from "@/services/api/client";
 import { ScheduleMeetingModal } from "@/components/candidate/ScheduleMeetingModal";
 import { reservePeerMeetTab, type PeerMeetTabHandle } from "@/lib/peerMeetTab";
+import { formatWait, waitingNote } from "@/lib/peerWait";
 
 // ─── URL helpers ──────────────────────────────────────────────────────────
 
@@ -375,6 +376,20 @@ export function PeerInterviewMatchModal({ open, onOpenChange }: Props) {
               keepPrivate={keepPrivate}
               onCancel={cancelSearch}
               onCopyRoomId={copyRoomId}
+              onSchedule={async () => {
+                await cancelSearch();
+                setMode("schedule");
+              }}
+              onOpenAgain={() => {
+                const base = import.meta.env.VITE_PEERMEET_URL as string | undefined;
+                if (!base || !status?.room_id || !status.token) return;
+                const url = buildPeerMeetUrl(
+                  base,
+                  { room: status.room_id, init: "1", private: keepPrivate ? "1" : "0" },
+                  { token: status.token },
+                );
+                if (url) window.open(url, "_blank");
+              }}
             />
           )}
           {mode === "join" && (
@@ -499,6 +514,8 @@ function FindPanel({
   keepPrivate,
   onCancel,
   onCopyRoomId,
+  onSchedule,
+  onOpenAgain,
 }: {
   initials: string;
   displayName: string;
@@ -508,6 +525,8 @@ function FindPanel({
   keepPrivate: boolean;
   onCancel: () => void;
   onCopyRoomId: (roomId: string) => void;
+  onSchedule: () => void;
+  onOpenAgain: () => void;
 }) {
   const isMatched = status?.status === "matched";
   return (
@@ -556,9 +575,17 @@ function FindPanel({
       </div>
 
       {!isMatched && !errorMsg && (
-        <p className="mt-6 text-center text-xs text-muted-foreground">
-          Waiting {formatWait(waitingSecs)} · Position in queue: you
-        </p>
+        <div className="mt-6 space-y-3 text-center">
+          <p className="text-xs text-muted-foreground" role="status">
+            Waiting {formatWait(waitingSecs)} · {waitingNote(waitingSecs).text}
+          </p>
+          {waitingNote(waitingSecs).suggestSchedule && (
+            <Button variant="outline" size="sm" onClick={onSchedule}>
+              <CalendarClock className="mr-1.5 h-3.5 w-3.5" />
+              Schedule a time instead
+            </Button>
+          )}
+        </div>
       )}
 
       {errorMsg && <p className="mt-6 text-center text-xs text-destructive">{errorMsg}</p>}
@@ -582,6 +609,17 @@ function FindPanel({
         </div>
       )}
 
+      {isMatched && (
+        <div className="mt-4 text-center">
+          <p className="text-xs text-muted-foreground">
+            The room did not open? Your browser may have blocked the new tab.
+          </p>
+          <Button variant="outline" size="sm" className="mt-2" onClick={onOpenAgain}>
+            Open the room
+          </Button>
+        </div>
+      )}
+
       <div className="mt-6 flex items-center justify-center border-t border-border/60 px-6 py-3">
         <Button variant="ghost" onClick={onCancel} disabled={isMatched}>
           <X className="mr-1.5 h-4 w-4" />
@@ -590,13 +628,6 @@ function FindPanel({
       </div>
     </div>
   );
-}
-
-function formatWait(seconds: number): string {
-  if (seconds < 60) return `${seconds}s`;
-  const m = Math.floor(seconds / 60);
-  const s = seconds % 60;
-  return `${m}m ${String(s).padStart(2, "0")}s`;
 }
 
 // ─── Panel: join by room ID ───────────────────────────────────────────────

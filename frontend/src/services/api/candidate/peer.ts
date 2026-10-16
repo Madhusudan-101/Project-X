@@ -52,6 +52,22 @@ export interface PublicScheduledMeeting {
   can_join_now: boolean; // is_authorized AND inside join window
 }
 
+export interface PeerHistoryItem {
+  room_id: string;
+  kind: "matched" | "scheduled";
+  title: string | null;
+  when: string;
+  /** completed | ended | scheduled | waiting | live | cancelled | expired | no_show */
+  status: string;
+  /** The partner's name only if they were not anonymous; null when nobody joined. */
+  partner_label: string | null;
+  report_id: string | null;
+  has_report: boolean;
+  rated: boolean;
+  blocked: boolean;
+  can_report_or_rate: boolean;
+}
+
 export interface PeerPreferences {
   default_private: boolean;
   /** An IANA timezone such as "Asia/Kolkata", or null to use the browser's. */
@@ -157,6 +173,11 @@ export const peerService = {
       method: "PATCH",
       body: { scheduled_at: scheduledAtIso },
     });
+  },
+
+  /** Every peer session I was part of, newest first. */
+  history(): Promise<PeerHistoryItem[]> {
+    return request<PeerHistoryItem[]>("/candidate/peer-history");
   },
 
   getPreferences(): Promise<PeerPreferences> {

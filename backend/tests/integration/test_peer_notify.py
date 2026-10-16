@@ -249,3 +249,55 @@ def test_only_the_host_can_move_it_and_only_before_anyone_joined(peer):
 def test_a_meeting_cannot_be_moved_into_the_past(peer):
     m = book(peer)
     assert _move(peer, ALICE, m, -30).status_code == 422
+
+
+# ── history ──────────────────────────────────────────────────────────────────
+def _history(peer, who):
+    r = peer.client.get("/candidate/peer-history", headers=peer.h[who])
+    assert r.status_code == 200, r.text
+    return r.json()
+
+
+def test_history_lists_matched_and_scheduled_sessions_newest_first(peer):
+    peer.client.post("/candidate/peer-matchmaking/request", json={}, headers=peer.h[ALICE])
+    room = peer.client.post("/candidate/peer-matchmaking/request", json={}, headers=peer.h[BOB]).json()["room_id"]
+    peer.client.post("/candidate/peer-matchmaking/end", headers=peer.h[BOB])
+    m = book(peer, invitee=BOB, minutes_ahead=600)
+    h = _history(peer, BOB)
+    assert [x["kind"] for x in h] == ["scheduled", "matched"]
+    assert h[0]["room_id"] == m["room_id"] and h[1]["room_id"] == room
+    assert h[1]["status"] == "completed" and h[1]["partner_label"] == "Alice A"
+    assert all(x["can_report_or_rate"] for x in h)
+
+
+def test_history_hides_the_name_of_a_partner_who_was_anonymous(peer):
+    peer.client.post("/candidate/peer-matchmaking/request", json={"keep_private": True}, headers=peer.h[ALICE])
+    peer.client.post("/candidate/peer-matchmaking/request", json={}, headers=peer.h[BOB])
+    assert _history(peer, BOB)[0]["partner_label"] == "Anonymous Candidate"
+    assert "Alice" not in str(_history(peer, BOB))
+
+
+def test_history_shows_what_i_already_did_with_each_session(peer):
+    peer.client.post("/candidate/peer-matchmaking/request", json={}, headers=peer.h[ALICE])
+    room = peer.client.post("/candidate/peer-matchmaking/request", json={}, headers=peer.h[BOB]).json()["room_id"]
+    assert _history(peer, BOB)[0]["rated"] is False and _history(peer, BOB)[0]["has_report"] is False
+    peer.client.post("/candidate/peer-safety/feedback", headers=peer.h[BOB], json={"room_id": room, "rating": 5})
+    peer.client.post("/candidate/peer-safety/blocks", headers=peer.h[BOB], json={"room_id": room})
+    peer.db.add("peer_interview_reports", student_id=BOB, room_id=room, role="candidate", phase=1)
+    row = _history(peer, BOB)[0]
+    assert row["rated"] is True and row["blocked"] is True and row["has_report"] is True and row["report_id"]
+
+
+def test_history_is_only_my_own_and_never_leaks_other_peoples_sessions(peer):
+    book(peer, invitee=BOB)
+    peer.client.post("/candidate/peer-matchmaking/request", json={}, headers=peer.h[ALICE])
+    peer.client.post("/candidate/peer-matchmaking/request", json={}, headers=peer.h[BOB])
+    assert _history(peer, CAROL) == []
+
+
+def test_history_works_for_someone_who_has_not_accepted_the_guidelines_and_for_open_meetings_nobody_joined(peer):
+    peer.h["new"] = peer.user("new", "candidate")
+    assert _history(peer, "new") == []
+    book(peer)  # an open meeting nobody has joined: no partner to report or rate
+    row = _history(peer, ALICE)[0]
+    assert row["partner_label"] is None and row["can_report_or_rate"] is False

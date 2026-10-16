@@ -79,6 +79,7 @@ import { PeerSuspensionNotice } from "@/components/candidate/peer/PeerSuspension
 import { PeerGuidelinesGate } from "@/components/candidate/peer/PeerGuidelinesDialog";
 import { PeerFeedbackDialog } from "@/components/candidate/peer/PeerFeedbackDialog";
 import { PeerSettingsDialog } from "@/components/candidate/peer/PeerSettingsDialog";
+import { PeerHistoryDialog } from "@/components/candidate/peer/PeerHistoryDialog";
 import { peerSafetyService } from "@/services/api/candidate/peerSafety";
 import { PrepPlanDialog } from "@/components/candidate/PrepPlanDialog";
 import { ApplicationFormModal } from "@/components/candidate/ApplicationFormModal";
@@ -1175,6 +1176,7 @@ function RecentPeerInterviewsCard({
   const [reportRoom, setReportRoom] = useState<string | null>(null);
   const [blockedOpen, setBlockedOpen] = useState(false);
   const [settingsOpen, setPeerSettingsOpen] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
   if (reports === null) {
     return (
       <Card className="p-5">
@@ -1192,10 +1194,20 @@ function RecentPeerInterviewsCard({
       <Card className="p-5">
         <div className="mb-3 flex items-center justify-between">
           <h3 className="font-display font-semibold">Recent</h3>
+          <div className="flex items-center gap-2">
+            <Button variant="ghost" size="sm" onClick={() => setHistoryOpen(true)}>
+              History
+            </Button>
+            <Button variant="ghost" size="sm" onClick={() => setPeerSettingsOpen(true)}>
+              Settings
+            </Button>
+          </div>
         </div>
         <div className="rounded-md border border-dashed border-border/70 bg-surface/60 p-4 text-center text-sm text-muted-foreground">
           No peer interviews yet. Complete one and your feedback lands here.
         </div>
+        <PeerSettingsDialog open={settingsOpen} onOpenChange={setPeerSettingsOpen} />
+        <PeerHistoryDialog open={historyOpen} onOpenChange={setHistoryOpen} />
       </Card>
     );
   }
@@ -1205,6 +1217,9 @@ function RecentPeerInterviewsCard({
       <div className="mb-3 flex items-center justify-between">
         <h3 className="font-display font-semibold">Recent peer interviews</h3>
         <div className="flex items-center gap-2">
+          <Button variant="ghost" size="sm" onClick={() => setHistoryOpen(true)}>
+            History
+          </Button>
           <Button variant="ghost" size="sm" onClick={() => setPeerSettingsOpen(true)}>
             Settings
           </Button>
@@ -1217,6 +1232,7 @@ function RecentPeerInterviewsCard({
       <PeerReportDialog roomId={reportRoom} onClose={() => setReportRoom(null)} />
       <BlockedPeopleDialog open={blockedOpen} onOpenChange={setBlockedOpen} />
       <PeerSettingsDialog open={settingsOpen} onOpenChange={setPeerSettingsOpen} />
+      <PeerHistoryDialog open={historyOpen} onOpenChange={setHistoryOpen} />
       <ul className="space-y-2">
         {shown.map((r) => {
           const when = new Date(r.created_at);
