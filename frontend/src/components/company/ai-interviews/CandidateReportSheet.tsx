@@ -17,8 +17,8 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import { IntegritySection } from "@/components/candidate/ai-interview/ReportView";
 import { companyAiInterviewService } from "@/services/api/company/aiInterviews";
-import type { Decision, ResultDetail } from "@/types/company/aiInterview";
-import { DECISION_LABEL, INVITE_STATUS_LABEL, mmss } from "./rubric";
+import type { Decision, IntegrityReview, ResultDetail } from "@/types/company/aiInterview";
+import { DECISION_LABEL, INVITE_STATUS_LABEL, defaultDecisionMessage, mmss } from "./rubric";
 
 const score = (v: number | null) => (v === null ? "Not scored" : `${Math.round(v)}/100`);
 
@@ -40,12 +40,16 @@ function DecisionForm({
   templateId,
   inviteId,
   current,
+  roleTitle,
 }: {
   templateId: string;
   inviteId: string;
   current: ResultDetail["decision"];
+  roleTitle: string;
 }) {
   const qc = useQueryClient();
+  const [notify, setNotify] = useState(false);
+  const [message, setMessage] = useState("");
   const [decision, setDecision] = useState<Decision | null>(current.decision);
   const [note, setNote] = useState(current.note);
   useEffect(() => {
@@ -54,15 +58,29 @@ function DecisionForm({
   }, [current.decision, current.note]);
 
   const save = useMutation({
-    mutationFn: () => companyAiInterviewService.setDecision(templateId, inviteId, decision, note),
-    onSuccess: () => {
+    mutationFn: () =>
+      companyAiInterviewService.setDecision(
+        templateId,
+        inviteId,
+        decision,
+        note,
+        notify && canNotify ? { message: message.trim() } : undefined,
+      ),
+    onSuccess: (r) => {
       toast.success(
         decision ? `Marked as ${DECISION_LABEL[decision].toLowerCase()}.` : "Decision cleared.",
       );
+      if (r.application_status)
+        toast.info(`Their job application is now “${r.application_status}”.`);
+      if (r.candidate_email === "sent") toast.success("The candidate was emailed.");
+      else if (r.candidate_email === "skipped" || r.candidate_email === "failed")
+        toast.warning("The candidate could not be emailed. Tell them yourself.");
+      setNotify(false);
       qc.invalidateQueries({ queryKey: ["company-ai-interviews"] });
     },
     onError: (e: unknown) => toast.error(e instanceof Error ? e.message : "Could not save."),
   });
+  const canNotify = decision === "advance" || decision === "reject";
   const dirty = decision !== current.decision || note.trim() !== current.note;
 
   return (
@@ -71,8 +89,8 @@ function DecisionForm({
         Your decision
       </h3>
       <p className="text-xs text-muted-foreground">
-        The AI report is a recommendation. You make the call, and the candidate is not told by this
-        tool.
+        The AI report is a recommendation. You make the call. The candidate is only told if you
+        choose to email them below.
       </p>
       <div className="flex flex-wrap gap-2" role="radiogroup" aria-label="Decision">
         {(Object.keys(DECISION_LABEL) as Decision[]).map((d) => (
@@ -83,7 +101,12 @@ function DecisionForm({
             role="radio"
             aria-checked={decision === d}
             variant={decision === d ? "default" : "outline"}
-            onClick={() => setDecision(decision === d ? null : d)}
+            onClick={() => {
+              const next = decision === d ? null : d;
+              setDecision(next);
+              setMessage(defaultDecisionMessage(next, roleTitle));
+              if (next !== "advance" && next !== "reject") setNotify(false);
+            }}
           >
             {DECISION_LABEL[d]}
           </Button>
@@ -99,9 +122,106 @@ function DecisionForm({
           maxLength={1000}
         />
       </div>
-      <Button size="sm" disabled={!dirty || save.isPending} onClick={() => save.mutate()}>
+      {canNotify && (
+        <div className="space-y-2">
+          <label className="flex items-center gap-2 text-sm">
+            <input type="checkbox" checked={notify} onChange={(e) => setNotify(e.target.checked)} />
+            Email the candidate this outcome
+          </label>
+          {notify && (
+            <>
+              <Label htmlFor="decision-message">Message to the candidate</Label>
+              <Textarea
+                id="decision-message"
+                value={message}
+                onChange={(e) => setMessage(e.target.value)}
+                rows={3}
+                maxLength={500}
+              />
+            </>
+          )}
+        </div>
+      )}
+      <Button
+        size="sm"
+        disabled={!dirty || save.isPending || (notify && canNotify && message.trim().length < 5)}
+        onClick={() => save.mutate()}
+      >
         {save.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />} Save decision
       </Button>
+    </section>
+  );
+}
+
+function IntegrityReviewForm({
+  templateId,
+  inviteId,
+  current,
+}: {
+  templateId: string;
+  inviteId: string;
+  current: NonNullable<ResultDetail["integrity_review"]>;
+}) {
+  const qc = useQueryClient();
+  const [note, setNote] = useState(current.note);
+  useEffect(() => setNote(current.note), [current.note]);
+  const save = useMutation({
+    mutationFn: (review: IntegrityReview | null) =>
+      companyAiInterviewService.setIntegrityReview(templateId, inviteId, review, note),
+    onSuccess: () => {
+      toast.success("Review saved.");
+      qc.invalidateQueries({ queryKey: ["company-ai-interviews"] });
+    },
+    onError: (e: unknown) => toast.error(e instanceof Error ? e.message : "Could not save."),
+  });
+  return (
+    <section className="space-y-2 rounded-lg border p-4" aria-labelledby="integrity-review-h">
+      <h3 id="integrity-review-h" className="text-sm font-semibold">
+        Your review of the flags
+      </h3>
+      <p className="text-xs text-muted-foreground">
+        Flags are signals, not proof. A person decides whether they matter.
+      </p>
+      <Textarea
+        aria-label="Review note"
+        value={note}
+        onChange={(e) => setNote(e.target.value)}
+        rows={2}
+        maxLength={1000}
+      />
+      <div className="flex flex-wrap items-center gap-2">
+        <Button
+          size="sm"
+          variant={current.review === "dismissed" ? "default" : "outline"}
+          disabled={save.isPending}
+          onClick={() => save.mutate("dismissed")}
+        >
+          Dismiss as false alarm
+        </Button>
+        <Button
+          size="sm"
+          variant={current.review === "confirmed" ? "destructive" : "outline"}
+          disabled={save.isPending}
+          onClick={() => save.mutate("confirmed")}
+        >
+          Confirm concern
+        </Button>
+        {current.review && (
+          <Button
+            size="sm"
+            variant="ghost"
+            disabled={save.isPending}
+            onClick={() => save.mutate(null)}
+          >
+            Clear review
+          </Button>
+        )}
+        {current.review && (
+          <Badge variant="outline">
+            {current.review === "dismissed" ? "Dismissed" : "Concern confirmed"}
+          </Badge>
+        )}
+      </div>
     </section>
   );
 }
@@ -110,10 +230,12 @@ export function CandidateReportSheet({
   templateId,
   inviteId,
   onClose,
+  roleTitle = "this",
 }: {
   templateId: string;
   inviteId: string | null;
   onClose: () => void;
+  roleTitle?: string;
 }) {
   const { data, isLoading, isError } = useQuery({
     queryKey: ["company-ai-interviews", templateId, "result", inviteId],
@@ -145,7 +267,31 @@ export function CandidateReportSheet({
               templateId={templateId}
               inviteId={data.candidate.id}
               current={data.decision}
+              roleTitle={roleTitle}
             />
+
+            {data.accommodation?.request && (
+              <p className="rounded-lg border border-amber-500/50 bg-amber-500/10 p-3 text-sm">
+                <span className="font-medium">Accommodation requested: </span>
+                {data.accommodation.request}
+              </p>
+            )}
+
+            {data.previous_attempts && data.previous_attempts.length > 0 && (
+              <section className="space-y-1 text-sm">
+                <h3 className="text-sm font-semibold">Earlier attempts</h3>
+                <ul className="list-disc pl-5 text-muted-foreground">
+                  {data.previous_attempts.map((a, i) => (
+                    <li key={i}>
+                      {a.started_at ? new Date(a.started_at).toLocaleString() : "Unknown date"} ·{" "}
+                      {a.has_report && a.overall_score !== null
+                        ? `scored ${Math.round(a.overall_score)}`
+                        : "no report"}
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            )}
 
             {!data.report ? (
               <p className="rounded-lg border border-dashed p-6 text-center text-sm text-muted-foreground">
@@ -205,6 +351,13 @@ export function CandidateReportSheet({
             )}
 
             <IntegritySection summary={data.integrity} events={data.integrity_events} />
+            {data.integrity.total > 0 && data.integrity_review && (
+              <IntegrityReviewForm
+                templateId={templateId}
+                inviteId={data.candidate.id}
+                current={data.integrity_review}
+              />
+            )}
 
             <p className="rounded-lg bg-muted/40 p-3 text-xs text-muted-foreground">
               {data.consent.accepted_at

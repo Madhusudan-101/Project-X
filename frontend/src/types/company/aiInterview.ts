@@ -65,6 +65,27 @@ export interface InviteRow {
   email_status: "sent" | "skipped" | "failed" | null;
   decision: Decision | null;
   overall_score: number | null;
+  retakes?: number;
+  accommodation_request?: string | null;
+  integrity_review?: IntegrityReview | null;
+}
+
+export type IntegrityReview = "dismissed" | "confirmed";
+
+export interface Applicant {
+  application_id: string;
+  name: string | null;
+  email: string;
+  application_status: string | null;
+  already_invited: boolean;
+}
+
+export interface PreviousAttempt {
+  started_at: string | null;
+  ended_reason: string | null;
+  overall_score: number | null;
+  partial: boolean;
+  has_report: boolean;
 }
 
 export interface InviteResult {
@@ -92,11 +113,19 @@ export interface ResultRow extends InviteRow {
   partial: boolean;
   competencies: CompetencyScore[];
   integrity: IntegritySummary;
+  /** Finished without a report: the team can allow a retake. */
+  incomplete?: boolean;
 }
 
 export interface ResultsPayload {
   template: InterviewTemplate;
-  summary: { taken: number; reported: number; average_score: number | null; flagged: number };
+  summary: {
+    taken: number;
+    reported: number;
+    average_score: number | null;
+    flagged: number;
+    incomplete?: number;
+  };
   rows: ResultRow[];
 }
 
@@ -122,4 +151,14 @@ export interface ResultDetail {
   integrity: IntegritySummary;
   integrity_events: IntegrityEvent[];
   decision: { decision: Decision | null; note: string; decided_at: string | null };
+  integrity_review?: { review: IntegrityReview | null; note: string };
+  previous_attempts?: PreviousAttempt[];
+  accommodation?: { request: string | null; at: string | null };
+}
+
+export interface DecisionResult {
+  decision: Decision | null;
+  note: string;
+  application_status?: string | null;
+  candidate_email?: "sent" | "skipped" | "failed" | null;
 }

@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { ShieldAlert } from "lucide-react";
+import { Download, ShieldAlert } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Table,
@@ -14,7 +15,15 @@ import {
 import { companyAiInterviewService } from "@/services/api/company/aiInterviews";
 import type { ResultsPayload } from "@/types/company/aiInterview";
 import { CandidateReportSheet } from "./CandidateReportSheet";
-import { DECISION_LABEL, INVITE_STATUS_LABEL } from "./rubric";
+import {
+  DECISION_LABEL,
+  INVITE_STATUS_LABEL,
+  filterRows,
+  resultsToCsv,
+  sortRows,
+  type ResultFilter,
+  type ResultSort,
+} from "./rubric";
 
 function Tile({ label, value }: { label: string; value: string }) {
   return (
@@ -27,14 +36,27 @@ function Tile({ label, value }: { label: string; value: string }) {
 
 export function ResultsPanel({ templateId }: { templateId: string }) {
   const [open, setOpen] = useState<string | null>(null);
+  const [sort, setSort] = useState<ResultSort>("recent");
+  const [filter, setFilter] = useState<ResultFilter>("all");
   const { data, isLoading } = useQuery<ResultsPayload>({
     queryKey: ["company-ai-interviews", templateId, "results"],
     queryFn: () => companyAiInterviewService.results(templateId),
   });
 
   if (isLoading) return <Skeleton className="h-48 w-full" />;
-  const rows = data?.rows ?? [];
+  const all = data?.rows ?? [];
+  const rows = sortRows(filterRows(all, filter), sort);
   const s = data?.summary;
+
+  const exportCsv = () => {
+    const blob = new Blob([resultsToCsv(rows)], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "interview-results.csv";
+    a.click();
+    URL.revokeObjectURL(url);
+  };
 
   return (
     <div className="space-y-4">
@@ -48,9 +70,49 @@ export function ResultsPanel({ templateId }: { templateId: string }) {
         <Tile label="With integrity flags" value={String(s?.flagged ?? 0)} />
       </div>
 
-      {rows.length === 0 ? (
+      {all.length > 0 && (
+        <div className="flex flex-wrap items-center gap-3 text-sm">
+          <label className="flex items-center gap-2">
+            Sort
+            <select
+              aria-label="Sort results"
+              className="h-9 rounded-md border bg-card px-2"
+              value={sort}
+              onChange={(e) => setSort(e.target.value as ResultSort)}
+            >
+              <option value="recent">Most recent</option>
+              <option value="score">Highest score</option>
+              <option value="flags">Most flags</option>
+              <option value="name">Name</option>
+            </select>
+          </label>
+          <label className="flex items-center gap-2">
+            Show
+            <select
+              aria-label="Filter results"
+              className="h-9 rounded-md border bg-card px-2"
+              value={filter}
+              onChange={(e) => setFilter(e.target.value as ResultFilter)}
+            >
+              <option value="all">Everyone</option>
+              <option value="flagged">With integrity flags</option>
+              <option value="undecided">No decision yet</option>
+              <option value="incomplete">No report (incomplete)</option>
+            </select>
+          </label>
+          <Button variant="outline" size="sm" className="ml-auto" onClick={exportCsv}>
+            <Download className="mr-1.5 h-4 w-4" /> Export CSV
+          </Button>
+        </div>
+      )}
+
+      {all.length === 0 ? (
         <p className="rounded-lg border border-dashed p-6 text-center text-sm text-muted-foreground">
           No one has taken this interview yet. Results appear here as candidates finish.
+        </p>
+      ) : rows.length === 0 ? (
+        <p className="rounded-lg border border-dashed p-6 text-center text-sm text-muted-foreground">
+          No one matches this filter.
         </p>
       ) : (
         <div className="overflow-x-auto rounded-lg border">
@@ -85,6 +147,11 @@ export function ResultsPanel({ templateId }: { templateId: string }) {
                     <Badge variant={r.status === "completed" ? "default" : "secondary"}>
                       {INVITE_STATUS_LABEL[r.status]}
                     </Badge>
+                    {r.incomplete && (
+                      <Badge variant="outline" className="ml-1.5">
+                        No report
+                      </Badge>
+                    )}
                     {r.partial && (
                       <Badge variant="outline" className="ml-1.5">
                         Left early
@@ -115,7 +182,12 @@ export function ResultsPanel({ templateId }: { templateId: string }) {
         </div>
       )}
 
-      <CandidateReportSheet templateId={templateId} inviteId={open} onClose={() => setOpen(null)} />
+      <CandidateReportSheet
+        templateId={templateId}
+        inviteId={open}
+        onClose={() => setOpen(null)}
+        roleTitle={data?.template.role_title}
+      />
     </div>
   );
 }

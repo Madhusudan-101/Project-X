@@ -6,6 +6,7 @@ import type {
   InterviewTemplate,
   InviteResult,
   InviteStatus,
+  ResultRow,
   TemplateDraft,
   TemplateStatus,
 } from "@/types/company/aiInterview";
@@ -171,3 +172,111 @@ export function describeInviteResult(r: InviteResult): string {
     r.emails_failed > 0 ? `${r.emails_failed} email${r.emails_failed === 1 ? "" : "s"} failed` : "";
   return [parts.join(", "), mail, failed].filter(Boolean).join(". ") + ".";
 }
+
+// ---- Results: sorting, filtering, export ----
+
+export type ResultSort = "recent" | "score" | "name" | "flags";
+export type ResultFilter = "all" | "flagged" | "undecided" | "incomplete";
+
+type RowLike = Pick<
+  ResultRow,
+  | "name"
+  | "email"
+  | "overall_score"
+  | "completed_at"
+  | "started_at"
+  | "integrity"
+  | "decision"
+  | "incomplete"
+  | "integrity_review"
+>;
+
+const isFlagged = (r: RowLike) => r.integrity.total > 0 && r.integrity_review !== "dismissed";
+
+export function filterRows<T extends RowLike>(rows: T[], filter: ResultFilter): T[] {
+  switch (filter) {
+    case "flagged":
+      return rows.filter(isFlagged);
+    case "undecided":
+      return rows.filter((r) => !r.decision);
+    case "incomplete":
+      return rows.filter((r) => r.incomplete);
+    default:
+      return rows;
+  }
+}
+
+/** Returns a new array. Unscored rows always sort last when ranking by score. */
+export function sortRows<T extends RowLike>(rows: T[], sort: ResultSort): T[] {
+  const out = [...rows];
+  const when = (r: RowLike) => r.completed_at ?? r.started_at ?? "";
+  switch (sort) {
+    case "score":
+      return out.sort((a, b) => {
+        if (a.overall_score === null && b.overall_score === null) return 0;
+        if (a.overall_score === null) return 1;
+        if (b.overall_score === null) return -1;
+        return b.overall_score - a.overall_score;
+      });
+    case "name":
+      return out.sort((a, b) => (a.name ?? a.email).localeCompare(b.name ?? b.email));
+    case "flags":
+      return out.sort((a, b) => b.integrity.total - a.integrity.total);
+    default:
+      return out.sort((a, b) => when(b).localeCompare(when(a)));
+  }
+}
+
+/** Spreadsheets run a cell that starts with = + - @ (or a tab/CR) as a formula. Defuse those. */
+export function csvCell(value: unknown): string {
+  let s = value === null || value === undefined ? "" : String(value);
+  if (/^[=+\-@\t\r]/.test(s)) s = `'${s}`;
+  return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+}
+
+export function resultsToCsv(rows: ResultRow[]): string {
+  const head = [
+    "Name",
+    "Email",
+    "Status",
+    "Score",
+    "AI recommendation",
+    "Integrity flags",
+    "Integrity review",
+    "Decision",
+    "Completed at",
+  ];
+  const lines = rows.map((r) =>
+    [
+      r.name ?? "",
+      r.email,
+      INVITE_STATUS_LABEL[r.status],
+      r.overall_score === null ? "" : Math.round(r.overall_score),
+      r.recommendation ?? "",
+      r.integrity.total,
+      r.integrity_review ?? "",
+      r.decision ? DECISION_LABEL[r.decision] : "",
+      r.completed_at ?? "",
+    ]
+      .map(csvCell)
+      .join(","),
+  );
+  return [head.map(csvCell).join(","), ...lines].join("\r\n");
+}
+
+/** What the candidate will be asked about, from the rubric: names by weight, highest first. */
+export function plannedTopics(rubric: Pick<Competency, "name" | "weight" | "questions">[]) {
+  const pct = weightPercentages(rubric);
+  return rubric
+    .map((c, i) => ({ name: c.name.trim(), pct: pct[i], seeds: c.questions.filter(Boolean) }))
+    .filter((t) => t.name)
+    .sort((a, b) => b.pct - a.pct);
+}
+
+/** Pre-filled message for a rejection or advance email; the team can edit it. */
+export const defaultDecisionMessage = (d: Decision | null, role: string, company?: string) =>
+  d === "advance"
+    ? `Thank you for completing the ${role} interview${company ? ` with ${company}` : ""}. We would like to move you to the next step and will be in touch shortly.`
+    : d === "reject"
+      ? `Thank you for the time you put into the ${role} interview${company ? ` with ${company}` : ""}. We have decided not to move forward at this time.`
+      : "";

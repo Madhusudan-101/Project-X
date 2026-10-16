@@ -30,6 +30,7 @@ import {
   draftFromTemplate,
   emptyCompetency,
   emptyDraft,
+  plannedTopics,
   toPayload,
   validateDraft,
   weightPercentages,
@@ -99,6 +100,25 @@ export function TemplateFormDialog({ open, onOpenChange, template, onSaved }: Pr
   const patch = (p: Partial<TemplateDraft>) => setDraft((d) => ({ ...d, ...p }));
   const patchComp = (i: number, p: Partial<TemplateDraft["rubric"][number]>) =>
     setDraft((d) => ({ ...d, rubric: d.rubric.map((c, k) => (k === i ? { ...c, ...p } : c)) }));
+
+  const [drafting, setDrafting] = useState(false);
+  const [preview, setPreview] = useState(false);
+  const draftWithAi = async () => {
+    setDrafting(true);
+    try {
+      const r = await companyAiInterviewService.draftRubric({
+        role_title: draft.role_title.trim(),
+        level: draft.level,
+        job_id: draft.job_id,
+      });
+      patch({ rubric: r.competencies.map(({ weight_pct: _p, ...c }) => ({ ...c })) });
+      toast.success("Rubric drafted. Review and edit it before saving.");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Could not draft a rubric.");
+    } finally {
+      setDrafting(false);
+    }
+  };
 
   const applyPreset = (id: string) => {
     const p = presets.data?.find((x) => x.id === id);
@@ -234,11 +254,67 @@ export function TemplateFormDialog({ open, onOpenChange, template, onSaved }: Pr
                 type="button"
                 size="sm"
                 variant="outline"
+                disabled={drafting || draft.role_title.trim().length < 2}
+                onClick={() => void draftWithAi()}
+                title={
+                  draft.role_title.trim().length < 2
+                    ? "Enter the role first"
+                    : draft.job_id
+                      ? "Uses the linked job description"
+                      : "Uses the role and level"
+                }
+              >
+                {drafting ? "Drafting…" : "Draft with AI"}
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
                 disabled={draft.rubric.length >= MAX_COMPETENCIES}
                 onClick={() => patch({ rubric: [...draft.rubric, emptyCompetency()] })}
               >
                 <Plus className="mr-1.5 h-4 w-4" /> Add competency
               </Button>
+            </div>
+
+            <div>
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                aria-expanded={preview}
+                onClick={() => setPreview((p) => !p)}
+              >
+                {preview ? "Hide" : "Preview"} candidate experience
+              </Button>
+              {preview && (
+                <div
+                  className="mt-2 space-y-2 rounded-lg bg-muted/40 p-4 text-sm"
+                  role="region"
+                  aria-label="Candidate preview"
+                >
+                  <p className="font-medium">
+                    {draft.role_title.trim() || "Your role"} · up to {draft.duration_minutes} min ·
+                    live voice and video with an AI interviewer
+                  </p>
+                  {draft.instructions.trim() && <p>{draft.instructions.trim()}</p>}
+                  <p className="text-muted-foreground">
+                    The interviewer covers these topics, most important first:
+                  </p>
+                  <ol className="list-decimal space-y-1 pl-5">
+                    {plannedTopics(draft.rubric).map((t) => (
+                      <li key={t.name}>
+                        {t.name}{" "}
+                        <span className="text-muted-foreground">({t.pct}% of the score)</span>
+                      </li>
+                    ))}
+                  </ol>
+                  <p className="text-xs text-muted-foreground">
+                    Candidates see the rules, camera and microphone consent, and an equipment check
+                    first. They never see this rubric or their report.
+                  </p>
+                </div>
+              )}
             </div>
 
             {draft.rubric.map((c, i) => (

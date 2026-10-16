@@ -277,6 +277,7 @@ describe("InvitesPanel", () => {
     await waitFor(() => expect(svc.invite).toHaveBeenCalledOnce());
     expect(svc.invite).toHaveBeenCalledWith("t1", {
       emails: ["ada@x.dev", "bob@x.dev"],
+      application_ids: [],
       expires_in_days: 14,
     });
     await waitFor(() => expect((box as HTMLTextAreaElement).value).toBe(""));
@@ -467,11 +468,17 @@ describe("ResultsPanel and candidate report", () => {
     const save = screen.getByRole("button", { name: /save decision/i }) as HTMLButtonElement;
     expect(save.disabled).toBe(true); // nothing to save yet
     await user.click(screen.getByRole("radio", { name: "Advance" }));
-    await user.type(screen.getByLabelText(/note/i), "Strong design.");
+    await user.type(screen.getByLabelText("Note (optional)"), "Strong design.");
     expect(save.disabled).toBe(false);
     await user.click(save);
     await waitFor(() =>
-      expect(svc.setDecision).toHaveBeenCalledWith("t1", "i1", "advance", "Strong design."),
+      expect(svc.setDecision).toHaveBeenCalledWith(
+        "t1",
+        "i1",
+        "advance",
+        "Strong design.",
+        undefined,
+      ),
     );
   });
 

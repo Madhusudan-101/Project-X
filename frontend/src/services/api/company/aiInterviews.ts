@@ -11,7 +11,11 @@
 
 import { request } from "../client";
 import type {
+  Applicant,
+  Competency,
   Decision,
+  DecisionResult,
+  IntegrityReview,
   InterviewTemplate,
   InviteResult,
   InviteRow,
@@ -62,9 +66,51 @@ export const companyAiInterviewService = {
   resultDetail: (id: string, inviteId: string) =>
     request<ResultDetail>(`${base}/${id}/results/${inviteId}`),
 
-  setDecision: (id: string, inviteId: string, decision: Decision | null, note: string) =>
-    request<{ decision: Decision | null; note: string }>(
-      `${base}/${id}/results/${inviteId}/decision`,
-      { method: "PUT", body: { decision, note } },
+  setDecision: (
+    id: string,
+    inviteId: string,
+    decision: Decision | null,
+    note: string,
+    notify?: { message: string },
+  ) =>
+    request<DecisionResult>(`${base}/${id}/results/${inviteId}/decision`, {
+      method: "PUT",
+      body: {
+        decision,
+        note,
+        ...(notify ? { notify_candidate: true, candidate_message: notify.message } : {}),
+      },
+    }),
+
+  applicants: (id: string) => request<Applicant[]>(`${base}/${id}/applicants`),
+
+  retake: (id: string, inviteId: string, expiresInDays = 7) =>
+    request<{ email: "sent" | "skipped" | "failed"; retakes: number }>(
+      `${base}/${id}/invites/${inviteId}/retake`,
+      { method: "POST", body: { expires_in_days: expiresInDays } },
     ),
+
+  extend: (id: string, inviteId: string, days = 7) =>
+    request<{ expires_at: string; email: "sent" | "skipped" | "failed" }>(
+      `${base}/${id}/invites/${inviteId}/extend`,
+      { method: "POST", body: { days } },
+    ),
+
+  setIntegrityReview: (
+    id: string,
+    inviteId: string,
+    review: IntegrityReview | null,
+    note: string,
+  ) =>
+    request<{ review: IntegrityReview | null; note: string }>(
+      `${base}/${id}/results/${inviteId}/integrity-review`,
+      { method: "PUT", body: { review, note } },
+    ),
+
+  draftRubric: (body: {
+    role_title: string;
+    level: string;
+    description?: string;
+    job_id?: string | null;
+  }) => request<{ competencies: Competency[] }>(`${base}/draft-rubric`, { method: "POST", body }),
 };
