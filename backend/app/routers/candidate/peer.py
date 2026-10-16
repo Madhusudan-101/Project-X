@@ -38,7 +38,7 @@ from fastapi import APIRouter, Depends, HTTPException, Path
 from pydantic import BaseModel, Field, field_validator
 
 from ...deps import get_current_user, db_client
-from ...services import peer_safety
+from ...services import peer_safety, peer_notify
 from postgrest.exceptions import APIError
 
 logger = logging.getLogger(__name__)
@@ -201,7 +201,7 @@ def _may_enter_room(user_id: str, room_id: str) -> bool:
     except APIError:
         return False
     meeting = getattr(m, "data", None) if m is not None else None
-    if not meeting or meeting["status"] in ("cancelled", "completed", "expired"):
+    if not meeting or meeting["status"] in ("cancelled", "completed", "expired", "no_show"):
         return False
     if not _is_authorized_to_join(meeting, user_id):
         return False
@@ -715,6 +715,15 @@ def create_scheduled_meeting(
     row = (inserted.data or [None])[0]
     if not row:
         raise HTTPException(status_code=500, detail="Create returned no row")
+    if invitee_id:
+        # Tell the invitee. An email problem must never fail the booking.
+        try:
+            if peer_notify.send_invitation(row, user_id, invitee_id) == "sent":
+                db_client.table("peer_scheduled_meetings").update(
+                    {"invited_emailed_at": datetime.now(timezone.utc).isoformat()}
+                ).eq("id", row["id"]).execute()
+        except Exception:  # noqa: BLE001
+            logger.exception("peer invitation email failed")
     return _row_to_meeting(row, user_id)
 
 
@@ -727,7 +736,7 @@ def cancel_scheduled_meeting(
     try:
         res = (
             db_client.table("peer_scheduled_meetings")
-            .select("id, creator_id, status")
+            .select("id, creator_id, invitee_id, scheduled_at, duration_minutes, keep_private, status")
             .eq("id", meeting_id)
             .maybe_single()
             .execute()
@@ -750,6 +759,11 @@ def cancel_scheduled_meeting(
         db_client.table("peer_scheduled_meetings").update({"status": "cancelled"}).eq("id", meeting_id).execute()
     except APIError as e:
         raise HTTPException(status_code=500, detail=f"Cancel failed: {e.message}")
+    if row.get("invitee_id"):
+        try:
+            peer_notify.send_cancellation(row, user_id, row["invitee_id"])
+        except Exception:  # noqa: BLE001
+            logger.exception("peer cancellation email failed")
 
 
 @router.post("/peer-meetings/{meeting_id}/join", response_model=JoinScheduledOut)
@@ -780,7 +794,7 @@ def join_scheduled_meeting(
 
     # Meeting must still be live for this feature (waiting / live / scheduled).
     # Completed & cancelled short-circuit with a clear reason.
-    if row["status"] in ("cancelled", "completed", "expired"):
+    if row["status"] in ("cancelled", "completed", "expired", "no_show"):
         raise HTTPException(status_code=410, detail=f"Meeting is {row['status']}")
 
     # Authorization: invitation-based meetings are restricted to creator +
@@ -926,6 +940,38 @@ def list_my_peer_reports(
     return out
 
 
+class PreferencesIn(BaseModel):
+    default_private: bool = True
+    timezone: Optional[str] = Field(default=None, max_length=64)
+    email_invites: bool = True
+    email_reminders: bool = True
+
+    @field_validator("timezone")
+    @classmethod
+    def known_timezone(cls, v: Optional[str]) -> Optional[str]:
+        if v in (None, ""):
+            return None
+        if not peer_notify.valid_timezone(v):
+            raise ValueError("Unknown timezone")
+        return v
+
+
+@router.get("/peer-preferences")
+def get_peer_preferences(current_user: dict = Depends(get_current_user)) -> dict:
+    """My peer interview settings (defaults when I never set any)."""
+    return peer_notify.get_preferences(current_user["id"])
+
+
+@router.put("/peer-preferences")
+def set_peer_preferences(body: PreferencesIn, current_user: dict = Depends(get_current_user)) -> dict:
+    db_client.table("peer_preferences").upsert({
+        "student_id": current_user["id"], "default_private": body.default_private, "timezone": body.timezone,
+        "email_invites": body.email_invites, "email_reminders": body.email_reminders,
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+    }, on_conflict="student_id").execute()
+    return peer_notify.get_preferences(current_user["id"])
+
+
 def complete_matchmaking_for_room(room_id: str) -> None:
     """The final report has landed: both people's matchmaking tickets are finished."""
     try:
@@ -934,11 +980,47 @@ def complete_matchmaking_for_room(room_id: str) -> None:
         logger.exception("matchmaking completion failed | room_id=%s", room_id)
 
 
+NO_SHOW_AFTER = timedelta(minutes=10)
+DAY_REMINDER_LEAD = timedelta(hours=24)
+SOON_REMINDER_LEAD = timedelta(minutes=15)
+
+
+def _participants_of(meeting: dict) -> list[str]:
+    """The people we can email about a meeting: the host, and the invitee if there is one."""
+    return [x for x in (meeting["creator_id"], meeting.get("invitee_id")) if x]
+
+
+def _send_due_reminders(m: dict, now: datetime) -> int:
+    """Send the 24-hour and 15-minute reminders for a meeting, each at most once. Marked only when the
+    send was attempted for everyone, so a meeting booked at short notice does not get a "tomorrow" mail."""
+    start = _parse_ts(m["scheduled_at"])
+    until_start = start - now
+    created = _parse_ts(m.get("created_at"))
+    sent = 0
+    if m["status"] not in ("scheduled", "waiting"):
+        return 0
+    if (
+        not m.get("reminded_day_at")
+        and timedelta(hours=2) < until_start <= DAY_REMINDER_LEAD
+        and created and (start - created) > DAY_REMINDER_LEAD + timedelta(hours=1)
+    ):
+        for sid in _participants_of(m):
+            peer_notify.send_reminder(m, sid, soon=False)
+            sent += 1
+        db_client.table("peer_scheduled_meetings").update({"reminded_day_at": now.isoformat()}).eq("id", m["id"]).execute()
+    if not m.get("reminded_soon_at") and timedelta(0) < until_start <= SOON_REMINDER_LEAD:
+        for sid in _participants_of(m):
+            peer_notify.send_reminder(m, sid, soon=True)
+            sent += 1
+        db_client.table("peer_scheduled_meetings").update({"reminded_soon_at": now.isoformat()}).eq("id", m["id"]).execute()
+    return sent
+
+
 def run_maintenance() -> dict:
     """Close what nobody finished: stale matched tickets and scheduled meetings past their window.
     Called on a schedule by POST /internal/peer/maintenance."""
     now = _now()
-    tickets = meetings = 0
+    tickets = meetings = no_shows = reminders = 0
     for t in (
         db_client.table("peer_matchmaking_tickets").select("id, status, matched_at, created_at, expires_at, last_seen_at")
         .in_("status", ["waiting", "matched"]).execute().data or []
@@ -956,13 +1038,27 @@ def run_maintenance() -> dict:
             }).eq("id", t["id"]).execute()
             tickets += 1
     for m in (
-        db_client.table("peer_scheduled_meetings").select("id, scheduled_at, duration_minutes, status")
+        db_client.table("peer_scheduled_meetings").select("*")
         .in_("status", list(ACTIVE_STATUSES)).execute().data or []
     ):
+        start = _parse_ts(m["scheduled_at"])
+        # Somebody came and waited, but the other person never did: a no-show, not just "expired".
+        if m["status"] == "waiting" and m.get("first_joiner_id") and now > start + NO_SHOW_AFTER:
+            db_client.table("peer_scheduled_meetings").update(
+                {"status": "no_show", "no_show_at": now.isoformat()}
+            ).eq("id", m["id"]).execute()
+            no_shows += 1
+            try:
+                peer_notify.send_no_show(m, m["first_joiner_id"])
+            except Exception:  # noqa: BLE001
+                logger.exception("no-show email failed")
+            continue
         if now > _meeting_window(m)[1]:
             db_client.table("peer_scheduled_meetings").update({"status": "expired"}).eq("id", m["id"]).execute()
             meetings += 1
-    return {"tickets_expired": tickets, "meetings_expired": meetings}
+            continue
+        reminders += _send_due_reminders(m, now)
+    return {"tickets_expired": tickets, "meetings_expired": meetings, "no_shows": no_shows, "reminders_sent": reminders}
 
 
 def _complete_scheduled_meeting_for_room(room_id: str) -> None:
