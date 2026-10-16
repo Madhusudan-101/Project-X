@@ -31,7 +31,7 @@ interface Props {
 export function PeerReportDialog({ roomId, onClose }: Props) {
   const [reason, setReason] = useState<ReportReason | "">("");
   const [details, setDetails] = useState("");
-  const [block, setBlock] = useState(true);
+  const [block, setBlock] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState<{ blocked: boolean } | null>(null);
@@ -40,7 +40,7 @@ export function PeerReportDialog({ roomId, onClose }: Props) {
     if (roomId) {
       setReason("");
       setDetails("");
-      setBlock(true);
+      setBlock(false);
       setError(null);
       setDone(null);
     }
@@ -105,7 +105,9 @@ export function PeerReportDialog({ roomId, onClose }: Props) {
             </fieldset>
 
             <div className="space-y-1.5">
-              <Label htmlFor="report-details">Details (optional)</Label>
+              <Label htmlFor="report-details">
+                {reason === "other" ? "Details (required)" : "Details (optional)"}
+              </Label>
               <Textarea
                 id="report-details"
                 value={details}

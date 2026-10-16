@@ -132,6 +132,9 @@ export function ScheduledMeetingsList({ refreshKey = 0 }: { refreshKey?: number 
         url.searchParams.set("private", res.keep_private ? "1" : "0");
         const until = untilParam(res.ends_at);
         if (until) url.searchParams.set("until", until);
+        // The scheduled start, so PeerMeet can offer "partner did not show" at the right time.
+        const start = untilParam(res.starts_at);
+        if (start) url.searchParams.set("start", start);
         // Identity token goes in the URL fragment so it never leaks via
         // Referer / access logs / browser history (see PeerInterviewMatchModal
         // for the full rationale).

@@ -26,13 +26,17 @@ describe("validateReport", () => {
     expect(validateReport("bogus", "")).toBeTruthy();
     expect(validateReport("spam", "x".repeat(1001))).toBeTruthy();
     expect(validateReport("spam", "x".repeat(1000))).toBeNull();
-    for (const r of REPORT_REASONS) expect(validateReport(r.id, "")).toBeNull();
+    for (const r of REPORT_REASONS.filter((x) => x.id !== "other"))
+      expect(validateReport(r.id, "")).toBeNull();
+    expect(validateReport("other", "")).toBe("Please describe what happened.");
+    expect(validateReport("other", "  ")).toBe("Please describe what happened.");
+    expect(validateReport("other", "they did X")).toBeNull();
   });
 });
 
 describe("PeerReportDialog", () => {
   it("does nothing until a reason is chosen, then sends the room (never a person)", async () => {
-    api.report.mockResolvedValue({ id: "r1", status: "open", created: true, blocked: true });
+    api.report.mockResolvedValue({ id: "r1", status: "open", created: true, blocked: false });
     const user = userEvent.setup();
     render(<PeerReportDialog roomId="room-123" onClose={() => undefined} />);
     const send = screen.getByRole("button", { name: /send report/i }) as HTMLButtonElement;
@@ -46,24 +50,53 @@ describe("PeerReportDialog", () => {
         room_id: "room-123",
         reason: "harassment",
         details: "rude",
-        block: true, // blocking is on by default
+        block: false, // a report never blocks (and so never ends anything) unless you tick the box
       }),
     );
     expect(await screen.findByRole("status")).toHaveProperty("textContent");
-    expect(screen.getByText(/will not be matched with this person again/i)).toBeTruthy();
+    expect(screen.queryByText(/will not be matched/i)).toBeNull();
   });
 
-  it("can report without blocking", async () => {
-    api.report.mockResolvedValue({ id: "r1", status: "open", created: true, blocked: false });
+  it("only blocks when the box is ticked", async () => {
+    api.report.mockResolvedValue({ id: "r1", status: "open", created: true, blocked: true });
     const user = userEvent.setup();
     render(<PeerReportDialog roomId="room-123" onClose={() => undefined} />);
+    expect(
+      (screen.getByLabelText(/also block this person/i) as HTMLInputElement).getAttribute(
+        "data-state",
+      ),
+    ).toBe("unchecked");
     await user.click(screen.getByLabelText("Spam or off-topic"));
     await user.click(screen.getByLabelText(/also block this person/i));
     await user.click(screen.getByRole("button", { name: /send report/i }));
     await waitFor(() =>
-      expect(api.report).toHaveBeenCalledWith(expect.objectContaining({ block: false })),
+      expect(api.report).toHaveBeenCalledWith(expect.objectContaining({ block: true })),
     );
-    expect(screen.queryByText(/will not be matched/i)).toBeNull();
+    expect(await screen.findByText(/will not be matched with this person again/i)).toBeTruthy();
+  });
+
+  it("offers the reasons that were asked for, and 'something else' needs a description", async () => {
+    api.report.mockResolvedValue({ id: "r1", status: "open", created: true, blocked: false });
+    const user = userEvent.setup();
+    render(<PeerReportDialog roomId="room-123" onClose={() => undefined} />);
+    for (const label of [
+      "Inappropriate content or behaviour",
+      "Rude or disrespectful",
+      "Not making a genuine effort",
+    ])
+      expect(screen.getByLabelText(label)).toBeTruthy();
+    await user.click(screen.getByLabelText(/something else/i));
+    expect(screen.getByText("Details (required)")).toBeTruthy();
+    await user.click(screen.getByRole("button", { name: /send report/i }));
+    expect((await screen.findByText(/describe what happened/i)).textContent).toBeTruthy();
+    expect(api.report).not.toHaveBeenCalled();
+    await user.type(screen.getByLabelText(/details/i), "They shared a real question");
+    await user.click(screen.getByRole("button", { name: /send report/i }));
+    await waitFor(() =>
+      expect(api.report).toHaveBeenCalledWith(
+        expect.objectContaining({ reason: "other", details: "They shared a real question" }),
+      ),
+    );
   });
 
   it("shows the server's reason when it fails and lets the person try again", async () => {

@@ -72,14 +72,26 @@ const {
   getChatHistory,
   getHostParticipantId,
   holdsSlotWithIdentity,
-  hasTranscriptionConsent,
   everyoneConsentedToTranscription,
   isRoomRestricted,
   isParticipantPrivate,
   getRoomIdForSocket,
   getPartner,
   releaseParticipant,
+  getPrecallSnapshot,
+  setSessionConsent,
+  setReady,
+  isSessionStarted,
+  isPairAdmitted,
+  isSessionCancelled,
+  cancelSession,
+  precallNeedsTimer,
+  setMediaReady,
+  markConsentVerified,
+  isConsentVerified,
+  getParticipantsForRoom,
 } = require('./roomManager');
+const { hasEnoughToJudge, buildInsufficientReport } = require('./answerCheck');
 const { sanitizeReport } = require('./reportSanitizer');
 const {
   createDeepgramTranscriptionManager,
@@ -123,6 +135,8 @@ function verifyPeerToken(token) {
     return {
       studentId: decoded.student_id,
       studentName: decoded.name || null,
+      firstName: decoded.first_name || null,
+      collegeBranch: decoded.college_branch || null,
       room: decoded.room,
     };
   } catch {
@@ -156,11 +170,11 @@ const WEBHOOK_RETRY_DELAYS_MS = (process.env.PEERMEET_WEBHOOK_RETRY_MS || '0,200
 /** POST a signed payload to the dashboard backend; retries network errors, 429 and 5xx, never other 4xx. */
 const postReportWithRetry = (payload) => postSigned('/internal/peer-reports', payload);
 
-async function postSigned(pathname, payload) {
+async function postSigned(pathname, payload, { delays = WEBHOOK_RETRY_DELAYS_MS } = {}) {
   const url = `${MIRRACLE_WEBHOOK_URL.replace(/\/+$/, '')}${pathname}`;
   const body = JSON.stringify(payload);
   let lastError = 'no attempt made';
-  for (const delay of WEBHOOK_RETRY_DELAYS_MS) {
+  for (const delay of delays) {
     if (delay) await new Promise((r) => setTimeout(r, delay));
     // Fresh timestamp + signature each attempt so a retry is never rejected as stale.
     const timestamp = String(Math.floor(Date.now() / 1000));
@@ -179,7 +193,13 @@ async function postSigned(pathname, payload) {
       });
       if (res.ok) return res;
       lastError = `responded ${res.status}`;
-      if (res.status !== 429 && res.status < 500) throw new Error(lastError); // permanent: do not retry
+      if (res.status !== 429 && res.status < 500) {
+        // permanent: do not retry. Keep the status and the server's own words for callers that show them.
+        const failure = new Error(lastError);
+        failure.status = res.status;
+        failure.detail = (await res.json().catch(() => null))?.detail;
+        throw failure;
+      }
     } catch (err) {
       if (String(err.message).startsWith('responded')) throw err;
       lastError = err.message;
@@ -187,6 +207,20 @@ async function postSigned(pathname, payload) {
     console.error(`[Webhook] peer-reports attempt failed (${lastError})`);
   }
   throw new Error(lastError);
+}
+
+/**
+ * One signed call to the dashboard backend whose ANSWER matters (consent check, onboarding flag, no-show).
+ * Never throws: returns { ok, status, body }. A person is waiting on it, so there is a single quick attempt.
+ */
+async function callBackend(pathname, payload) {
+  if (!MIRRACLE_WEBHOOK_URL || !WEBHOOK_SECRET) return { ok: false, status: 0, body: null };
+  try {
+    const res = await postSigned(pathname, payload, { delays: [0] });
+    return { ok: true, status: res.status, body: await res.json().catch(() => null) };
+  } catch (err) {
+    return { ok: false, status: err.status || 0, body: null, detail: typeof err.detail === 'string' ? err.detail : null, error: err.message };
+  }
 }
 
 /**
@@ -223,6 +257,7 @@ function fireReportWebhook({
     phase,
     final,
     unavailable: !!report.unavailable,
+    insufficient: !!report.insufficient,
     // Did the partner ask to stay anonymous? The dashboard hides their name unless this is false.
     partner_private: partnerParticipantId ? isParticipantPrivate(roomId, partnerParticipantId) : null,
     report: {
@@ -385,6 +420,114 @@ function emitToParticipant(roomId, participantId, event, payload) {
   const socketId = getSocketIdForParticipant(roomId, participantId);
   if (!socketId) return;
   io.to(socketId).emit(event, payload);
+}
+
+// ── Pre-call ("Get ready") ─────────────────────────────────────────────────────
+// Both people join the room first, but nothing is sent between them (no video, no captions, no AI)
+// until each has answered the consent question with Yes and clicked Ready.
+const SESSION_CONSENT_VERSION = '2026-10-session-v1'; // keep in step with the backend's SESSION_CONSENT_VERSION
+const PRECALL_TIMEOUT_MS = Number(process.env.PEERMEET_PRECALL_TIMEOUT_MS) || 5 * 60 * 1000;
+const precallTimers = new Map();
+const precallDeadlines = new Map();
+
+function sendPrecallState(roomId) {
+  for (const p of getParticipantsForRoom(roomId)) {
+    if (!p.socketId) continue;
+    const snap = getPrecallSnapshot(roomId, p.participantId);
+    if (!snap) continue;
+    io.to(p.socketId).emit('precall:state', {
+      roomId,
+      ...snap,
+      deadlineAt: snap.phase === 'precall' ? precallDeadlines.get(roomId) || null : null,
+      consentVersion: SESSION_CONSENT_VERSION,
+    });
+  }
+}
+
+function clearPrecallTimer(roomId) {
+  clearTimeout(precallTimers.get(roomId));
+  precallTimers.delete(roomId);
+  precallDeadlines.delete(roomId);
+}
+
+/** Cancel the pre-call for both people. Only a timeout names a reason; a decline never does. */
+function cancelPrecall(roomId, reason) {
+  const people = cancelSession(roomId);
+  clearPrecallTimer(roomId);
+  for (const p of people || []) {
+    if (p.socketId) io.to(p.socketId).emit('session:cancelled', reason ? { reason } : {});
+  }
+}
+
+/** Start the clock once both people are on the Ready screen: someone who never clicks Ready ends it. */
+function armPrecallTimer(roomId) {
+  if (!precallNeedsTimer(roomId)) return;
+  if (precallTimers.has(roomId)) return;
+  precallDeadlines.set(roomId, Date.now() + PRECALL_TIMEOUT_MS);
+  const timer = setTimeout(() => {
+    precallTimers.delete(roomId);
+    precallDeadlines.delete(roomId);
+    if (roomExists(roomId) && !isSessionStarted(roomId) && !isSessionCancelled(roomId)) cancelPrecall(roomId, 'timeout');
+  }, PRECALL_TIMEOUT_MS);
+  timer.unref?.();
+  precallTimers.set(roomId, timer);
+}
+
+/**
+ * May this room's speech be transcribed and reviewed by AI? Only when the session has started and BOTH
+ * people said Yes, and (for dashboard people) the backend confirms a stored Yes for each of them.
+ * Anything unclear means no.
+ */
+async function recordingAllowed(roomId) {
+  if (!isPairAdmitted(roomId) || !everyoneConsentedToTranscription(roomId)) return false;
+  const people = getParticipantsForRoom(roomId);
+  const identified = people.filter((p) => p.studentId);
+  if (identified.length === 0) return true; // a plain anonymous room has no account to store an answer on
+  if (identified.length !== people.length) return false; // one side cannot be verified
+  if (isConsentVerified(roomId)) return true;
+  const res = await callBackend('/internal/peer/session-consent/check', {
+    room_id: roomId,
+    student_ids: identified.map((p) => p.studentId),
+  });
+  if (res.ok && res.body?.all_yes === true) {
+    markConsentVerified(roomId);
+    return true;
+  }
+  return false;
+}
+
+/** The first time a person is ever made interviewer, show them a one-time message (saved per person). */
+async function offerInterviewerOnboarding(roomId, participantId) {
+  const identity = getIdentityForParticipant(roomId, participantId);
+  let show = true; // a person we cannot save a flag for (anonymous, or the backend is down) sees it
+  if (identity?.studentId) {
+    const res = await callBackend('/internal/peer/onboarding/status', { student_id: identity.studentId });
+    if (res.ok && res.body?.seen === true) show = false;
+  }
+  if (show) emitToParticipant(roomId, participantId, 'onboarding:interviewer', {});
+}
+
+/** A round with too little candidate speech gets an honest "too short to judge" report, not a score. */
+async function buildTurnReport(roomId, interview) {
+  if (!hasEnoughToJudge(interview.transcriptBuffer, interview.roles.candidateId)) {
+    return buildInsufficientReport(interview.topicsCovered || []);
+  }
+  let report = null;
+  if (interviewAssistant.isConfigured()) {
+    try {
+      report = sanitizeReport(
+        await interviewAssistant.generateReport({
+          config: interview.config,
+          transcriptBuffer: interview.transcriptBuffer,
+          interviewerId: interview.roles.interviewerId,
+          summary: getCopilotSummary(roomId),
+        })
+      );
+    } catch (err) {
+      console.error(`[Interview] report generation failed: ${err.message}`);
+    }
+  }
+  return report || buildFallbackReport(interview);
 }
 
 // ── AI Interview Assistant (Gemini) ────────────────────────────────────────────
@@ -600,26 +743,7 @@ async function endInterviewForRoom(roomId, opts = {}) {
   const candidateId = interview.roles.candidateId;
   const interviewerId = interview.roles.interviewerId;
 
-  let report = null;
-  if (interviewAssistant.isConfigured()) {
-    try {
-      report = sanitizeReport(
-        await interviewAssistant.generateReport({
-          config: interview.config,
-          transcriptBuffer: interview.transcriptBuffer,
-          interviewerId,
-          summary: getCopilotSummary(roomId),
-        })
-      );
-    } catch (err) {
-      console.error(`[Interview] report generation failed: ${err.message}`);
-    }
-  }
-  // Never leave the candidate with no report at all — degrade to a labeled
-  // fallback rather than silently skipping 'interview:turn-report'.
-  if (!report) {
-    report = buildFallbackReport(interview);
-  }
+  const report = await buildTurnReport(roomId, interview);
 
   interview.ended = true;
   interview.endedReason = opts.reason || 'manual';
@@ -725,6 +849,7 @@ function sendInterviewStateTo(roomId, participantId, socketId) {
   }
 
   if (role === 'interviewer') {
+    offerInterviewerOnboarding(roomId, participantId).catch(() => {});
     io.to(socketId).emit('interview:assistant-update', {
       phase: interview.phase,
       recommendation: interview.lastRecommendation || null,
@@ -843,7 +968,7 @@ io.on('connection', (socket) => {
    * who expects to be the initiator (e.g. their room was fully abandoned
    * and needs recreating) — see the 'join-room'-driven client fallback.
    */
-  socket.on('create-room', ({ roomId, participantId, token, keepPrivate, transcriptionConsent } = {}) => {
+  socket.on('create-room', ({ roomId, participantId, token, keepPrivate } = {}) => {
     console.log(`[Room] create-room | room=${short(roomId)} | socket=${short(socket.id)}`);
 
     if (!ID_PATTERN.test(String(roomId || '')) || !ID_PATTERN.test(String(participantId || ''))) {
@@ -865,9 +990,10 @@ io.on('connection', (socket) => {
       socket.emit('auth-error', { reason: denied });
       return;
     }
-    createRoom(roomId, participantId, socket.id, identity, !!keepPrivate, transcriptionConsent === true);
+    createRoom(roomId, participantId, socket.id, identity, !!keepPrivate);
     socket.join(roomId);
     socket.emit('room-created', { roomId });
+    sendPrecallState(roomId);
 
     console.log(`[Room] Created: ${short(roomId)}`);
   });
@@ -884,7 +1010,7 @@ io.on('connection', (socket) => {
    *   - On success → notify both participants; on reconnect, also resync
    *     the reconnecting participant's interview state.
    */
-  socket.on('join-room', ({ roomId, participantId, token, keepPrivate, transcriptionConsent } = {}) => {
+  socket.on('join-room', ({ roomId, participantId, token, keepPrivate } = {}) => {
     console.log(`[Room] join-room | room=${short(roomId)} | socket=${short(socket.id)}`);
 
     if (!ID_PATTERN.test(String(roomId || '')) || !ID_PATTERN.test(String(participantId || ''))) {
@@ -914,8 +1040,7 @@ io.on('connection', (socket) => {
       socket.id,
       (id) => io.sockets.sockets.has(id),
       identity,
-      !!keepPrivate,
-      transcriptionConsent === true
+      !!keepPrivate
     );
 
     if (result.notFound) {
@@ -931,6 +1056,12 @@ io.on('connection', (socket) => {
 
     if (result.isFull) {
       socket.emit('room-full', { roomId });
+      return;
+    }
+
+    // A session that was cancelled (declined, or nobody got ready in time) cannot be joined again.
+    if (isSessionCancelled(roomId)) {
+      socket.emit('session:cancelled', {});
       return;
     }
 
@@ -958,52 +1089,161 @@ io.on('connection', (socket) => {
       });
     }
 
-    // Public display names respect each participant's "keep private" flag
-    // (see roomManager.getPublicDisplayName). These are what the other side
-    // sees on the video tile — Mirracle still uses the real identity for
-    // the report webhook, which never reads these labels.
-    const myDisplayName = getPublicDisplayName(roomId, participantId);
-    const partnerDisplayName = result.partnerParticipantId
-      ? getPublicDisplayName(roomId, result.partnerParticipantId)
-      : null;
-
+    // Where things stand on the Ready screen, for both people. No video, captions or AI are paired up
+    // here: that only happens once both have said Yes and clicked Ready (see 'session:media-ready').
+    armPrecallTimer(roomId); // first, so the state below carries the deadline
+    sendPrecallState(roomId);
     if (result.reconnected) {
-      // Tell this participant who the current partner is, exactly like a
-      // fresh 'ready' — their client destroys any stale peer and creates a
-      // new one as the receiver.
-      socket.emit('ready', { initiatorId: result.partnerId, partnerDisplayName });
-      // Tell the (still-connected) partner this participant is back, so
-      // THEY create a fresh peer as the initiator.
-      if (result.partnerId) {
-        io.to(result.partnerId).emit('user-joined', {
-          signal: null,
-          callerId: socket.id,
-          partnerDisplayName: myDisplayName,
-        });
-      }
-      // Resync interview role/state — they missed whatever was emitted to
-      // their previous (now-dead) socket while disconnected.
+      // They missed whatever was emitted to their previous (now-dead) socket while disconnected.
       sendInterviewStateTo(roomId, participantId, socket.id);
-
       console.log(`[Room] ${short(socket.id)} reconnected to room ${short(roomId)}`);
       return;
     }
+    console.log(`[Room] ${short(socket.id)} joined room ${short(roomId)}`);
+  });
 
-    // Fresh join: tell the initiator (participant A) that B has joined.
-    // Initiator will create SimplePeer with initiator=true and send an offer.
-    socket.to(result.partnerId).emit('user-joined', {
+  /**
+   * PRECALL:CONSENT
+   * "This session may be recorded and reviewed by AI for scoring and safety purposes. Continue?"
+   * A Yes is stored on the backend first (for dashboard people), so a Yes that was not saved never
+   * unlocks anything. A No cancels the session for both; the partner is not told why.
+   */
+  socket.on('precall:consent', async ({ roomId, answer, version } = {}) => {
+    if (!roomId || !socket.rooms.has(roomId)) return;
+    const pid = getParticipantIdForSocket(roomId, socket.id);
+    if (!pid || typeof answer !== 'boolean') return;
+    if (isRateLimited(socket, 'precall:consent', 500)) return;
+    if (version !== SESSION_CONSENT_VERSION) {
+      socket.emit('precall:error', { reason: 'outdated-wording' });
+      return;
+    }
+    const identity = getIdentityForParticipant(roomId, pid);
+    if (identity?.studentId) {
+      const saved = await callBackend('/internal/peer/session-consent', {
+        room_id: roomId,
+        student_id: identity.studentId,
+        answer,
+        version,
+      });
+      if (!saved.ok) {
+        socket.emit('precall:error', { reason: 'consent-not-saved' });
+        return;
+      }
+    }
+    const result = setSessionConsent(roomId, pid, answer);
+    if (!result.ok) {
+      socket.emit('precall:error', { reason: result.reason });
+      return;
+    }
+    if (answer === false && isSessionStarted(roomId)) {
+      // Someone who arrived into a session that is already running said No: only they leave.
+      const { partnerId } = releaseParticipant(socket.id);
+      socket.leave(roomId);
+      socket.emit('session:cancelled', { self: true });
+      if (partnerId) io.to(partnerId).emit('user-left', { socketId: socket.id });
+      if (roomExists(roomId)) sendPrecallState(roomId);
+      return;
+    }
+    if (answer === false) {
+      const partnerSocket = getPartner(roomId, socket.id);
+      clearPrecallTimer(roomId);
+      cancelSession(roomId);
+      socket.emit('session:cancelled', { self: true });
+      if (partnerSocket) io.to(partnerSocket).emit('session:cancelled', {}); // no reason given
+      return;
+    }
+    sendPrecallState(roomId);
+  });
+
+  /**
+   * PRECALL:READY
+   * Needs a Yes on file and working camera and microphone. When both people are present and ready the
+   * session starts ('session:go'); only then do cameras and microphones go on. Repeat clicks change nothing.
+   */
+  socket.on('precall:ready', ({ roomId, devicesOk } = {}) => {
+    if (!roomId || !socket.rooms.has(roomId)) return;
+    const pid = getParticipantIdForSocket(roomId, socket.id);
+    if (!pid) return;
+    if (isRateLimited(socket, 'precall:ready', 300)) return;
+    const result = setReady(roomId, pid, devicesOk === true);
+    if (!result.ok) {
+      socket.emit('precall:error', { reason: result.reason });
+      return;
+    }
+    if (result.justStarted) {
+      clearPrecallTimer(roomId);
+      for (const p of getParticipantsForRoom(roomId)) {
+        if (p.socketId) io.to(p.socketId).emit('session:go', { roomId });
+      }
+    } else if (result.justAdmitted) {
+      socket.emit('session:go', { roomId }); // joined a running session: only they get the go
+    }
+    sendPrecallState(roomId);
+  });
+
+  /**
+   * SESSION:MEDIA-READY
+   * After 'session:go' each browser turns its camera and microphone on and says so. When both have, the
+   * two are paired for video (the same handshake a join used to start).
+   */
+  socket.on('session:media-ready', ({ roomId } = {}) => {
+    if (!roomId || !socket.rooms.has(roomId)) return;
+    const pid = getParticipantIdForSocket(roomId, socket.id);
+    if (!pid) return;
+    const paired = setMediaReady(roomId, pid);
+    if (!paired?.partner) return;
+    const other = getParticipantsForRoom(roomId).find((p) => p.socketId === paired.partner);
+    socket.emit('ready', {
+      initiatorId: paired.partner,
+      partnerDisplayName: other ? getPublicDisplayName(roomId, other.participantId) : null,
+    });
+    io.to(paired.partner).emit('user-joined', {
       signal: null,
       callerId: socket.id,
-      partnerDisplayName: myDisplayName,
+      partnerDisplayName: getPublicDisplayName(roomId, pid),
     });
+  });
 
-    // Tell participant B who the initiator is so they can set up SimplePeer.
-    socket.emit('ready', {
-      initiatorId: result.partnerId,
-      partnerDisplayName,
-    });
+  /**
+   * NO-SHOW:MARK
+   * The person waiting alone says their partner did not show. The backend decides (the scheduled start
+   * plus the grace window) and records who was absent.
+   */
+  socket.on('no-show:mark', async ({ roomId } = {}) => {
+    if (!roomId || !socket.rooms.has(roomId)) return;
+    const pid = getParticipantIdForSocket(roomId, socket.id);
+    const identity = pid ? getIdentityForParticipant(roomId, pid) : null;
+    if (!identity?.studentId) {
+      socket.emit('no-show:error', { message: 'This is only available for scheduled meetings.' });
+      return;
+    }
+    if (isRateLimited(socket, 'no-show:mark', 3000)) return;
+    if (getParticipantsForRoom(roomId).length > 1) {
+      socket.emit('no-show:error', { message: 'Your partner is already here.' });
+      return;
+    }
+    const res = await callBackend('/internal/peer/no-show', { room_id: roomId, reporter_student_id: identity.studentId });
+    if (!res.ok) {
+      socket.emit('no-show:error', {
+        message: res.status >= 400 && res.status < 500 && res.detail ? String(res.detail).slice(0, 200) : 'Could not do that right now. Try again.',
+      });
+      return;
+    }
+    socket.emit('no-show:marked', {});
+    clearPrecallTimer(roomId);
+    releaseParticipant(socket.id);
+    socket.leave(roomId);
+  });
 
-    console.log(`[Room] ${short(socket.id)} joined room ${short(roomId)}`);
+  /** The interviewer clicked "Got it" on the one-time message: remember it for that person, everywhere. */
+  socket.on('onboarding:interviewer-dismiss', async ({ roomId } = {}) => {
+    if (!roomId || !socket.rooms.has(roomId)) return;
+    const pid = getParticipantIdForSocket(roomId, socket.id);
+    const identity = pid ? getIdentityForParticipant(roomId, pid) : null;
+    if (!identity?.studentId) return;
+    if (isRateLimited(socket, 'onboarding:dismiss', 1000)) return;
+    const res = await callBackend('/internal/peer/onboarding/seen', { student_id: identity.studentId });
+    if (!res.ok) console.error('[Onboarding] could not save the seen flag');
   });
 
   /**
@@ -1017,6 +1257,8 @@ io.on('connection', (socket) => {
     // any socket id or room name, which let an outsider inject signals into someone else's call.
     const senderRoom = getRoomIdForSocket(socket.id);
     if (!senderRoom || typeof to !== 'string' || getPartner(senderRoom, socket.id) !== to) return;
+    // No video is exchanged until both people said Yes and clicked Ready.
+    if (!isPairAdmitted(senderRoom)) return;
 
     io.to(to).emit('return-signal', {
       signal,
@@ -1029,7 +1271,7 @@ io.on('connection', (socket) => {
    * Start an independent Deepgram stream for this participant.
    * The client must already be in the Socket.io room it is transcribing for.
    */
-  socket.on('transcription:start', ({ roomId, mimeType } = {}) => {
+  socket.on('transcription:start', async ({ roomId, mimeType } = {}) => {
     if (!roomId || !socket.rooms.has(roomId)) {
       socket.emit('transcription:error', {
         message: 'Join a meeting room before starting transcription.',
@@ -1037,17 +1279,18 @@ io.on('connection', (socket) => {
       return;
     }
 
-    // Audio goes to a third-party transcription service, so it only starts for someone who agreed to it.
-    if (!hasTranscriptionConsent(roomId, getParticipantIdForSocket(roomId, socket.id))) {
-      socket.emit('transcription:error', {
-        message: 'Live captions are off because transcription was not agreed to for this meeting.',
-      });
-      return;
-    }
-
     // 1s floor: a real client starts this once per mic-enable/reconnect —
     // guards against a client opening a flood of Deepgram connections.
     if (isRateLimited(socket, 'transcription:start', 1000)) return;
+
+    // Audio goes to a third-party transcription service, so it only starts once the session has begun
+    // and BOTH people said Yes (checked against the stored answers on the backend).
+    if (!(await recordingAllowed(roomId)) || !socket.rooms.has(roomId)) {
+      socket.emit('transcription:error', {
+        message: 'Live captions are off because both people have not agreed for this session.',
+      });
+      return;
+    }
 
     const started = transcriptionManager.start({
       socketId: socket.id,
@@ -1084,33 +1327,39 @@ io.on('connection', (socket) => {
   // ── Interview: configure ─────────────────────────────────────────────────
   // The creator submits interview setup. Server assigns roles and tells BOTH
   // participants their role + that AI assistance is active (disclosure).
-  socket.on('interview:configure', ({ roomId, config } = {}) => {
+  socket.on('interview:configure', async ({ roomId, config } = {}) => {
     if (!roomId || !socket.rooms.has(roomId)) return;
     const myParticipantId = getParticipantIdForSocket(roomId, socket.id);
     if (!myParticipantId) return;
     if (isRateLimited(socket, 'interview:configure', 1000)) return;
 
-    // Don't allow reconfiguring once the interview has started.
-    const existing = getInterview(roomId);
-    if (existing?.started && !existing?.ended) return;
-
-    // AI feedback processes BOTH people's speech, so it needs both of them to have agreed to it.
-    if (!everyoneConsentedToTranscription(roomId)) {
-      socket.emit('interview:error', { reason: 'consent-required' });
+    // Only the room host (whoever started the meeting) may set the interview up. Without this the
+    // second person to arrive could configure first, take the interviewer role and see the AI panel.
+    const host = getHostParticipantId(roomId);
+    if (host && host !== myParticipantId) {
+      socket.emit('interview:error', { reason: 'not-host' });
       return;
     }
 
-    // Only the room host (the first person in the room) may set the interview up. Without this the
-    // second person to arrive could configure first, take the interviewer role and see the AI panel.
-    const host = getHostParticipantId(roomId);
-    if (host && host !== myParticipantId) return;
+    // Setup is submitted once. It is locked from the first submit, and for good once the session begins.
+    const existing = getInterview(roomId);
+    if (existing?.started) {
+      socket.emit('interview:error', { reason: 'already-started' });
+      return;
+    }
+    if (existing?.configured) {
+      socket.emit('interview:error', { reason: 'setup-locked' });
+      return;
+    }
 
-    // Only the participant who originally configured the interview (the
-    // meeting host) may (re)configure it. This must NOT be checked against
-    // roles.interviewerId — when whoStarts === 'candidate' the host is
-    // assigned the CANDIDATE role, so anchoring on interviewerId would
-    // incorrectly lock the host out of their own setup.
-    if (existing?.configured && existing.configuredBy && existing.configuredBy !== myParticipantId) {
+    // AI feedback processes BOTH people's speech, so it needs both of them to have said Yes.
+    if (!(await recordingAllowed(roomId))) {
+      socket.emit('interview:error', { reason: 'consent-required' });
+      return;
+    }
+    // Something may have been submitted while we were checking.
+    if (getInterview(roomId)?.configured) {
+      socket.emit('interview:error', { reason: 'setup-locked' });
       return;
     }
 
@@ -1152,6 +1401,12 @@ io.on('connection', (socket) => {
     if (!existing?.configuredBy || existing.configuredBy !== myParticipantId) return;
     // Starting twice would reset the deadline and call the AI again; ignore repeats and a finished interview.
     if (existing.started || existing.ended) return;
+    // Never start the AI without both people's stored Yes, even if configure was somehow reached.
+    if (!(await recordingAllowed(roomId))) {
+      socket.emit('interview:error', { reason: 'consent-required' });
+      return;
+    }
+    if (getInterview(roomId)?.started) return;
 
     const interview = startInterview(roomId);
     if (!interview) return;
@@ -1159,6 +1414,7 @@ io.on('connection', (socket) => {
     for (const participantId of [interview.roles.interviewerId, interview.roles.candidateId]) {
       emitToParticipant(roomId, participantId, 'interview:started', { phase: interview.phase });
     }
+    offerInterviewerOnboarding(roomId, interview.roles.interviewerId).catch(() => {});
 
     // ── Duration enforcement ──────────────────────────────────────────────
     // Emit an absolute deadline so both clients can render a synced countdown
@@ -1253,26 +1509,8 @@ io.on('connection', (socket) => {
 
     try {
     // Build the report from the current phase transcript BEFORE swapping.
-    let report = null;
-    if (interviewAssistant.isConfigured()) {
-      try {
-        report = sanitizeReport(
-          await interviewAssistant.generateReport({
-            config: interview.config,
-            transcriptBuffer: interview.transcriptBuffer,
-            interviewerId,
-            summary: getCopilotSummary(roomId),
-          })
-        );
-      } catch (err) {
-        console.error(`[Interview] report generation failed: ${err.message}`);
-      }
-    }
+    let report = await buildTurnReport(roomId, interview);
     if (interview.ended || interview.phase !== phaseAtSwitch) return;
-    // Never leave the outgoing candidate with no report at all.
-    if (!report) {
-      report = buildFallbackReport(interview);
-    }
 
     // Deliver the report to the participant who was just the candidate.
     if (outgoingCandidateId && report) {
@@ -1317,6 +1555,7 @@ io.on('connection', (socket) => {
     for (const participantId of [updated.roles.interviewerId, updated.roles.candidateId]) {
       emitToParticipant(roomId, participantId, 'interview:roles-switched', { phase: updated.phase });
     }
+    offerInterviewerOnboarding(roomId, updated.roles.interviewerId).catch(() => {});
     } finally {
       interview.switching = false;
     }
@@ -1426,6 +1665,12 @@ io.on('connection', (socket) => {
     const { partnerId } = releaseParticipant(socket.id);
     socket.leave(roomId);
     if (partnerId) io.to(partnerId).emit('user-left', { socketId: socket.id });
+    if (roomExists(roomId)) {
+      if (!precallNeedsTimer(roomId)) clearPrecallTimer(roomId);
+      sendPrecallState(roomId);
+    } else {
+      clearPrecallTimer(roomId);
+    }
   });
 
   /**
@@ -1448,6 +1693,14 @@ io.on('connection', (socket) => {
     if (partnerId) {
       console.log(`[Room] partner notified: ${short(socket.id)} left room ${short(roomId)}`);
       io.to(partnerId).emit('user-left', { socketId: socket.id });
+    }
+    if (roomId) {
+      if (roomExists(roomId)) {
+        if (!precallNeedsTimer(roomId)) clearPrecallTimer(roomId);
+        sendPrecallState(roomId);
+      } else {
+        clearPrecallTimer(roomId);
+      }
     }
 
     // Only tear down room-scoped AI/duration timers once the room is

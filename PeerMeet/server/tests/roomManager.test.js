@@ -327,18 +327,122 @@ test('unknown participants count as private', () => {
   assert.equal(rm.isParticipantPrivate(r, 'pA'), false);
 });
 
-test('transcription consent is per person and everyone must agree for the AI interview', () => {
+test('a Yes is per person and everyone must say Yes before the AI interview', () => {
   const r = newRoom();
-  rm.createRoom(r, 'pA', 'sA', null, false, true);
-  rm.joinRoom(r, 'pB', 'sB', () => true, null, false); // joined without agreeing
+  rm.createRoom(r, 'pA', 'sA', null, false);
+  rm.joinRoom(r, 'pB', 'sB', () => true, null, false);
+  assert.equal(rm.hasTranscriptionConsent(r, 'pA'), false); // nobody answered yet
+  assert.equal(rm.setSessionConsent(r, 'pA', true).ok, true);
   assert.equal(rm.hasTranscriptionConsent(r, 'pA'), true);
   assert.equal(rm.hasTranscriptionConsent(r, 'pB'), false);
   assert.equal(rm.everyoneConsentedToTranscription(r), false);
-  rm.leaveRoom('sB');
-  rm.joinRoom(r, 'pB', 'sB2', () => false, null, false, true); // rejoin, now agreeing
+  rm.setSessionConsent(r, 'pB', true);
   assert.equal(rm.everyoneConsentedToTranscription(r), true);
   assert.equal(rm.hasTranscriptionConsent(r, 'nobody'), false);
   assert.equal(rm.everyoneConsentedToTranscription('no-such-room'), false);
+});
+
+test('a lone person saying Yes is not "everyone"', () => {
+  const r = newRoom();
+  rm.createRoom(r, 'pA', 'sA', null, false);
+  rm.setSessionConsent(r, 'pA', true);
+  assert.equal(rm.everyoneConsentedToTranscription(r), false);
+});
+
+test('an answer cannot be flipped, and a No blocks Ready', () => {
+  const r = pair();
+  assert.equal(rm.setSessionConsent(r, 'pA', false).ok, true);
+  assert.equal(rm.setSessionConsent(r, 'pA', true).reason, 'already-answered');
+  assert.equal(rm.setReady(r, 'pA', true).reason, 'consent-required');
+  assert.equal(rm.setSessionConsent(r, 'pA', 'yes').ok, false); // only true or false
+});
+
+test('the session starts only when both are present, said Yes and are ready', () => {
+  const r = pair();
+  assert.equal(rm.setReady(r, 'pA', true).reason, 'consent-required');
+  rm.setSessionConsent(r, 'pA', true);
+  rm.setSessionConsent(r, 'pB', true);
+  assert.equal(rm.setReady(r, 'pA', false).reason, 'devices-not-ready');
+  assert.deepEqual(rm.setReady(r, 'pA', true), { ok: true, started: false, justStarted: false, justAdmitted: false });
+  assert.equal(rm.isSessionStarted(r), false);
+  assert.deepEqual(rm.setReady(r, 'pA', true), { ok: true, started: false, justStarted: false, justAdmitted: false }); // double click
+  assert.equal(rm.setReady(r, 'pB', true).justStarted, true);
+  assert.equal(rm.isSessionStarted(r), true);
+  assert.equal(rm.setReady(r, 'pB', true).justStarted, false); // already started: no second start
+  assert.equal(rm.setSessionConsent(r, 'pA', true).reason, 'already-started');
+});
+
+test('someone who arrives after the session started goes through Yes and Ready on their own', () => {
+  const r = pair();
+  rm.setSessionConsent(r, 'pA', true);
+  rm.setSessionConsent(r, 'pB', true);
+  rm.setReady(r, 'pA', true);
+  rm.setReady(r, 'pB', true);
+  rm.releaseParticipant('sB'); // B left on purpose
+  assert.equal(rm.isPairAdmitted(r), false);
+  rm.joinRoom(r, 'pC', 'sC', undefined, null, false);
+  assert.equal(rm.getPrecallSnapshot(r, 'pC').phase, 'precall'); // not live just because the session was
+  assert.equal(rm.getPrecallSnapshot(r, 'pA').phase, 'live');
+  assert.equal(rm.setReady(r, 'pC', true).reason, 'consent-required');
+  assert.equal(rm.everyoneConsentedToTranscription(r), false); // C never said Yes: no captions or AI
+  rm.setSessionConsent(r, 'pC', true);
+  assert.equal(rm.setReady(r, 'pC', true).justAdmitted, true);
+  assert.equal(rm.isPairAdmitted(r), true);
+  assert.equal(rm.setMediaReady(r, 'pC').partner, null); // A already did: A's media-ready was recorded earlier
+});
+
+test('a partner who is not connected cannot be waited into starting', () => {
+  const r = pair();
+  rm.setSessionConsent(r, 'pA', true);
+  rm.setSessionConsent(r, 'pB', true);
+  rm.leaveRoom('sB'); // dropped, slot kept
+  rm.setReady(r, 'pA', true);
+  assert.equal(rm.setReady(r, 'pB', true).justStarted, false); // pB has no live connection
+  assert.equal(rm.isSessionStarted(r), false);
+});
+
+test('leaving or dropping on the Ready screen clears ready', () => {
+  const r = pair();
+  rm.setSessionConsent(r, 'pB', true);
+  rm.setReady(r, 'pB', true);
+  assert.equal(rm.getPrecallSnapshot(r, 'pA').partner.ready, true);
+  rm.leaveRoom('sB');
+  const snap = rm.getPrecallSnapshot(r, 'pA');
+  assert.equal(snap.partner.present, false);
+  assert.equal(snap.partner.ready, false);
+  assert.equal(rm.precallNeedsTimer(r), false);
+});
+
+test('cancelling the session ends the pre-call for good', () => {
+  const r = pair();
+  rm.cancelSession(r);
+  assert.equal(rm.isSessionCancelled(r), true);
+  assert.equal(rm.getPrecallSnapshot(r, 'pA').phase, 'cancelled');
+  rm.setSessionConsent(r, 'pA', true);
+  assert.equal(rm.setReady(r, 'pA', true).reason, 'cancelled');
+});
+
+test('the partner card shows first name and college only, and nothing for a private person', () => {
+  const id = { studentId: 's1', studentName: 'Ann Archer', firstName: 'Ann', collegeBranch: 'Alpha, CSE' };
+  const r = pair({ aIdentity: id, bIdentity: { studentId: 's2', studentName: 'Bob Brown' } });
+  assert.deepEqual(rm.getPrecallSnapshot(r, 'pB').partner.card, { anonymous: false, firstName: 'Ann', collegeBranch: 'Alpha, CSE' });
+  assert.deepEqual(rm.getPrecallSnapshot(r, 'pA').partner.card, { anonymous: false, firstName: 'Bob', collegeBranch: null });
+  const p = pair({ aIdentity: id, aPrivate: true });
+  assert.deepEqual(rm.getPrecallSnapshot(p, 'pB').partner.card, { anonymous: true });
+  const anon = pair();
+  assert.deepEqual(rm.getPrecallSnapshot(anon, 'pB').partner.card, { anonymous: true });
+});
+
+test('media-ready pairs only after the session started, once each', () => {
+  const r = pair();
+  assert.equal(rm.setMediaReady(r, 'pA'), null); // not started
+  rm.setSessionConsent(r, 'pA', true);
+  rm.setSessionConsent(r, 'pB', true);
+  rm.setReady(r, 'pA', true);
+  rm.setReady(r, 'pB', true);
+  assert.equal(rm.setMediaReady(r, 'pA').partner, null); // partner not on yet
+  assert.equal(rm.setMediaReady(r, 'pA'), null); // repeat changes nothing
+  assert.equal(rm.setMediaReady(r, 'pB').partner, 'sA');
 });
 
 test('chat messages: trimmed plain text, capped, only from people in the room, history bounded', () => {

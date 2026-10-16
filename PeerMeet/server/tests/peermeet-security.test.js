@@ -30,7 +30,7 @@ function record(name, ok, detail) {
 
 let port;
 let roomManager;
-const hook = { calls: [], failFirst: 0 };
+const hook = { calls: [], failFirst: 0, onboardingSeen: false };
 
 function startHookServer() {
   return new Promise((resolve) => {
@@ -39,12 +39,16 @@ function startHookServer() {
       req.on('data', (c) => (body += c));
       req.on('end', () => {
         hook.calls.push({ url: req.url, headers: req.headers, body });
-        if (hook.failFirst > 0) {
+        // Only the report endpoints are made to fail; the pre-call endpoints answer normally.
+        if (hook.failFirst > 0 && /peer-reports|peer-safety/.test(req.url)) {
           hook.failFirst -= 1;
           res.writeHead(503);
           return res.end('{}');
         }
         res.writeHead(201, { 'Content-Type': 'application/json' });
+        // Answers the pre-call endpoints the way the backend does for two people who both said Yes.
+        if (req.url.endsWith('/session-consent/check')) return res.end('{"all_yes":true,"missing":[]}');
+        if (req.url.endsWith('/onboarding/status')) return res.end(JSON.stringify({ seen: hook.onboardingSeen === true }));
         res.end('{"ok":true}');
       });
     });
@@ -70,7 +74,26 @@ async function startServer(hookPort) {
   if (!port) throw new Error('could not find server port');
 }
 
-const connect = () => ioc(`http://localhost:${port}`, { transports: ['websocket'], forceNew: true, reconnection: false });
+
+/**
+ * Test helper: behave like a person who says Yes, is Ready and has working devices, so tests that are
+ * about something else (tokens, chat, reports) can get a live call. Pre-call tests turn this off.
+ */
+function enableAutoLive(s) {
+  s.on('precall:state', (st) => {
+    // A returning person (refresh, dropped connection) in a session that already started turns media on again.
+    if (st.phase === 'live') return s.emit('session:media-ready', { roomId: st.roomId });
+    if (st.phase !== 'precall' || !st.partner.present) return;
+    if (st.me.consent === null) s.emit('precall:consent', { roomId: st.roomId, answer: true, version: st.consentVersion });
+    else if (st.me.consent === true && !st.me.ready) s.emit('precall:ready', { roomId: st.roomId, devicesOk: true });
+  });
+  s.on('session:go', ({ roomId }) => s.emit('session:media-ready', { roomId }));
+  return s;
+}
+const connect = ({ auto = true } = {}) => {
+  const s = ioc(`http://localhost:${port}`, { transports: ['websocket'], forceNew: true, reconnection: false });
+  return auto ? enableAutoLive(s) : s;
+};
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 function waitConnect(s) {
   return new Promise((resolve, reject) => {
@@ -111,7 +134,7 @@ function mint(studentId, name, room, over = {}) {
 async function newRoom(roomId, hostPid, hostToken) {
   const A = connect();
   await waitConnect(A);
-  A.emit('create-room', { roomId, participantId: hostPid, token: hostToken, keepPrivate: false, transcriptionConsent: true });
+  A.emit('create-room', { roomId, participantId: hostPid, token: hostToken, keepPrivate: false });
   await waitEvent(A, 'room-created');
   return A;
 }
@@ -282,7 +305,7 @@ async function testOnlyTheHostConfiguresTheInterview() {
   const B = connect();
   await waitConnect(B);
   const ready = waitEvent(B, 'ready');
-  B.emit('join-room', { roomId, participantId: 'p-host-b', transcriptionConsent: true });
+  B.emit('join-room', { roomId, participantId: 'p-host-b' });
   await ready;
 
   const hijack = never(A, 'interview:role', 500);
@@ -367,47 +390,6 @@ async function testChatStaysBetweenThePair() {
   record('...and nobody else', await none);
 
   [A, B2, outsider].forEach((x) => x.disconnect());
-  await sleep(80);
-}
-
-// ── consent ──────────────────────────────────────────────────────────────────
-async function testNothingStartsWithoutConsent() {
-  const roomId = `cons-${uid()}`;
-  const A = connect();
-  await waitConnect(A);
-  A.emit('create-room', { roomId, participantId: 'p-con-a', transcriptionConsent: true });
-  await waitEvent(A, 'room-created');
-  const B = connect();
-  await waitConnect(B);
-  const ready = waitEvent(B, 'ready');
-  B.emit('join-room', { roomId, participantId: 'p-con-b' }); // B did NOT consent
-  await ready;
-  record('Consent is recorded per person', roomManager.hasTranscriptionConsent(roomId, 'p-con-a') === true && roomManager.hasTranscriptionConsent(roomId, 'p-con-b') === false);
-
-  const refused = waitEvent(B, 'transcription:error');
-  B.emit('transcription:start', { roomId, mimeType: 'audio/webm' });
-  const err = await refused;
-  record('Transcription does not start for someone who did not agree', /not agreed/.test(err.message));
-
-  const blocked = waitEvent(A, 'interview:error');
-  A.emit('interview:configure', { roomId, config: { domain: 'SQL', whoStarts: 'interviewer' } });
-  record('The AI interview needs BOTH people to have agreed', (await blocked).reason === 'consent-required');
-  record('No interview was set up without consent', !roomManager.getInterview(roomId)?.configured);
-
-  // B reconnects with consent: now it can proceed
-  B.disconnect();
-  await sleep(200);
-  const B2 = connect();
-  await waitConnect(B2);
-  const ready2 = waitEvent(B2, 'ready');
-  B2.emit('join-room', { roomId, participantId: 'p-con-b', transcriptionConsent: true });
-  await ready2;
-  await sleep(1100); // the earlier refused attempt still counts toward the per-event rate limit
-  const role = waitEvent(A, 'interview:role');
-  A.emit('interview:configure', { roomId, config: { domain: 'SQL', whoStarts: 'interviewer' } });
-  record('Once both agreed the interview can be set up', (await role).role === 'interviewer');
-
-  [A, B2].forEach((x) => x.disconnect());
   await sleep(80);
 }
 
@@ -529,10 +511,10 @@ async function runInterview({ roomId, tokenA, tokenB, aPrivate, bPrivate }) {
   const B = connect();
   await waitConnect(A);
   await waitConnect(B);
-  A.emit('create-room', { roomId, participantId: 'p-wh-a', token: tokenA, keepPrivate: aPrivate, transcriptionConsent: true });
+  A.emit('create-room', { roomId, participantId: 'p-wh-a', token: tokenA, keepPrivate: aPrivate });
   await waitEvent(A, 'room-created');
   const ready = waitEvent(B, 'ready');
-  B.emit('join-room', { roomId, participantId: 'p-wh-b', token: tokenB, keepPrivate: bPrivate, transcriptionConsent: true });
+  B.emit('join-room', { roomId, participantId: 'p-wh-b', token: tokenB, keepPrivate: bPrivate });
   await ready;
   const roleA = waitEvent(A, 'interview:role');
   A.emit('interview:configure', { roomId, config: { domain: 'SQL', whoStarts: 'interviewer', durationMinutes: 10 } });
@@ -540,12 +522,19 @@ async function runInterview({ roomId, tokenA, tokenB, aPrivate, bPrivate }) {
   const started = waitEvent(A, 'interview:started');
   A.emit('interview:start', { roomId });
   await started;
+  // The candidate (B) said enough to be judged, so the report goes down the normal path rather than "too short".
+  roomManager.appendTranscriptLine(roomId, {
+    speakerId: 'p-wh-b',
+    text: 'I would add an index on the join column and then check the query plan to confirm the planner uses it, because a full scan gets slower as the table grows.',
+  });
   return { A, B };
 }
 
+/** Only the report deliveries (the pre-call calls to the same stub are not what these tests are about). */
+const reportCalls = () => hook.calls.filter((c) => /peer-reports/.test(c.url));
 async function waitForHook(n, ms = 4000) {
   const end = Date.now() + ms;
-  while (hook.calls.length < n && Date.now() < end) await sleep(40);
+  while (reportCalls().length < n && Date.now() < end) await sleep(40);
 }
 
 async function testWebhookIsSignedAndRetried() {
@@ -563,8 +552,8 @@ async function testWebhookIsSignedAndRetried() {
   A.emit('interview:end', { roomId });
   await waitForHook(2);
 
-  record('A failed delivery (503) is retried', hook.calls.length === 2, `calls=${hook.calls.length}`);
-  const last = hook.calls[hook.calls.length - 1];
+  record('A failed delivery (503) is retried', reportCalls().length === 2, `calls=${reportCalls().length}`);
+  const last = reportCalls()[reportCalls().length - 1];
   const payload = JSON.parse(last.body);
   record('Report payload names the candidate, partner, phase and that it is final', payload.student_id === 'student-B' && payload.partner_student_id === 'student-A' && payload.phase === 1 && payload.final === true && payload.role === 'candidate', JSON.stringify({ ...payload, report: undefined }));
   record('Fallback report is flagged unavailable', payload.unavailable === true);
@@ -595,9 +584,9 @@ async function testSwitchRolesReportIsNotFinalAndOnlyOnce() {
   await switched;
   await waitForHook(1);
   await sleep(200);
-  const payload = JSON.parse(hook.calls[0].body);
+  const payload = JSON.parse(reportCalls()[0].body);
   record('A role-switch report is phase 1 and NOT final', payload.phase === 1 && payload.final === false);
-  record('Exactly one report is sent for the switch', hook.calls.length === 1, `calls=${hook.calls.length}`);
+  record('Exactly one report is sent for the switch', reportCalls().length === 1, `calls=${reportCalls().length}`);
   record('Roles really switched and the phase advanced', roomManager.getInterview(roomId).phase === 1);
   record('The partner who asked for privacy is marked private', payload.partner_private === true);
 
@@ -619,7 +608,6 @@ async function testSwitchRolesReportIsNotFinalAndOnlyOnce() {
     await testOnlyTheHostConfiguresTheInterview();
     await testLeavingFreesTheSlotButDroppingDoesNot();
     await testChatStaysBetweenThePair();
-    await testNothingStartsWithoutConsent();
     await testInMeetingReport();
     await testWebhookIsSignedAndRetried();
     await testSwitchRolesReportIsNotFinalAndOnlyOnce();

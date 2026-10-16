@@ -44,7 +44,9 @@ export default defineConfig({
       reuseExistingServer: true,
       timeout: 60_000,
       env: { PORT: "5001", CLIENT_URL: "http://127.0.0.1:5173", PEERMEET_SHARED_SECRET: "e2e-secret",
-             MIRRACLE_WEBHOOK_URL: "http://127.0.0.1:8000" },
+             MIRRACLE_WEBHOOK_URL: "http://127.0.0.1:8000",
+             // only set when running the "nobody clicks Ready" timeout test (PRECALL_TIMEOUT_E2E=1)
+             ...(process.env.PEERMEET_PRECALL_TIMEOUT_MS ? { PEERMEET_PRECALL_TIMEOUT_MS: process.env.PEERMEET_PRECALL_TIMEOUT_MS } : {}) },
     },
     {
       command: "npx vite --port 5173 --host 127.0.0.1",

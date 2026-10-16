@@ -11,10 +11,10 @@ const fakeSocket = (reply) => ({
   },
 });
 
-test('every reason the backend knows is offered', () => {
+test('the reasons offered are the ones people can choose (no-show has its own button)', () => {
   assert.deepEqual(
     REPORT_REASONS.map((r) => r.id).sort(),
-    ['cheating_or_sharing_questions', 'harassment', 'impersonation', 'inappropriate_content', 'no_show', 'other', 'spam']
+    ['cheating_or_sharing_questions', 'harassment', 'impersonation', 'inappropriate_content', 'not_genuine_effort', 'other', 'rude', 'spam']
   );
 });
 
@@ -23,6 +23,19 @@ test('a reason is required and details are bounded', () => {
   assert.ok(validateReport({ reason: 'bogus', details: '' }));
   assert.ok(validateReport({ reason: 'spam', details: 'x'.repeat(1001) }));
   assert.equal(validateReport({ reason: 'spam', details: 'x'.repeat(1000) }), null);
+});
+
+test('"other" needs a description; every other reason does not', () => {
+  assert.equal(validateReport({ reason: 'other', details: '' }), 'Please describe what happened.');
+  assert.equal(validateReport({ reason: 'other', details: '   ' }), 'Please describe what happened.');
+  assert.equal(validateReport({ reason: 'other', details: 'They kept interrupting' }), null);
+  assert.equal(validateReport({ reason: 'rude', details: '' }), null);
+  assert.equal(validateReport({ reason: 'not_genuine_effort', details: '' }), null);
+});
+
+test('the three reasons that were asked for are all offered', () => {
+  const ids = REPORT_REASONS.map((r) => r.id);
+  for (const id of ['inappropriate_content', 'rude', 'not_genuine_effort', 'other']) assert.ok(ids.includes(id), id);
 });
 
 test('sends only the room, reason, trimmed details and block (never who the reporter is)', async () => {

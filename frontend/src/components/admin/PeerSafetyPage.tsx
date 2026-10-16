@@ -22,7 +22,7 @@ import {
   type PersonRef,
   type ResolveAction,
 } from "@/services/api/admin/peerSafety";
-import { REPORT_REASONS } from "@/services/api/candidate/peerSafety";
+import { REASON_LABELS } from "@/services/api/candidate/peerSafety";
 import { PageHeader } from "./controls";
 import { fmtRelative } from "./format";
 import { ChartSkeleton, EmptyBlock, ErrorBlock } from "./StateViews";
@@ -34,7 +34,7 @@ const TABS: { id: PeerReportStatus | "all"; label: string }[] = [
   { id: "dismissed", label: "Dismissed" },
   { id: "all", label: "All" },
 ];
-const reasonLabel = (id: string) => REPORT_REASONS.find((r) => r.id === id)?.label ?? id;
+const reasonLabel = (id: string) => REASON_LABELS[id] ?? id;
 const person = (p: PersonRef | null) => (p ? p.name || p.email || p.id : "Unknown");
 
 export function PeerSafetyPage() {

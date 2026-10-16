@@ -22,9 +22,8 @@ function DisclosureBanner({ role, phase }) {
       <div className="glass rounded-xl border border-violet-500/30 px-4 py-2 flex items-center gap-3 text-sm max-w-6xl w-full">
         <HiSparkles className="text-violet-300 text-lg flex-shrink-0" />
         <span className="text-slate-200">
-          <span className="font-semibold text-violet-300">AI-assisted interview.</span>{' '}
-          An AI assistant is helping the interviewer with questions and evaluation.
-          Both participants are aware of this.
+          <span className="font-semibold text-violet-300">AI assistance is active.</span>{' '}
+          An AI assistant is helping the interviewer with questions and scoring. Both of you can see this notice.
         </span>
         {roleLabel && (
           <span className="ml-auto text-[11px] px-2 py-1 rounded-full border border-white/10 bg-white/5 text-slate-300 whitespace-nowrap">

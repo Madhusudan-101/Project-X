@@ -38,7 +38,7 @@ from fastapi import APIRouter, Depends, HTTPException, Path
 from pydantic import BaseModel, Field, field_validator
 
 from ...deps import get_current_user, db_client
-from ...services import peer_safety, peer_notify
+from ...services import peer_safety, peer_notify, peer_precall
 from postgrest.exceptions import APIError
 
 logger = logging.getLogger(__name__)
@@ -149,9 +149,13 @@ def _mint_token_for(user_id: str, name: str, room_id: str) -> str:
     if not secret:
         raise HTTPException(status_code=503, detail="PeerMeet integration is not configured")
     now = int(time.time())
+    card = peer_precall.card_fields(user_id)
     payload = {
         "student_id": user_id,
         "name": _clean_name(name),
+        # Shown to the partner on the Ready screen (unless this person chose to stay private).
+        "first_name": card["first_name"],
+        "college_branch": card["college_branch"],
         "room": room_id,
         "aud": "peermeet",
         "jti": uuid.uuid4().hex,
@@ -1092,7 +1096,7 @@ def complete_matchmaking_for_room(room_id: str) -> None:
         logger.exception("matchmaking completion failed | room_id=%s", room_id)
 
 
-NO_SHOW_AFTER = timedelta(minutes=10)
+NO_SHOW_AFTER = peer_precall.NO_SHOW_GRACE
 DAY_REMINDER_LEAD = timedelta(hours=24)
 SOON_REMINDER_LEAD = timedelta(minutes=15)
 
@@ -1156,14 +1160,12 @@ def run_maintenance() -> dict:
         start = _parse_ts(m["scheduled_at"])
         # Somebody came and waited, but the other person never did: a no-show, not just "expired".
         if m["status"] == "waiting" and m.get("first_joiner_id") and now > start + NO_SHOW_AFTER:
-            db_client.table("peer_scheduled_meetings").update(
-                {"status": "no_show", "no_show_at": now.isoformat()}
-            ).eq("id", m["id"]).execute()
-            no_shows += 1
-            try:
-                peer_notify.send_no_show(m, m["first_joiner_id"])
-            except Exception:  # noqa: BLE001
-                logger.exception("no-show email failed")
+            if peer_precall.record_no_show(m):
+                no_shows += 1
+                try:
+                    peer_notify.send_no_show(m, m["first_joiner_id"])
+                except Exception:  # noqa: BLE001
+                    logger.exception("no-show email failed")
             continue
         if now > _meeting_window(m)[1]:
             db_client.table("peer_scheduled_meetings").update({"status": "expired"}).eq("id", m["id"]).execute()

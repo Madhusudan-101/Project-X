@@ -3,7 +3,7 @@ import os
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from .routers.shared import auth, peer_reports, ai_interview_reports
+from .routers.shared import auth, peer_reports, ai_interview_reports, peer_precall as shared_peer_precall
 
 # Without this, every `logger.exception(...)`/`logger.warning(...)` call across
 # the whole backend is a silent no-op — the root logger has no handler
@@ -93,6 +93,7 @@ app.include_router(analyze.router)
 app.include_router(practice.router)
 app.include_router(peer.router)
 app.include_router(peer_reports.router)
+app.include_router(shared_peer_precall.router)
 app.include_router(ai_interview.router)
 app.include_router(ai_interview_reports.router)
 app.include_router(company.router)

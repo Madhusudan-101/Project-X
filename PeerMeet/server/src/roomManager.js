@@ -25,20 +25,37 @@
 
 const rooms = new Map();
 
+function newParticipant(participantId, socketId, identity, keepPrivate) {
+  return {
+    participantId,
+    socketId,
+    identity: identity || null,
+    keepPrivate: !!keepPrivate,
+    consent: null, // null = not answered, true = Yes, false = No (to "may be recorded and reviewed by AI")
+    ready: false, // clicked Ready on the pre-call screen
+    admitted: false, // went through consent + Ready (everyone at the start; a person who arrives later does too)
+    mediaReady: false, // their camera and microphone are on, after the session started
+  };
+}
+
 /**
  * Create a new room and register the first participant.
  * @param {string} roomId
  * @param {string} participantId
  * @param {string} socketId
  */
-function createRoom(roomId, participantId, socketId, identity = null, keepPrivate = false, transcriptionConsent = false) {
+function createRoom(roomId, participantId, socketId, identity = null, keepPrivate = false) {
   rooms.set(roomId, {
     // The first participant is the room host: only they may configure/start an interview.
     hostParticipantId: participantId,
     // A room created with a verified identity token belongs to the dashboard: everyone who joins it
     // must also present a valid token for THIS room (anonymous guests are refused).
     restricted: !!identity,
-    participants: [{ participantId, socketId, identity: identity || null, keepPrivate: !!keepPrivate, transcriptionConsent: !!transcriptionConsent }],
+    participants: [newParticipant(participantId, socketId, identity, keepPrivate)],
+    // The pre-call screen: nothing is sent between people (no WebRTC, no transcription) until both are ready.
+    started: false,
+    cancelled: false,
+    consentVerified: false,
     // ── Interview state (all AI/role data lives server-side) ──────────────
     // This block is additive; existing signaling logic ignores it.
     interview: createInitialInterviewState(),
@@ -532,16 +549,16 @@ function getPublicDisplayName(roomId, participantId) {
   return participant.identity?.studentName || 'Participant';
 }
 
-/** Did this person explicitly agree to live transcription (audio to a third party) and AI feedback? */
+/** Did this person answer Yes to "this session may be recorded and reviewed by AI"? */
 function hasTranscriptionConsent(roomId, participantId) {
   const p = rooms.get(roomId)?.participants.find((x) => x.participantId === participantId);
-  return !!p?.transcriptionConsent;
+  return p?.consent === true;
 }
 
-/** True only when everyone currently in the room agreed. AI feedback processes BOTH people's speech. */
+/** True only when both people in the room said Yes. AI feedback processes BOTH people's speech. */
 function everyoneConsentedToTranscription(roomId) {
   const room = rooms.get(roomId);
-  return !!room && room.participants.length > 0 && room.participants.every((p) => p.transcriptionConsent);
+  return !!room && room.participants.length === 2 && room.participants.every((p) => p.consent === true);
 }
 
 /** Does this participant already hold a slot (with an identity) in the room? Used to let them back in. */
@@ -584,7 +601,7 @@ function getParticipantIdForSocket(roomId, socketId) {
  *   to tell a genuine reconnect apart from a duplicate browser tab (below)
  * @returns {{ success: boolean, reconnected?: boolean, partnerId?: string|null, partnerParticipantId?: string|null, isFull?: boolean, notFound?: boolean, duplicateSession?: boolean }}
  */
-function joinRoom(roomId, participantId, socketId, isSocketAlive, identity = null, keepPrivate = false, transcriptionConsent = null) {
+function joinRoom(roomId, participantId, socketId, isSocketAlive, identity = null, keepPrivate = false) {
   const room = rooms.get(roomId);
 
   if (!room) {
@@ -624,9 +641,6 @@ function joinRoom(roomId, participantId, socketId, isSocketAlive, identity = nul
     if (typeof keepPrivate === 'boolean') {
       existing.keepPrivate = keepPrivate;
     }
-    if (typeof transcriptionConsent === 'boolean') {
-      existing.transcriptionConsent = transcriptionConsent;
-    }
     const partner = room.participants.find((p) => p.participantId !== participantId) || null;
     return {
       success: true,
@@ -641,7 +655,7 @@ function joinRoom(roomId, participantId, socketId, isSocketAlive, identity = nul
   }
 
   const partner = room.participants[0] || null; // the existing participant, before we add the new one
-  room.participants.push({ participantId, socketId, identity: identity || null, keepPrivate: !!keepPrivate, transcriptionConsent: !!transcriptionConsent });
+  room.participants.push(newParticipant(participantId, socketId, identity, keepPrivate));
 
   return {
     success: true,
@@ -683,6 +697,8 @@ function leaveRoom(socketId) {
     const participant = room.participants.find((p) => p.socketId === socketId);
     if (participant) {
       participant.socketId = null;
+      participant.mediaReady = false;
+      if (!room.started) participant.ready = false; // a person who left the screen is no longer ready
 
       const partner = room.participants.find((p) => p.participantId !== participant.participantId);
       const stillHasLiveParticipant = room.participants.some((p) => p.socketId !== null);
@@ -728,6 +744,138 @@ function getRoomSize(roomId) {
   return room ? room.participants.length : 0;
 }
 
+// ── Pre-call ("Get ready") ───────────────────────────────────────────────────
+
+const livePeople = (room) => room.participants.filter((p) => p.socketId);
+
+function participantCard(p) {
+  // Only a first name and college/branch, and only when the person chose to be visible.
+  if (!p || p.keepPrivate || !p.identity) return { anonymous: true };
+  const first = p.identity.firstName || String(p.identity.studentName || '').split(' ')[0] || null;
+  return {
+    anonymous: false,
+    firstName: first || null,
+    collegeBranch: p.identity.collegeBranch || null,
+  };
+}
+
+/** What one person's Ready screen shows. Never includes anything about the partner beyond the card. */
+function getPrecallSnapshot(roomId, participantId) {
+  const room = rooms.get(roomId);
+  if (!room) return null;
+  const me = room.participants.find((p) => p.participantId === participantId);
+  if (!me) return null;
+  const other = room.participants.find((p) => p.participantId !== participantId) || null;
+  return {
+    phase: room.cancelled ? 'cancelled' : room.started && me.admitted ? 'live' : 'precall',
+    me: { consent: me.consent, ready: me.ready, host: room.hostParticipantId === participantId },
+    partner: {
+      present: !!other?.socketId,
+      ready: !!other?.ready || !!(room.started && other?.admitted),
+      card: other ? participantCard(other) : null,
+    },
+  };
+}
+
+/** Record a Yes/No. A person who already answered cannot change it (a No cancels the session). */
+function setSessionConsent(roomId, participantId, answer) {
+  const room = rooms.get(roomId);
+  const p = room?.participants.find((x) => x.participantId === participantId);
+  if (!room || !p) return { ok: false, reason: 'not-in-room' };
+  if (room.cancelled) return { ok: false, reason: 'cancelled' };
+  if (p.admitted) return { ok: false, reason: 'already-started' };
+  if (typeof answer !== 'boolean') return { ok: false, reason: 'bad-answer' };
+  if (p.consent !== null && p.consent !== answer) return { ok: false, reason: 'already-answered' };
+  p.consent = answer;
+  if (answer === false) p.ready = false;
+  return { ok: true };
+}
+
+/**
+ * Mark a person Ready. Needs a Yes on file and working devices. When both people are present and
+ * Ready the session starts. Calling it again changes nothing (a double click is harmless).
+ * @returns {{ ok: boolean, reason?: string, started?: boolean, justStarted?: boolean }}
+ */
+function setReady(roomId, participantId, devicesOk) {
+  const room = rooms.get(roomId);
+  const p = room?.participants.find((x) => x.participantId === participantId);
+  if (!room || !p) return { ok: false, reason: 'not-in-room' };
+  if (room.cancelled) return { ok: false, reason: 'cancelled' };
+  if (room.started && p.admitted) return { ok: true, started: true, justStarted: false, justAdmitted: false };
+  if (p.consent !== true) return { ok: false, reason: 'consent-required' };
+  if (devicesOk !== true) return { ok: false, reason: 'devices-not-ready' };
+  p.ready = true;
+  if (room.started) {
+    // The session is already running and this person arrived later (for example after someone left):
+    // they went through the same Yes + Ready, so they are let in on their own.
+    p.admitted = true;
+    return { ok: true, started: true, justStarted: false, justAdmitted: true };
+  }
+  const live = livePeople(room);
+  if (live.length === 2 && room.participants.length === 2 && room.participants.every((x) => x.ready && x.consent === true)) {
+    room.started = true;
+    for (const x of room.participants) x.admitted = true;
+    return { ok: true, started: true, justStarted: true, justAdmitted: false };
+  }
+  return { ok: true, started: false, justStarted: false, justAdmitted: false };
+}
+
+/** Both people in the room went through consent and Ready: only then may video be exchanged. */
+function isPairAdmitted(roomId) {
+  const room = rooms.get(roomId);
+  return !!room && room.started && room.participants.length === 2 && room.participants.every((p) => p.admitted);
+}
+
+function isSessionStarted(roomId) {
+  return !!rooms.get(roomId)?.started;
+}
+
+function isSessionCancelled(roomId) {
+  return !!rooms.get(roomId)?.cancelled;
+}
+
+/** End the pre-call for both people. The reason is never shared with the partner. */
+function cancelSession(roomId) {
+  const room = rooms.get(roomId);
+  if (!room) return null;
+  room.cancelled = true;
+  for (const p of room.participants) p.ready = false;
+  return room.participants.map((p) => ({ participantId: p.participantId, socketId: p.socketId }));
+}
+
+/** Both people are present (two live connections) and the session has not started. */
+function precallNeedsTimer(roomId) {
+  const room = rooms.get(roomId);
+  return !!room && !room.started && !room.cancelled && livePeople(room).length === 2;
+}
+
+/** After the session started, a person's camera and microphone are on. */
+function setMediaReady(roomId, participantId) {
+  const room = rooms.get(roomId);
+  const p = room?.participants.find((x) => x.participantId === participantId);
+  if (!room || !p || !room.started || !p.admitted || !p.socketId || p.mediaReady) return null; // a repeat changes nothing
+  p.mediaReady = true;
+  const other = room.participants.find((x) => x.participantId !== participantId);
+  return { mine: p.socketId, partner: other?.admitted && other.mediaReady && other.socketId ? other.socketId : null };
+}
+
+function markConsentVerified(roomId) {
+  const room = rooms.get(roomId);
+  if (room) room.consentVerified = true;
+}
+
+function isConsentVerified(roomId) {
+  return !!rooms.get(roomId)?.consentVerified;
+}
+
+function getParticipantsForRoom(roomId) {
+  return (rooms.get(roomId)?.participants || []).map((p) => ({
+    participantId: p.participantId,
+    studentId: p.identity?.studentId || null,
+    socketId: p.socketId,
+  }));
+}
+
 module.exports = {
   createRoom,
   joinRoom,
@@ -763,4 +911,17 @@ module.exports = {
   everyoneConsentedToTranscription,
   isRoomRestricted,
   isParticipantPrivate,
+  // Pre-call
+  getPrecallSnapshot,
+  setSessionConsent,
+  setReady,
+  isSessionStarted,
+  isPairAdmitted,
+  isSessionCancelled,
+  cancelSession,
+  precallNeedsTimer,
+  setMediaReady,
+  markConsentVerified,
+  isConsentVerified,
+  getParticipantsForRoom,
 };

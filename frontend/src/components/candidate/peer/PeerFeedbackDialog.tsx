@@ -23,10 +23,13 @@ export function PeerFeedbackDialog({
   roomId,
   onClose,
   onSaved,
+  onReport,
 }: {
   roomId: string | null;
   onClose: () => void;
   onSaved?: (roomId: string, rating: number) => void;
+  /** Opens the report form for this meeting. When given, a "Report this person" button is shown. */
+  onReport?: (roomId: string) => void;
 }) {
   const [rating, setRating] = useState(0);
   const [tags, setTags] = useState<string[]>([]);
@@ -130,13 +133,31 @@ export function PeerFeedbackDialog({
           </p>
         )}
 
-        <DialogFooter>
-          <Button variant="outline" onClick={onClose} disabled={busy}>
-            Skip
-          </Button>
-          <Button onClick={save} disabled={busy || rating < 1}>
-            {busy && <Loader2 className="mr-2 h-4 w-4 animate-spin" />} Send feedback
-          </Button>
+        <DialogFooter className="sm:justify-between">
+          {onReport && roomId ? (
+            <Button
+              type="button"
+              variant="ghost"
+              className="text-destructive"
+              onClick={() => {
+                onClose();
+                onReport(roomId);
+              }}
+              disabled={busy}
+            >
+              Report this person
+            </Button>
+          ) : (
+            <span />
+          )}
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={onClose} disabled={busy}>
+              Skip
+            </Button>
+            <Button onClick={save} disabled={busy || rating < 1}>
+              {busy && <Loader2 className="mr-2 h-4 w-4 animate-spin" />} Send feedback
+            </Button>
+          </div>
         </DialogFooter>
       </DialogContent>
     </Dialog>

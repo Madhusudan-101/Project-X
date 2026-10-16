@@ -365,6 +365,7 @@ function OverviewTab({ onOpenAiInterview }: { onOpenAiInterview: () => void }) {
   // "How was your session?" for a meeting: opened by ending the session here, by a link from PeerMeet's
   // "meeting ended" page (?peer_feedback=<room>), or by the Rate button in the recent list.
   const [feedbackRoom, setFeedbackRoom] = useState<string | null>(null);
+  const [reportAfterFeedback, setReportAfterFeedback] = useState<string | null>(null);
   const [ratedRooms, setRatedRooms] = useState<Record<string, number>>({});
   useEffect(() => {
     peerSafetyService
@@ -619,9 +620,11 @@ function OverviewTab({ onOpenAiInterview }: { onOpenAiInterview: () => void }) {
 
       <PeerInterviewMatchModal open={peerModalOpen} onOpenChange={setPeerModalOpen} />
       <PeerGuidelinesGate />
+      <PeerReportDialog roomId={reportAfterFeedback} onClose={() => setReportAfterFeedback(null)} />
       <PeerFeedbackDialog
         roomId={feedbackRoom}
         onClose={() => setFeedbackRoom(null)}
+        onReport={setReportAfterFeedback}
         onSaved={(room, rating) => setRatedRooms((r) => ({ ...r, [room]: rating }))}
       />
     </div>

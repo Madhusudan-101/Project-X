@@ -73,6 +73,8 @@ class PeerReportIn(BaseModel):
     final: bool = True
     # True for the placeholder report PeerMeet produces when the AI could not run.
     unavailable: bool = False
+    # True when the candidate said too little to judge: no scores, just an honest note.
+    insufficient: bool = False
     # Did the partner ask to stay anonymous? Unknown (None) is treated as private when displayed.
     partner_private: Optional[bool] = None
 
@@ -134,6 +136,11 @@ async def ingest_peer_report(
     if wanted - known:
         raise HTTPException(status_code=422, detail="Unknown student in report")
 
+    # A session that ended as a no-show never gets a score or a feedback report.
+    ns = db_client.table("peer_scheduled_meetings").select("status").eq("room_id", body.room_id).maybe_single().execute()
+    if (getattr(ns, "data", None) or {}).get("status") == "no_show":
+        raise HTTPException(status_code=409, detail="This session was a no-show: no report is created.")
+
     r = body.report
     row = {
         "room_id": body.room_id,
@@ -154,6 +161,7 @@ async def ingest_peer_report(
         "phase": body.phase,
         "partner_private": body.partner_private,
         "unavailable": body.unavailable,
+        "insufficient": body.insufficient,
     }
 
     try:

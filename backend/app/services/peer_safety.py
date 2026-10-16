@@ -23,6 +23,8 @@ REPORT_REASONS = (
     "cheating_or_sharing_questions",
     "spam",
     "no_show",
+    "rude",
+    "not_genuine_effort",
     "other",
 )
 ANON_NAME = "Anonymous Candidate"
@@ -241,6 +243,8 @@ def file_report(
     """Create a report about the other person in `room_id`. Idempotent per (reporter, reported, room)."""
     if reason not in REPORT_REASONS:
         raise HTTPException(status_code=422, detail="Choose a reason from the list.")
+    if reason == "other" and not (details or "").strip():
+        raise HTTPException(status_code=422, detail="Please describe what happened.")
     partner = partner_in_room(reporter_id, room_id)
     if not partner:
         raise HTTPException(status_code=422, detail="You can only report someone from a meeting you were in.")

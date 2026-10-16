@@ -41,7 +41,14 @@ This is a **practice/mock interview tool**, not a hiring platform — the AI's o
 
 ## Peer-interview experience (Mirracle integration)
 
-Pre-join lobby (device pickers, mic meter, permission help), partner/self video swap, in-call chat, partner mic/camera state, people panel, leave confirmation and an ended screen, scheduled-meeting countdown, and an in-call **Report** that sends the transcript and chat excerpt to Mirracle's moderators. Entry tokens are bound to one room and expire; set `PEERMEET_REQUIRE_TOKEN=1` in production. Report webhooks are HMAC-signed. See `../PEERMEET_SETUP.md` for setup, SQL order, scheduler and the manual test plan.
+1. **Get ready screen.** After matching, both people land on a screen that shows the partner's first name and college/branch only (nothing if they chose to be private), a short respect reminder, your own camera preview with device pickers and a mic meter, and one question: *"This session may be recorded and reviewed by AI for scoring and safety purposes. Continue?"* Ready is disabled until you answer Yes and your camera and microphone work.
+2. **Nothing flows until both are Ready.** The server holds back video pairing, captions and the AI interview until both people have a stored Yes and have clicked Ready (`precall:*` and `session:*` socket events). A No cancels for both (the partner is not told why). Not getting ready in time, leaving, refreshing and double clicks are all handled by the server.
+3. **Consent is stored on the backend** (`peer_session_consents`: person, session, answer, time, wording version). Captions and the AI interview check that both Yes answers exist there before they start.
+4. **In the call.** Chat, partner mic/camera state, people panel, leave confirmation, ended screen, scheduled-meeting countdown, and Report (reasons: inappropriate, rude, not a genuine effort, harassment, impersonation, cheating, spam, other with a description). A report does not end the call.
+5. **AI interview.** The person who started the meeting sets it up once (the server locks it after the first submit and after the session begins). Both people see "AI assistance is active" and their own role. The first time someone is ever made interviewer they get a one-time message (saved per person). The candidate sees a short note. A round with too little candidate speech gets a "too short to judge" report with no scores.
+6. **Partner did not show** (scheduled meetings). After the grace window the waiting person can mark it; the meeting is stored as `no_show` with who was absent and their count goes up (a count only, no penalty, and no report is made).
+
+Entry tokens are bound to one room and expire; set `PEERMEET_REQUIRE_TOKEN=1` in production. Report webhooks are HMAC-signed. See `../PEERMEET_SETUP.md` for setup, SQL order, scheduler and the manual test plan.
 
 ## Architecture
 

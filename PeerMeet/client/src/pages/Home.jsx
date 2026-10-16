@@ -55,6 +55,7 @@ function Home() {
     let autoRoom = null;
     let autoInit = false;
     let autoUntil = null;
+    let autoStart = null;
     // Dashboard opens this tab via `window.open` without `noopener` on
     // purpose (that would return a null Window handle in Chromium/Firefox
     // and break the reserved-tab pattern that keeps the flow at exactly
@@ -85,6 +86,7 @@ function Home() {
       // A room id is used in a URL path and as a server-side room name: only accept a boring one.
       if (autoRoom && !/^[A-Za-z0-9_-]{3,64}$/.test(autoRoom)) autoRoom = null;
       autoUntil = url.searchParams.get('until');
+      autoStart = url.searchParams.get('start');
       autoInit = url.searchParams.get('init') === '1';
       const privateFlag = url.searchParams.get('private') === '1';
       let touched = false;
@@ -108,6 +110,10 @@ function Home() {
         url.searchParams.delete('until');
         touched = true;
       }
+      if (url.searchParams.has('start')) {
+        url.searchParams.delete('start');
+        touched = true;
+      }
       if (url.searchParams.has('private')) {
         setIdentityPrivate(privateFlag);
         url.searchParams.delete('private');
@@ -128,6 +134,7 @@ function Home() {
       const query = new URLSearchParams();
       if (autoInit) query.set('init', 'true');
       if (autoUntil) query.set('until', autoUntil); // the meeting's scheduled end, for the countdown
+      if (autoStart) query.set('start', autoStart); // the scheduled start, for "partner did not show"
       const qs = query.toString();
       navigate(`/room/${autoRoom}${qs ? `?${qs}` : ''}`, { replace: true });
     }

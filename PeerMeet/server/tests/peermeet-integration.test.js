@@ -61,12 +61,28 @@ function record(name, ok, detail) {
   console.log(line);
 }
 
+
+/**
+ * Test helper: behave like a person who says Yes, is Ready and has working devices, so tests that are
+ * about something else (tokens, chat, reports) can get a live call. Pre-call tests turn this off.
+ */
+function enableAutoLive(s) {
+  s.on('precall:state', (st) => {
+    // A returning person (refresh, dropped connection) in a session that already started turns media on again.
+    if (st.phase === 'live') return s.emit('session:media-ready', { roomId: st.roomId });
+    if (st.phase !== 'precall' || !st.partner.present) return;
+    if (st.me.consent === null) s.emit('precall:consent', { roomId: st.roomId, answer: true, version: st.consentVersion });
+    else if (st.me.consent === true && !st.me.ready) s.emit('precall:ready', { roomId: st.roomId, devicesOk: true });
+  });
+  s.on('session:go', ({ roomId }) => s.emit('session:media-ready', { roomId }));
+  return s;
+}
 function connect(overrideUrl) {
-  return ioc(overrideUrl || `http://localhost:${port}`, {
+  return enableAutoLive(ioc(overrideUrl || `http://localhost:${port}`, {
     transports: ['websocket'],
     forceNew: true,
     reconnection: false,
-  });
+  }));
 }
 
 function waitEvent(socket, event, ms = 3000) {
@@ -111,7 +127,27 @@ function mintToken(studentId, name, room) {
   );
 }
 
+async function startBackendStub() {
+  // Stands in for the Mirracle backend's pre-call endpoints (both people said Yes, nothing seen yet).
+  const http = require('http');
+  const srv = http.createServer((req, res) => {
+    req.resume();
+    req.on('end', () => {
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      if (req.url.endsWith('/session-consent/check')) return res.end('{"all_yes":true,"missing":[]}');
+      if (req.url.endsWith('/onboarding/status')) return res.end('{"seen":false}');
+      res.end('{"ok":true}');
+    });
+  });
+  await new Promise((r) => srv.listen(0, '127.0.0.1', r));
+  return srv;
+}
+
+let backendStub;
+
 async function startServer() {
+  backendStub = await startBackendStub();
+  process.env.MIRRACLE_WEBHOOK_URL = `http://127.0.0.1:${backendStub.address().port}`;
   // Require inside the async so all env is set first.
   // eslint-disable-next-line global-require
   const modulePath = path.resolve(__dirname, '..', 'src', 'index.js');
@@ -130,7 +166,7 @@ async function startServer() {
   for (const h of process._getActiveHandles()) {
     if (h && typeof h.address === 'function') {
       const a = h.address();
-      if (a && a.port && a.family) {
+      if (a && a.port && a.family && a.port !== backendStub.address().port) {
         port = a.port;
         httpServer = h;
         break;

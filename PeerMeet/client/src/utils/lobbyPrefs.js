@@ -1,6 +1,6 @@
 /**
- * What a person chose in the pre-join lobby, remembered for this tab and this room only
- * (sessionStorage), so a page refresh goes straight back into the call instead of asking again.
+ * The camera and microphone a person picked on the Ready screen, remembered for this tab and this room
+ * only (sessionStorage), so a refresh in the middle of a call opens the same devices again.
  */
 
 const keyFor = (roomId) => `peermeet:lobby:${roomId}`;
@@ -13,18 +13,17 @@ function safeStorage() {
   }
 }
 
-/** @returns {{ cameraId: string|null, micId: string|null, transcriptionConsent: boolean } | null} */
+/** @returns {{ cameraId: string|null, micId: string|null } | null} */
 export function loadLobby(roomId, storage = safeStorage()) {
   if (!storage || !roomId) return null;
   try {
     const raw = storage.getItem(keyFor(roomId));
     if (!raw) return null;
     const v = JSON.parse(raw);
-    if (!v || v.acceptedGuidelines !== true) return null;
+    if (!v || typeof v !== 'object') return null;
     return {
       cameraId: typeof v.cameraId === 'string' ? v.cameraId : null,
       micId: typeof v.micId === 'string' ? v.micId : null,
-      transcriptionConsent: v.transcriptionConsent === true,
     };
   } catch {
     return null;
@@ -39,13 +38,11 @@ export function saveLobby(roomId, prefs, storage = safeStorage()) {
       JSON.stringify({
         cameraId: prefs.cameraId || null,
         micId: prefs.micId || null,
-        transcriptionConsent: prefs.transcriptionConsent === true,
-        acceptedGuidelines: true,
         at: Date.now(),
       })
     );
   } catch {
-    /* storage unavailable: the lobby simply shows again after a refresh */
+    /* storage unavailable: the default devices are used after a refresh */
   }
 }
 

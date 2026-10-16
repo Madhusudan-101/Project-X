@@ -173,7 +173,7 @@ def _patch(body: dict):
 def _state():
     """Test-only: lets specs assert on what the backend actually stored."""
     return {t: len(rows) for t, rows in db.tables.items()} | {
-        "applications_rows": db.tables.get("applications", []), "peer_matchmaking_tickets_rows": db.tables.get("peer_matchmaking_tickets", []), "peer_user_reports_rows": db.tables.get("peer_user_reports", []), "peer_blocks_rows": db.tables.get("peer_blocks", []), "peer_consents_rows": db.tables.get("peer_consents", []), "students_rows": db.tables.get("students", [])}
+        "applications_rows": db.tables.get("applications", []), "peer_matchmaking_tickets_rows": db.tables.get("peer_matchmaking_tickets", []), "peer_user_reports_rows": db.tables.get("peer_user_reports", []), "peer_blocks_rows": db.tables.get("peer_blocks", []), "peer_consents_rows": db.tables.get("peer_consents", []), "peer_session_consents_rows": db.tables.get("peer_session_consents", []), "peer_user_flags_rows": db.tables.get("peer_user_flags", []), "peer_scheduled_meetings_rows": db.tables.get("peer_scheduled_meetings", []), "peer_interview_reports_rows": db.tables.get("peer_interview_reports", []), "students_rows": db.tables.get("students", [])}
 
 
 if __name__ == "__main__":

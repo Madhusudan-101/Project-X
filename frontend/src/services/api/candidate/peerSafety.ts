@@ -1,14 +1,21 @@
 import { request } from "@/services/api/client";
 
 export const REPORT_REASONS = [
-  { id: "harassment", label: "Harassment or abuse" },
   { id: "inappropriate_content", label: "Inappropriate content or behaviour" },
+  { id: "rude", label: "Rude or disrespectful" },
+  { id: "not_genuine_effort", label: "Not making a genuine effort" },
+  { id: "harassment", label: "Harassment or abuse" },
   { id: "impersonation", label: "Pretending to be someone else" },
   { id: "cheating_or_sharing_questions", label: "Cheating or sharing interview questions" },
   { id: "spam", label: "Spam or off-topic" },
-  { id: "no_show", label: "Did not take part properly" },
-  { id: "other", label: "Something else" },
+  { id: "other", label: "Something else (please describe)" },
 ] as const;
+
+/** Every reason a stored report can have, including one that is no longer offered. For showing, not choosing. */
+export const REASON_LABELS: Record<string, string> = {
+  ...Object.fromEntries(REPORT_REASONS.map((r) => [r.id, r.label])),
+  no_show: "Did not take part properly",
+};
 
 export type ReportReason = (typeof REPORT_REASONS)[number]["id"];
 export const MAX_REPORT_DETAILS = 1000;
@@ -53,6 +60,7 @@ export interface SafetyStatus {
 /** Plain-words problems with a report, or null when it can be sent. */
 export function validateReport(reason: string, details: string): string | null {
   if (!REPORT_REASONS.some((r) => r.id === reason)) return "Choose a reason.";
+  if (reason === "other" && !details.trim()) return "Please describe what happened.";
   if (details.length > MAX_REPORT_DETAILS)
     return `Keep the details under ${MAX_REPORT_DETAILS} characters.`;
   return null;

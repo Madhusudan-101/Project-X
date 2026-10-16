@@ -175,6 +175,9 @@ export function UpcomingMeetings() {
         url.searchParams.set("private", res.keep_private ? "1" : "0");
         const until = untilParam(res.ends_at);
         if (until) url.searchParams.set("until", until);
+        // The scheduled start, so PeerMeet can offer "partner did not show" at the right time.
+        const start = untilParam(res.starts_at);
+        if (start) url.searchParams.set("start", start);
         // Identity token in the fragment — never leaks via Referer / logs
         // / history (see PeerInterviewMatchModal for full rationale).
         url.hash = `token=${encodeURIComponent(res.token)}`;

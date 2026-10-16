@@ -51,13 +51,14 @@ function getFriendlyError(err) {
   }
 }
 
-export function useMediaDevices({ cameraId = null, micId = null } = {}) {
-  // Devices chosen in the lobby; read once so changing them mid-call cannot re-open the camera.
+export function useMediaDevices({ cameraId = null, micId = null, enabled = true } = {}) {
+  // Devices chosen on the Ready screen; read once when media is switched on, so changing them mid-call
+  // cannot re-open the camera. With `enabled` false (the Ready screen) nothing is opened at all.
   const prefsRef = useRef({ cameraId, micId });
   const [stream, setStream] = useState(null);
   // Stable mic source — set once on acquire, never touched by screen share.
   const [micStream, setMicStream] = useState(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(enabled);
   const [error, setError] = useState(null);
   const [isAudioEnabled, setIsAudioEnabled] = useState(true);
   const [isVideoEnabled, setIsVideoEnabled] = useState(true);
@@ -130,6 +131,8 @@ export function useMediaDevices({ cameraId = null, micId = null } = {}) {
 
   // Initialize on mount
   useEffect(() => {
+    if (!enabled) return undefined;
+    prefsRef.current = { cameraId, micId };
     // getUserMedia is async, so on a fast unmount/remount (React StrictMode
     // in development, or any re-run of this effect) the cleanup below fires
     // while the request is still pending — at which point streamRef.current
@@ -157,7 +160,9 @@ export function useMediaDevices({ cameraId = null, micId = null } = {}) {
         cameraStreamRef.current.getTracks().forEach((track) => track.stop());
       }
     };
-  }, [initializeMedia]);
+    // cameraId and micId are read once, when media is switched on.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initializeMedia, enabled]);
 
   // Wrapper so the "Try Again" button's click event is never mistaken for the
   // internal cancellation token that initializeMedia takes.

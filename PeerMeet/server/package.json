@@ -6,8 +6,8 @@
   "scripts": {
     "start": "node src/index.js",
     "dev": "nodemon src/index.js",
-    "test": "node --test tests/roomManager.test.js tests/reportSanitizer.test.js && node tests/peermeet-integration.test.js && node tests/peermeet-security.test.js",
-    "test:unit": "node --test tests/roomManager.test.js tests/reportSanitizer.test.js"
+    "test": "node --test tests/roomManager.test.js tests/reportSanitizer.test.js tests/answerCheck.test.js && node tests/peermeet-integration.test.js && node tests/peermeet-security.test.js && node tests/peermeet-precall.test.js",
+    "test:unit": "node --test tests/roomManager.test.js tests/reportSanitizer.test.js tests/answerCheck.test.js"
   },
   "dependencies": {
     "@deepgram/sdk": "^3.11.2",

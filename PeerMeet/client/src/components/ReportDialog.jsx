@@ -17,7 +17,7 @@ import {
 function ReportDialog({ socket, roomId, onClose, onSubmitted }) {
   const [reason, setReason] = useState('');
   const [details, setDetails] = useState('');
-  const [block, setBlock] = useState(true);
+  const [block, setBlock] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
   const [done, setDone] = useState(false);
@@ -80,6 +80,7 @@ function ReportDialog({ socket, roomId, onClose, onSubmitted }) {
           <form onSubmit={submit}>
             <p className="text-slate-400 text-sm mb-4">
               Tell us what happened. The other person is not told, and reports are reviewed by people.
+              Reporting does not end your call, and you can leave at any time without penalty.
               Please only report real problems: false reports can lead to penalties.
             </p>
 
@@ -103,7 +104,7 @@ function ReportDialog({ socket, roomId, onClose, onSubmitted }) {
             </fieldset>
 
             <label htmlFor="report-details" className="text-sm text-white font-medium">
-              Details (optional)
+              {reason === 'other' ? 'Details (required)' : 'Details (optional)'}
             </label>
             <textarea
               id="report-details"
@@ -117,7 +118,7 @@ function ReportDialog({ socket, roomId, onClose, onSubmitted }) {
 
             <label className="flex items-start gap-2 text-sm text-slate-200 mb-4">
               <input type="checkbox" checked={block} onChange={(e) => setBlock(e.target.checked)} className="mt-1" />
-              <span>Also block this person, so we never match you again.</span>
+              <span>Also block this person and leave the call, so we never match you again.</span>
             </label>
 
             <p className="text-xs text-slate-500 mb-4">

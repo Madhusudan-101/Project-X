@@ -139,6 +139,22 @@ describe("PeerGuidelinesDialog", () => {
 });
 
 describe("PeerFeedbackDialog", () => {
+  it("has a Report button on the feedback screen that hands this room to the report form", async () => {
+    const onReport = vi.fn();
+    const onClose = vi.fn();
+    const user = userEvent.setup();
+    render(<PeerFeedbackDialog roomId="room-9" onClose={onClose} onReport={onReport} />);
+    await user.click(screen.getByRole("button", { name: /report this person/i }));
+    expect(onReport).toHaveBeenCalledWith("room-9");
+    expect(onClose).toHaveBeenCalled();
+    expect(api.saveFeedback).not.toHaveBeenCalled(); // reporting is not rating
+  });
+
+  it("shows no Report button when nothing can handle it", () => {
+    render(<PeerFeedbackDialog roomId="room-9" onClose={() => undefined} />);
+    expect(screen.queryByRole("button", { name: /report this person/i })).toBeNull();
+  });
+
   it("needs a star rating, then sends the rating, tags and note for that room", async () => {
     api.saveFeedback.mockResolvedValue({ ok: true });
     const onSaved = vi.fn();

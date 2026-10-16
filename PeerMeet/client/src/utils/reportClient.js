@@ -6,13 +6,14 @@
  */
 
 export const REPORT_REASONS = [
-  { id: 'harassment', label: 'Harassment or abuse' },
   { id: 'inappropriate_content', label: 'Inappropriate content or behaviour' },
+  { id: 'rude', label: 'Rude or disrespectful' },
+  { id: 'not_genuine_effort', label: 'Not making a genuine effort' },
+  { id: 'harassment', label: 'Harassment or abuse' },
   { id: 'impersonation', label: 'Pretending to be someone else' },
   { id: 'cheating_or_sharing_questions', label: 'Cheating or sharing interview questions' },
   { id: 'spam', label: 'Spam or off-topic' },
-  { id: 'no_show', label: 'Did not take part properly' },
-  { id: 'other', label: 'Something else' },
+  { id: 'other', label: 'Something else (please describe)' },
 ];
 
 export const MAX_DETAILS = 1000;
@@ -30,6 +31,7 @@ export const REPORT_ERRORS = {
 
 export function validateReport({ reason, details }) {
   if (!REPORT_REASONS.some((r) => r.id === reason)) return 'Choose a reason.';
+  if (reason === 'other' && !String(details || '').trim()) return 'Please describe what happened.';
   if (String(details || '').length > MAX_DETAILS) return `Keep the details under ${MAX_DETAILS} characters.`;
   return null;
 }

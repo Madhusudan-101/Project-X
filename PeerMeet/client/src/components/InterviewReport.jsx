@@ -64,10 +64,18 @@ function InterviewReport({ report, isFinal, onClose }) {
           </p>
         )}
 
+        {report.insufficient && (
+          <p role="status" className="text-sm text-amber-100 bg-amber-500/10 border border-amber-500/20 rounded-lg px-3 py-3 mb-4">
+            Your answers were too short to judge, so this round has no score. Answer out loud, in full sentences, and
+            explain your thinking.
+          </p>
+        )}
+
         <div className={`inline-block px-4 py-1.5 rounded-full border text-sm font-semibold mb-4 ${recommendationTone(report.final_recommendation)}`}>
           {report.final_recommendation || 'No recommendation'}
         </div>
 
+        {!report.insufficient && (
         <div className="grid grid-cols-2 md:grid-cols-5 gap-2 mb-5">
           <StatCard label="Overall" value={report.overall_score} />
           <StatCard label="Technical" value={report.technical_score} />
@@ -75,7 +83,9 @@ function InterviewReport({ report, isFinal, onClose }) {
           <StatCard label="Confidence" value={report.confidence_score} />
           <StatCard label="Problem Solving" value={report.problem_solving_score} />
         </div>
+        )}
 
+        {!report.insufficient && (
         <div className="grid md:grid-cols-2 gap-4 mb-4">
           <div>
             <h3 className="text-xs font-semibold text-emerald-300 mb-1">Strengths</h3>
@@ -94,6 +104,7 @@ function InterviewReport({ report, isFinal, onClose }) {
             </ul>
           </div>
         </div>
+        )}
 
         {report.topics_covered?.length > 0 && (
           <div className="mb-4">
@@ -106,7 +117,7 @@ function InterviewReport({ report, isFinal, onClose }) {
           </div>
         )}
 
-        {report.suggestions?.length > 0 && (
+        {!report.insufficient && report.suggestions?.length > 0 && (
           <div className="mb-6">
             <h3 className="text-xs font-semibold text-slate-300 mb-1">Suggestions</h3>
             <ul className="list-disc list-inside space-y-0.5">

@@ -65,6 +65,7 @@ function sanitizeReport(report) {
   out.question_timeline = cleanTimeline(report.question_timeline);
   out.final_recommendation = cleanText(report.final_recommendation, 80) || null;
   if (report.unavailable === true) out.unavailable = true;
+  if (report.insufficient === true) out.insufficient = true;
   return out;
 }
 

@@ -60,9 +60,21 @@ Generate each with `openssl rand -hex 48`.
 - [ ] `PEERMEET_SHARED_SECRET` : same value in the **backend** and the **PeerMeet server**. This is the simple setup.
 - [ ] Optional, stronger: use two secrets instead: `PEERMEET_TOKEN_SECRET` (signs the entry token) and `PEERMEET_WEBHOOK_SECRET` (authenticates reports). Each falls back to the shared one if unset. Set them identically on backend and PeerMeet server.
 
-## 3. Database (Supabase SQL editor): run in this order
+## 3. Database: run the SQL files in this order
 
 Every file is safe to run again.
+
+**From the terminal (no copy-pasting into Supabase):**
+
+```bash
+# Supabase > Project Settings > Database > Connection string (URI), the direct or session-pooler one
+export DATABASE_URL='postgresql://postgres:<password>@db.<project-ref>.supabase.co:5432/postgres'
+./backend/db/run_peer_migrations.sh --dry-run   # lists what would run, in order
+./backend/db/run_peer_migrations.sh             # runs all of them, stops at the first error
+```
+
+It needs `psql` (`brew install libpq` or `apt install postgresql-client`). The script and the list below are the same order.
+You can also still paste each file into the Supabase SQL editor.
 
 1. [ ] `backend/db/apply_peer_matchmaking_and_scheduling.sql` (matchmaking + scheduled meetings; you may already have run it)
 2. [ ] `backend/db/peer_interview_reports_migration.sql`
@@ -72,9 +84,12 @@ Every file is safe to run again.
 6. [ ] `backend/db/peer_feedback_migration.sql` post-meeting ratings
 7. [ ] `backend/db/peer_notifications_migration.sql` reminder bookkeeping, `no_show` status, personal settings
 8. [ ] `backend/db/peer_matching_preferences_migration.sql` topic preference and "avoid people you just met"
+9. [ ] `backend/db/peer_precall_migration.sql` per-session Yes/No consent, no-show count and who was absent, the one-time interviewer message flag, the "rude" and "not genuine effort" report reasons, and the "too short to judge" report flag
 
-They need `profiles` and `public.trigger_set_updated_at()` from your base migrations. All eight were run twice on a scratch
-Postgres 16 and the matcher, constraints and row-level security were checked there.
+They need `profiles` and `public.trigger_set_updated_at()` from your base migrations. All nine were run twice on a scratch
+Postgres 16 and the matcher, constraints and row-level security were checked there (`backend/tests/sql/peer_precall_rls_test.sh`
+re-runs that check on a throwaway database whenever you like: it proves one person cannot read or write another person's consent
+answers, reports or flags).
 
 ## 4. Backend environment (`backend/.env`)
 
@@ -95,6 +110,7 @@ PORT=5001
 CLIENT_URL=https://your-peermeet-client        # comma-separate more than one origin
 PEERMEET_SHARED_SECRET=<step 2>                # same as the backend (or the two split secrets)
 PEERMEET_REQUIRE_TOKEN=1                       # RECOMMENDED for a dashboard-only deployment (see below)
+PEERMEET_PRECALL_TIMEOUT_MS=300000             # optional: how long the Ready screen waits for both people (default 5 minutes)
 MIRRACLE_WEBHOOK_URL=https://your-backend      # no trailing slash; must be reachable from the PeerMeet server
 DEEPGRAM_API_KEY=  GEMINI_API_KEY=  GEMINI_MODEL=gemini-3.6-flash  METERED_API_KEY=
 ```
@@ -172,19 +188,36 @@ saw, the browser console error and the server log around that time.
 - [ ] After the session, **History** and the Recent card show "Anonymous Candidate" for Ben to Ann. Ben's real name appears nowhere on Ann's side (including the report, history and any emails).
 - [ ] A person with no name on their profile is shown as "Peer", never as an email address.
 
-### 9.4 The lobby (before joining)
-- [ ] The PeerMeet tab opens the **"Get ready to join"** screen: live camera preview, microphone level bar that moves when you speak, camera and microphone pickers.
-- [ ] **Join meeting** stays disabled until the rules box is ticked.
-- [ ] "Turn on live captions and AI feedback" is **unticked** for someone who opened a bare link, pre-ticked for signed-in dashboard users, and the text says who receives the audio (Deepgram, Gemini; not stored).
-- [ ] Block the camera in the browser, reload the lobby: a clear message with **browser-specific steps** and a **Try again** button. Allow it, try again: the preview returns.
-- [ ] Unplug or disable the camera: "No camera or microphone was found". Use the camera in another app: "being used by another app".
-- [ ] A refresh inside the meeting goes straight back in (no lobby again).
+### 9.4 The Ready screen (before the call): partner, consent, device check, Ready
+After matching, or after opening a scheduled meeting, both people land on **"Get ready"**. Nothing is shared between them yet.
+- [ ] The screen shows your **own camera preview**, a **microphone level bar** that moves when you speak, and camera and microphone pickers. The preview stays on your device: the partner sees nothing of you yet.
+- [ ] **Your partner** shows their **first name and college/branch only**. A partner who chose to be private shows "They chose to keep their details private." No surname, email or phone anywhere.
+- [ ] A short **be respectful** reminder is shown.
+- [ ] The question reads exactly: *"This session may be recorded and reviewed by AI for scoring and safety purposes. Continue?"* with **Yes, continue** and **No, cancel the session**.
+- [ ] **Ready is disabled** until you answered Yes **and** the camera and microphone work. (Check: no Yes, only devices ok: disabled. Yes but camera blocked: disabled.)
+- [ ] Click **Yes**: "You said Yes." Ann's Yes appears in the table `peer_session_consents` (person, session, answer, time, wording version).
+- [ ] Click **Ready** once: the button changes to "Ready. Waiting for your partner…". The partner sees "Your partner is ready." **No call starts, no "Connected", no video** until the other person is Ready too.
+- [ ] When **both** are Ready, the call starts for both. Double-clicking Ready is harmless.
+- [ ] **No**: the person who said No sees "Session cancelled". The partner sees "Session cancelled" and is **not told why**. Nothing is recorded, no transcript, no AI. The No is stored as a No.
+- [ ] **Partner leaves this screen**: you see "Waiting for your partner to join…" and can wait or Leave.
+- [ ] **Nobody clicks Ready**: after about 5 minutes the screen closes for both with "Not ready in time". A countdown is shown on the screen.
+- [ ] **Refresh on this screen**: your Yes is remembered, your Ready is not (you check devices and click Ready again).
+- [ ] **Refresh during the call** goes straight back into the call.
+- [ ] Block the camera in the browser: a clear message with **browser-specific steps** and **Try again**; Ready stays disabled. "No camera or microphone was found" / "being used by another app" appear for those cases.
+- [ ] **Waiting alone for a scheduled meeting** shows the meeting ID to share.
+
+### 9.4b "Partner did not show" (scheduled meetings only)
+- [ ] Book a meeting with Ben for a few minutes ahead; Ann opens it and waits alone. Before 10 minutes after the scheduled start there is **no** button.
+- [ ] After 10 minutes past the scheduled start, **"Partner did not show"** appears (it says it will not count against Ann). Click it: Ann sees "Marked as a no-show".
+- [ ] In the database: the meeting is `no_show`, `absent_id` is Ben, Ben's `no_show_count` in `peer_user_flags` is 1 (Ann has no row). **No** report or score exists for that session, and no suspension was created.
+- [ ] Ben can no longer join that meeting. An **open** meeting (nobody invited) records nobody as absent and counts nothing.
+- [ ] The scheduler's automatic no-show (section 7) does the same and never double counts after a manual click.
 
 ### 9.5 In the meeting
 - [ ] Partner is the **large video**, you are a **small window**; **Swap** exchanges them.
 - [ ] The partner's mic/camera state shows (mute Ben: Ann sees the muted indicator). **People** tab lists both with state.
 - [ ] **Chat**: messages arrive within a second, unread count shows while the panel is closed, history comes back after a refresh. Send `<b>hi</b>`: it appears as literal text. Try 15 messages in a few seconds: you are slowed down.
-- [ ] **Captions** tab: with both people opted in, live captions appear. With one person not opted in: that person sees "Live captions are off", and the host **cannot** start the AI interview (a message explains it needs both).
+- [ ] **Captions** tab: captions only run after both people said Yes on the Ready screen and the backend has both Yes answers on file. If the backend cannot confirm both, captions and the AI stay off.
 - [ ] Share your screen, then stop with the **browser's own "Stop sharing" bar**: your partner's video returns to your camera (it used to freeze).
 - [ ] Turn your camera off while sharing: the camera button reflects the camera, not the screen.
 - [ ] **Leave** asks "Leave this meeting?"; **Stay** keeps you; **Leave** takes you to **"You left the meeting"** with **Rate this session** and **Rejoin the meeting**.
@@ -192,8 +225,14 @@ saw, the browser console error and the server log around that time.
 - [ ] Scheduled meetings show **"N min left"**, warn at 5 minutes, 1 minute and when the time is up, and never cut the call off.
 
 ### 9.6 AI-assisted interview
-- [ ] With both opted in, the host sees **Interview Setup** after the partner joins; configure it and start. **Both** see the AI disclosure.
-- [ ] Only the interviewer sees the AI panel; the candidate never does. Only the host can set it up; the guest cannot take over.
+- [ ] The **person who started the meeting** sees **Interview Setup** once both cameras are on; the guest never sees it. Choose subject, difficulty, experience, duration and who answers first, then start.
+- [ ] **Setup is once.** After it is submitted the server refuses a second submit ("The setup was already submitted"), a submit from the guest ("Only the person who started the meeting can set it up"), and any edit after the session began ("The session already started"). Try it from a second tab or by reloading: the setup is unchanged.
+- [ ] **Both** people see **"AI assistance is active"** and **their own role** ("You are the interviewer" / "You are the candidate").
+- [ ] The **candidate** sees a short note: answer properly and out loud; one-word or silent answers only produce a report saying the answer was too short to judge. The interviewer does not see that note.
+- [ ] **First time ever as interviewer**: a message appears ("You'll get live suggested questions and live scoring... guide, not a script...") with the glance, pick-one, ask-naturally and topic-map guidance. **Escape and clicking outside do nothing; only "Got it" closes it.**
+- [ ] After "Got it", `peer_user_flags.interviewer_onboarding_seen_at` is set for that person. In a **second session**, on a **different browser or device**, they are interviewer again and are **not** shown it. A person who has never been interviewer sees it the first time they are made interviewer after a **role switch**.
+- [ ] Only the interviewer sees the AI panel; the candidate never does.
+- [ ] **Too-short answers**: start an interview, say nothing (or one word), end it. The candidate's report says **"Your answers were too short to judge"**, shows **no scores**, no strengths or weaknesses, and is saved flagged as insufficient (not as an AI failure). Then do it again and answer properly for a minute: you get a normal scored report.
 - [ ] End the interview (or switch roles): the candidate gets a report that says **"Practice feedback"** (not a hiring verdict). Printing it works (no pop-up).
 - [ ] Switch roles then end: **two** reports, not duplicates, and the meeting completes only at the end.
 
@@ -207,7 +246,9 @@ saw, the browser console error and the server log around that time.
 - [ ] **Settings**: turn off reminders for Ben; he stops getting them while Ann still does. Choose a timezone; emails use it.
 
 ### 9.8 Report, block, suspension and moderation (the safety feature)
-- [ ] In a meeting, **Report** appears only once the other person is there. Send a report with a reason; "also block" is on by default and you leave afterwards.
+- [ ] In a meeting, **Report** appears only once the other person is there. Reasons: inappropriate, rude, not making a genuine effort, harassment, impersonation, cheating, spam, and **Something else** (which requires a description).
+- [ ] **A report does not end the call.** "Also block this person" is **off** by default; ticking it blocks and takes the reporter out of the call. Without it, the reporter can keep going, or leave at any time with no penalty.
+- [ ] The **feedback screen** ("Rate this session", on the dashboard) has a **Report this person** button that opens the same form for that session.
 - [ ] The confirmation says the other person is **not told**. Ben sees nothing in the call.
 - [ ] **Admin → Peer safety**: the report is in the Open queue with reporter and reported names, the reason, "from inside the meeting", the **transcript and chat lines** attached, and the reported person's history.
 - [ ] Reporting from **History** (after a session) works the same and names the room, not a person.
@@ -255,6 +296,12 @@ described.
 - Emails: deliverability (SPF/DKIM on your Resend domain) and wording in a real inbox.
 
 ## 11. Known limits (by design today)
+
+- **"Recorded"**: Mirracle stores no audio or video. The consent question covers what really happens: speech is sent live to Deepgram for captions and the transcript is reviewed by Gemini (AI) for scoring and safety. If you ever add real call recording, it needs its own storage, retention rule and a separate go-ahead.
+- Camera/microphone device state ("both work") is reported by each browser; the server enforces Yes, Ready and "both ready", but cannot itself see a camera.
+- A plain anonymous room (no dashboard sign-in) has no account to store a Yes on, so for those rooms the Yes is held in the meeting server's memory only. Dashboard rooms always use the stored answers. Use `PEERMEET_REQUIRE_TOKEN=1` to allow dashboard rooms only.
+- Someone who arrives into a session that is already running (for example after a partner left on purpose) goes through the same Yes and Ready on their own before they are paired.
+- "Partner did not show" is for scheduled meetings. Instant matches have no scheduled start to measure from.
 
 - **PeerMeet's state is in memory, single instance.** A server restart ends every live call and interview, and two instances behind
   a load balancer will not share rooms. Fix later with a shared store (Redis); not done.

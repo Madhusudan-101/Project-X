@@ -164,6 +164,7 @@ export function PeerHistoryDialog({
         <PeerFeedbackDialog
           roomId={rateRoom}
           onClose={() => setRateRoom(null)}
+          onReport={(room) => setReportRoom(room)}
           onSaved={(room) =>
             setItems((all) =>
               (all ?? []).map((x) => (x.room_id === room ? { ...x, rated: true } : x)),

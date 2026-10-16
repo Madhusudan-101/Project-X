@@ -35,6 +35,12 @@ import { useInterviewAssistant } from '../hooks/useInterviewAssistant.js';
 import { useToast } from '../context/ToastContext.jsx';
 import DisclosureBanner from '../components/DisclosureBanner.jsx';
 import InterviewSetup from '../components/InterviewSetup.jsx';
+import ReadyScreen from '../components/ReadyScreen.jsx';
+import SessionEnded from '../components/SessionEnded.jsx';
+import InterviewerOnboarding from '../components/InterviewerOnboarding.jsx';
+import CandidateNote from '../components/CandidateNote.jsx';
+import { parseStart } from '../utils/precall.js';
+import { loadLobby, saveLobby } from '../utils/lobbyPrefs.js';
 import AssistantPanel from '../components/AssistantPanel.jsx';
 import InterviewCountdown from '../components/InterviewCountdown.jsx';
 import InterviewReport from '../components/InterviewReport.jsx';
@@ -176,8 +182,7 @@ function getOrCreateParticipantId(roomId) {
   }
 }
 
-function MeetingRoom({ lobby = {} }) {
-  const transcriptionConsent = lobby.transcriptionConsent === true;
+function MeetingRoom() {
   const { roomId } = useParams();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
@@ -201,11 +206,25 @@ function MeetingRoom({ lobby = {} }) {
   const [remoteMedia, setRemoteMedia] = useState({ audio: true, video: true });
   // Dashboard meetings pass their scheduled end (?until=<ms>); we show the time left and warn, never cut off.
   const until = useMemo(() => parseUntil(searchParams.get('until')), [searchParams]);
+  // A meeting booked on the dashboard carries its end (and start) time; a plain instant match does not.
+  const isScheduled = until !== null;
+  const startMs = useMemo(() => parseStart(searchParams.get('start')), [searchParams]);
   const [now, setNow] = useState(() => Date.now());
   const lastWarningRef = useRef(null);
   const [roomError, setRoomError] = useState(null); // 'full' | 'not-found'
   const [remoteJoined, setRemoteJoined] = useState(false);
-  const [canTranscribe, setCanTranscribe] = useState(false);
+  // The Ready screen's state from the server, and what the browser keeps beside it.
+  const [precall, setPrecall] = useState(null); // { phase, me, partner, deadlineAt, consentVersion } | null
+  const [precallError, setPrecallError] = useState(null);
+  const [devices, setDevices] = useState(() => loadLobby(roomId) || { cameraId: null, micId: null });
+  const [sessionEnd, setSessionEnd] = useState(null); // 'declined' | 'cancelled' | 'timeout' | 'no-show'
+  const [noShowMessage, setNoShowMessage] = useState(null);
+  const [showOnboarding, setShowOnboarding] = useState(false);
+  const [mediaAnnounce, setMediaAnnounce] = useState(0);
+  // The call itself (camera, microphone, video, captions) only exists once the server says the session is live.
+  const live = precall?.phase === 'live';
+  const isHost = precall?.me?.host === true;
+  const canTranscribe = live;
   // Peer's display name — either their real name or "Anonymous Candidate"
   // depending on THEIR own privacy preference. Server-authoritative; we
   // don't try to derive it client-side.
@@ -232,7 +251,7 @@ function MeetingRoom({ lobby = {} }) {
     setOnScreenShareEnded,
     stopStream,
     retry: retryMedia,
-  } = useMediaDevices({ cameraId: lobby.cameraId, micId: lobby.micId });
+  } = useMediaDevices({ cameraId: devices.cameraId, micId: devices.micId, enabled: live });
 
   // ── WebRTC ─────────────────────────────────────────────────────────────────
   const {
@@ -354,6 +373,11 @@ function MeetingRoom({ lobby = {} }) {
   const [showSetup, setShowSetup] = useState(false);
   const [setupDismissed, setSetupDismissed] = useState(false);
 
+  // The person who started the meeting sets the interview up once both cameras are on.
+  useEffect(() => {
+    if (live && remoteJoined && isHost && !aiAssisted && !setupDismissed && !ended) setShowSetup(true);
+  }, [live, remoteJoined, isHost, aiAssisted, setupDismissed, ended]);
+
   const handleSubmitSetup = useCallback(
     (cfg) => {
       configure(cfg);
@@ -369,14 +393,13 @@ function MeetingRoom({ lobby = {} }) {
     setSetupDismissed(true);
   }, []);
 
-  // ── Register with signaling server once local stream is ready ─────────────
-  // Always try join-room first — the server treats a matching participantId
-  // as a reconnect (reclaiming the same slot/interview role) rather than a
-  // fresh join. If the room genuinely doesn't exist yet, 'room-not-found'
-  // falls back to create-room below (only if we expect to be the creator).
+  // ── Register with the meeting server as soon as the page opens ────────────
+  // Joining only puts you on the Ready screen: no camera, microphone or video is involved until the
+  // server says the session is live. A matching participantId makes this a reconnect (same slot, same
+  // answers) rather than a fresh join. If the room genuinely does not exist yet, 'room-not-found' falls
+  // back to create-room below (only if we expect to be the creator).
   useEffect(() => {
-    if (!localStream || hasJoinedRef.current) return;
-
+    if (hasJoinedRef.current) return;
     hasJoinedRef.current = true;
     debugLog('[MeetingRoom] Emitting join-room:', roomId, 'participantId:', participantId);
     socket.emit('join-room', {
@@ -384,19 +407,22 @@ function MeetingRoom({ lobby = {} }) {
       participantId,
       token: getAuthToken(),
       keepPrivate: getIdentityPrivate(),
-          transcriptionConsent,
     });
-  }, [localStream, roomId, participantId]);
+  }, [roomId, participantId]);
+
+  // Once the session is live and our camera and microphone are on, tell the server so the two of us can
+  // be paired for video. Sent again after any new live state (for example after a reconnect).
+  useEffect(() => {
+    if (live && localStream && socketOnline) socket.emit('session:media-ready', { roomId });
+  }, [live, localStream, roomId, mediaAnnounce, socketOnline]);
 
   // ── Socket event listeners for room state ─────────────────────────────────
   useEffect(() => {
     const handleRoomCreated = ({ roomId: id }) => {
       debugLog('[MeetingRoom] Room created:', id);
-      setCanTranscribe(transcriptionConsent);
     };
 
     const handleReady = ({ initiatorId, partnerDisplayName: pdn } = {}) => {
-      setCanTranscribe(transcriptionConsent);
       // `ready` is delivered when the server knows who our partner is —
       // for a fresh second-participant join, this is the moment BOTH
       // participants exist in the room, so it's the authoritative signal
@@ -413,11 +439,6 @@ function MeetingRoom({ lobby = {} }) {
       setRemoteJoined(true);
       if (pdn) setPartnerDisplayName(pdn);
       addToast('A participant has joined the meeting!', 'success');
-      // Only the creator (initiator) sees the interview setup modal, and only
-      // if they haven't already dismissed or completed it.
-      if (isInitiator && !setupDismissed && transcriptionConsent) {
-        setShowSetup(true);
-      }
     };
 
     const handleUserLeft = () => {
@@ -432,12 +453,10 @@ function MeetingRoom({ lobby = {} }) {
       // silently stealing the original tab's slot — see roomManager.joinRoom.
       if (reason === 'duplicate-session') {
         setRoomError('duplicate');
-        setCanTranscribe(false);
         addToast('This meeting is already open in another tab.', 'error', 0);
         return;
       }
       setRoomError('full');
-      setCanTranscribe(false);
       addToast('This room is full (max 2 participants).', 'error', 0);
     };
 
@@ -452,31 +471,44 @@ function MeetingRoom({ lobby = {} }) {
           participantId,
           token: getAuthToken(),
           keepPrivate: getIdentityPrivate(),
-          transcriptionConsent,
         });
         return;
       }
       setRoomError('not-found');
-      setCanTranscribe(false);
       addToast('Meeting room not found.', 'error', 0);
     };
 
     const handleAuthError = ({ reason } = {}) => {
       // The server refused us entry: our token is for another room, missing, or invalid.
       setRoomError(reason === 'token-required' ? 'auth-required' : 'auth');
-      setCanTranscribe(false);
       addToast('You are not allowed in this meeting.', 'error', 0);
     };
 
     const handleInterviewError = ({ reason } = {}) => {
-      if (reason === 'consent-required') {
-        addToast(
-          'AI feedback needs both people to agree to live transcription. You can still talk without it.',
-          'warning',
-          6000
-        );
-      }
+      const text = {
+        'consent-required': 'AI feedback needs both people to have said Yes. You can still talk without it.',
+        'setup-locked': 'The setup was already submitted, so it cannot be changed.',
+        'not-host': 'Only the person who started the meeting can set it up.',
+        'already-started': 'The session already started, so the setup is locked.',
+      }[reason];
+      if (text) addToast(text, 'warning', 6000);
     };
+
+    // ── The Ready screen, driven by the server ──────────────────────────────
+    const handlePrecallState = (state) => {
+      setPrecall(state);
+      setPrecallError(null);
+      if (state.phase === 'cancelled') setSessionEnd((cur) => cur || 'cancelled');
+      if (state.phase === 'live') setMediaAnnounce((n) => n + 1);
+    };
+    const handlePrecallError = ({ reason } = {}) => setPrecallError(reason || 'unknown');
+    const handleGo = () => setPrecall((cur) => (cur ? { ...cur, phase: 'live' } : cur));
+    const handleCancelled = ({ self, reason } = {}) => {
+      setSessionEnd(self ? 'declined' : reason === 'timeout' ? 'timeout' : 'cancelled');
+    };
+    const handleNoShowMarked = () => setSessionEnd('no-show');
+    const handleNoShowError = ({ message } = {}) => setNoShowMessage(message || 'Could not do that right now. Try again.');
+    const handleOnboarding = () => setShowOnboarding(true);
 
     const handleRoomExists = () => {
       // Lost a create-vs-join race (e.g. duplicate tab) — the room exists
@@ -487,10 +519,16 @@ function MeetingRoom({ lobby = {} }) {
         participantId,
         token: getAuthToken(),
         keepPrivate: getIdentityPrivate(),
-          transcriptionConsent,
       });
     };
 
+    socket.on('precall:state', handlePrecallState);
+    socket.on('precall:error', handlePrecallError);
+    socket.on('session:go', handleGo);
+    socket.on('session:cancelled', handleCancelled);
+    socket.on('no-show:marked', handleNoShowMarked);
+    socket.on('no-show:error', handleNoShowError);
+    socket.on('onboarding:interviewer', handleOnboarding);
     socket.on('room-created', handleRoomCreated);
     socket.on('ready', handleReady);
     socket.on('user-joined', handleUserJoined);
@@ -502,6 +540,13 @@ function MeetingRoom({ lobby = {} }) {
     socket.on('interview:error', handleInterviewError);
 
     return () => {
+      socket.off('precall:state', handlePrecallState);
+      socket.off('precall:error', handlePrecallError);
+      socket.off('session:go', handleGo);
+      socket.off('session:cancelled', handleCancelled);
+      socket.off('no-show:marked', handleNoShowMarked);
+      socket.off('no-show:error', handleNoShowError);
+      socket.off('onboarding:interviewer', handleOnboarding);
       socket.off('auth-error', handleAuthError);
       socket.off('interview:error', handleInterviewError);
       socket.off('room-created', handleRoomCreated);
@@ -512,7 +557,7 @@ function MeetingRoom({ lobby = {} }) {
       socket.off('room-not-found', handleRoomNotFound);
       socket.off('room-exists', handleRoomExists);
     };
-  }, [addToast, isInitiator, setupDismissed, roomId, participantId, transcriptionConsent]);
+  }, [addToast, isInitiator, roomId, participantId]);
 
   // ── Notify when connected ──────────────────────────────────────────────────
   useEffect(() => {
@@ -616,7 +661,6 @@ function MeetingRoom({ lobby = {} }) {
         participantId,
         token: getAuthToken(),
         keepPrivate: getIdentityPrivate(),
-          transcriptionConsent,
       });
 
       stopTranscription();
@@ -654,6 +698,62 @@ function MeetingRoom({ lobby = {} }) {
           </div>
         </div>
       </div>
+    );
+  }
+
+  const dashboardUrl = import.meta.env.VITE_DASHBOARD_URL;
+  const backToDashboard = (() => {
+    try {
+      return dashboardUrl ? new URL('/candidate', dashboardUrl).toString() : null;
+    } catch {
+      return null;
+    }
+  })();
+
+  // The session ended before it began: a No, a timeout, or a no-show.
+  if (sessionEnd) {
+    return (
+      <SessionEnded
+        kind={sessionEnd}
+        backHref={backToDashboard}
+        onBack={() => navigate('/')}
+      />
+    );
+  }
+
+  // The Ready screen: nothing is sent between the two of you until you have both said Yes and clicked Ready.
+  if (!live) {
+    return (
+      <ReadyScreen
+        roomId={roomId}
+        state={precall}
+        error={precallError}
+        online={socketOnline}
+        isPrivate={getIdentityPrivate()}
+        isScheduled={isScheduled}
+        startMs={startMs}
+        noShowMessage={noShowMessage}
+        onConsent={(answer) => {
+          setPrecallError(null);
+          socket.emit('precall:consent', { roomId, answer, version: precall?.consentVersion });
+        }}
+        onReady={(chosen) => {
+          setDevices(chosen);
+          saveLobby(roomId, chosen);
+          setPrecallError(null);
+          socket.emit('precall:ready', { roomId, devicesOk: true });
+        }}
+        onNoShow={() => {
+          setNoShowMessage(null);
+          socket.emit('no-show:mark', { roomId });
+        }}
+        onLeave={() => {
+          socket.emit('leave-room', { roomId });
+          socket.disconnect();
+          if (backToDashboard) window.location.assign(backToDashboard);
+          else navigate('/');
+        }}
+      />
     );
   }
 
@@ -711,6 +811,9 @@ function MeetingRoom({ lobby = {} }) {
 
         {/* ── AI disclosure banner (both participants) ───────────────────── */}
         {aiAssisted && <DisclosureBanner role={role} phase={phase} />}
+
+        {/* ── A short note for the person being interviewed ───────────────── */}
+        {aiAssisted && role === 'candidate' && !ended && <CandidateNote />}
 
         {/* ── Interview countdown (both participants) ────────────────────── */}
         {deadline && !ended && (
@@ -828,7 +931,7 @@ function MeetingRoom({ lobby = {} }) {
                   interimTranscript={interimTranscript}
                   transcriptionError={transcriptionError}
                   isTranscribing={isTranscribing}
-                  canTranscribe={transcriptionConsent}
+                  canTranscribe={live}
                   participantId={participantId}
                   partnerName={partnerDisplayName}
                 />
@@ -889,7 +992,17 @@ function MeetingRoom({ lobby = {} }) {
         />
       )}
 
-      {/* ── Interview setup modal (creator only) ─────────────────────────── */}
+      {/* ── One-time message, the first time you are ever the interviewer ─── */}
+      {showOnboarding && (
+        <InterviewerOnboarding
+          onDismiss={() => {
+            setShowOnboarding(false);
+            socket.emit('onboarding:interviewer-dismiss', { roomId });
+          }}
+        />
+      )}
+
+      {/* ── Interview setup modal (the person who started the meeting) ───── */}
       {showSetup && (
         <InterviewSetup onSubmit={handleSubmitSetup} onSkip={handleSkipSetup} />
       )}

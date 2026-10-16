@@ -13,7 +13,7 @@ describe('ReportDialog', () => {
     expect(screen.getByRole('button', { name: 'Send report' }).disabled).toBe(true);
   });
 
-  it('sends the report over the socket and confirms; blocking is on by default', async () => {
+  it('sends the report over the socket and confirms; blocking is OFF by default so a report never ends the call', async () => {
     const socket = socketThatReplies({ ok: true });
     const onSubmitted = vi.fn();
     const user = userEvent.setup();
@@ -22,9 +22,43 @@ describe('ReportDialog', () => {
     await user.type(screen.getByLabelText(/Details/), 'rude');
     await user.click(screen.getByRole('button', { name: 'Send report' }));
     await screen.findByRole('status');
-    expect(socket.emit).toHaveBeenCalledWith('report-user', { roomId: 'r1', reason: 'harassment', details: 'rude', block: true }, expect.any(Function));
+    expect(socket.emit).toHaveBeenCalledWith('report-user', { roomId: 'r1', reason: 'harassment', details: 'rude', block: false }, expect.any(Function));
+    expect(onSubmitted).toHaveBeenCalledWith({ block: false });
+    expect(screen.queryByText(/will not be matched with them again/)).toBeNull();
+  });
+
+  it('says the call is not ended, and only blocks (which leaves the call) if you tick the box', async () => {
+    const socket = socketThatReplies({ ok: true });
+    const onSubmitted = vi.fn();
+    const user = userEvent.setup();
+    render(<ReportDialog socket={socket} roomId="r1" onClose={() => {}} onSubmitted={onSubmitted} />);
+    expect(screen.getByText(/Reporting does not end your call/)).toBeTruthy();
+    expect(screen.getByLabelText(/Also block this person/).checked).toBe(false);
+    await user.click(screen.getByLabelText('Rude or disrespectful'));
+    await user.click(screen.getByLabelText(/Also block this person/));
+    await user.click(screen.getByRole('button', { name: 'Send report' }));
+    await screen.findByRole('status');
+    expect(socket.emit).toHaveBeenCalledWith('report-user', { roomId: 'r1', reason: 'rude', details: '', block: true }, expect.any(Function));
     expect(onSubmitted).toHaveBeenCalledWith({ block: true });
     expect(screen.getByText(/will not be matched with them again/)).toBeTruthy();
+  });
+
+  it('offers the asked-for reasons, and "Something else" needs a description', async () => {
+    const socket = socketThatReplies({ ok: true });
+    const user = userEvent.setup();
+    render(<ReportDialog socket={socket} roomId="r1" onClose={() => {}} />);
+    for (const label of ['Inappropriate content or behaviour', 'Rude or disrespectful', 'Not making a genuine effort']) {
+      expect(screen.getByLabelText(label)).toBeTruthy();
+    }
+    await user.click(screen.getByLabelText(/Something else/));
+    expect(screen.getByText('Details (required)')).toBeTruthy();
+    await user.click(screen.getByRole('button', { name: 'Send report' }));
+    expect((await screen.findByRole('alert')).textContent).toMatch(/describe what happened/);
+    expect(socket.emit).not.toHaveBeenCalled();
+    await user.type(screen.getByLabelText(/Details/), 'They shared a real question');
+    await user.click(screen.getByRole('button', { name: 'Send report' }));
+    await screen.findByRole('status');
+    expect(socket.emit).toHaveBeenCalledWith('report-user', expect.objectContaining({ reason: 'other', details: 'They shared a real question' }), expect.any(Function));
   });
 
   it('shows a clear message for an anonymous guest and lets them close', async () => {

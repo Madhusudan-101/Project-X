@@ -55,7 +55,7 @@ function EndedScreen() {
             )}
           </div>
           <p className="text-xs text-slate-500 mt-6">
-            Something went wrong in the meeting? Report it from your dashboard under “Recent peer interviews”.
+            Something went wrong in the meeting? Open “Rate this session” above: you can report your partner from there too.
           </p>
         </div>
       </main>

@@ -10,24 +10,23 @@ const memory = () => {
   return { getItem: (k) => (m.has(k) ? m.get(k) : null), setItem: (k, v) => m.set(k, String(v)), removeItem: (k) => m.delete(k) };
 };
 
-test('choices are remembered per room and only after the guidelines were accepted', () => {
+test('the chosen devices are remembered per room', () => {
   const s = memory();
   assert.equal(loadLobby('room-1', s), null);
-  saveLobby('room-1', { cameraId: 'cam', micId: 'mic', transcriptionConsent: true }, s);
-  assert.deepEqual(loadLobby('room-1', s), { cameraId: 'cam', micId: 'mic', transcriptionConsent: true });
+  saveLobby('room-1', { cameraId: 'cam', micId: 'mic' }, s);
+  assert.deepEqual(loadLobby('room-1', s), { cameraId: 'cam', micId: 'mic' });
   assert.equal(loadLobby('room-2', s), null);
   clearLobby('room-1', s);
   assert.equal(loadLobby('room-1', s), null);
 });
 
-test('consent defaults to off and junk or half-written storage is ignored', () => {
+test('half-written or junk storage is ignored, and no consent is ever kept in it', () => {
   const s = memory();
-  saveLobby('r', { cameraId: 'c' }, s);
-  assert.equal(loadLobby('r', s).transcriptionConsent, false);
+  saveLobby('r', { cameraId: 'c', transcriptionConsent: true }, s);
+  assert.deepEqual(loadLobby('r', s), { cameraId: 'c', micId: null });
+  assert.doesNotMatch(s.getItem('peermeet:lobby:r'), /consent|accepted/i); // the server keeps the answer, not the browser
   s.setItem('peermeet:lobby:bad', '{not json');
   assert.equal(loadLobby('bad', s), null);
-  s.setItem('peermeet:lobby:nogl', JSON.stringify({ cameraId: 'c', transcriptionConsent: true }));
-  assert.equal(loadLobby('nogl', s), null); // never accepted the guidelines
   assert.equal(loadLobby('r', null), null);
   assert.doesNotThrow(() => saveLobby('r', {}, null));
 });
