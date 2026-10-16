@@ -40,7 +40,7 @@ export interface OAListItem {
   windowEnd: string | null;
 }
 
-export type CodeLanguage = "javascript" | "python";
+export type CodeLanguage = "javascript" | "python" | "java" | "cpp";
 
 export interface OAProblem {
   id: string;

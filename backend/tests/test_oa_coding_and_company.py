@@ -64,7 +64,7 @@ def seed():
     db.store["oa_problems"] = [
         {"id": "two-sum", "title": "Two Sum", "difficulty": "Easy", "topics": ["Array & Hashing"], "statement_html": "<p>Find two numbers.</p>",
          "constraints_html": "<li>n >= 2</li>", "function_name": "twoSum", "params": ["nums", "target"],
-         "starter_code": {"javascript": "function twoSum(nums, target) {\n}\n"}, "languages": ["javascript", "python"],
+         "starter_code": {"javascript": "function twoSum(nums, target) {\n}\n"}, "languages": ["javascript", "python", "java", "cpp"],
          "validated": True, "active": True},
         {"id": "raw-one", "title": "Raw", "difficulty": "Easy", "topics": [], "statement_html": "<p>x</p>", "constraints_html": "",
          "function_name": "rawOne", "params": ["a"], "starter_code": {}, "languages": ["python"], "validated": False, "active": True},
@@ -172,7 +172,9 @@ as_candidate("stu-1")
 # ── 4. take it ──────────────────────────────────────────────────────
 r = client.post("/candidate/oa/app-1/start").json()
 q = r["section"]["questions"][0]
-check("session carries the problem, html prompt, both languages", q["prompt_format"] == "html" and q["problem"]["languages"] == ["javascript", "python"], q)
+check("session carries the problem, html prompt, all four languages", q["prompt_format"] == "html" and q["problem"]["languages"] == ["javascript", "python", "java", "cpp"], q)
+check("java + c++ starters are typed from the examples", "public int[] twoSum(int[] nums, int target)" in q["starter_code"]["java"]
+      and "vector<int> twoSum(vector<int>& nums, int target)" in q["starter_code"]["cpp"], q["starter_code"])
 check("python starter generated from the signature", "def two_sum(nums, target):" in q["starter_code"]["python"], q["starter_code"])
 check("visible examples shown as 'name = value'", q["problem"]["examples"][0] == {"input": "nums = [2,7,11,15], target = 9", "expected": "[0,1]"}, q["problem"]["examples"])
 body = str(r)
@@ -185,6 +187,14 @@ r = client.post(RUN, json={"language": "python", "source": GOOD_PY}).json()
 check("run: python passes both examples", r["verdict"] == "accepted" and [c["status"] for c in r["cases"]] == ["pass", "pass"], r)
 r = client.post(RUN, json={"language": "javascript", "source": GOOD_JS}).json()
 check("run: javascript passes", r["verdict"] == "accepted", r)
+GOOD_JAVA = "import java.util.*;\nclass Solution { public int[] twoSum(int[] nums, int target) { Map<Integer,Integer> m = new HashMap<>(); for (int i = 0; i < nums.length; i++) { if (m.containsKey(target - nums[i])) return new int[]{m.get(target - nums[i]), i}; m.put(nums[i], i); } return null; } }"
+GOOD_CPP = "class Solution { public: vector<int> twoSum(vector<int>& nums, int target) { unordered_map<int,int> m; for (int i = 0; i < (int)nums.size(); i++) { if (m.count(target - nums[i])) return {m[target - nums[i]], i}; m[nums[i]] = i; } return {}; } };"
+r = client.post(RUN, json={"language": "java", "source": GOOD_JAVA}).json()
+check("run: java passes both examples", r["verdict"] == "accepted" and [c["status"] for c in r["cases"]] == ["pass", "pass"], r)
+r = client.post(RUN, json={"language": "cpp", "source": GOOD_CPP}).json()
+check("run: c++ passes both examples", r["verdict"] == "accepted" and [c["status"] for c in r["cases"]] == ["pass", "pass"], r)
+r = client.post(RUN, json={"language": "java", "source": GOOD_JAVA.replace("return null;", "return null")}).json()
+check("run: java compile error is reported with a line number", r["verdict"] == "compile_error" and "Line 2:" in r["compile_error"], r)
 r = client.post(RUN, json={"language": "python", "source": GOOD_PY, "custom_args": [[1, 5, 9], 14]}).json()
 check("run: custom input returns the real output", r["cases"][-1]["label"] == "Custom" and r["cases"][-1]["actual"] == "[1,2]" and r["cases"][-1]["expected"] is None, r)
 check("run: wrong custom arity → 422", client.post(RUN, json={"language": "python", "source": GOOD_PY, "custom_args": [[1]]}).status_code == 422)
@@ -192,7 +202,7 @@ r = client.post(RUN, json={"language": "python", "source": "def two_sum(:\n"}).j
 check("run: syntax error reported", r["verdict"] == "compile_error" and "SyntaxError" in r["compile_error"], r)
 r = client.post(RUN, json={"language": "python", "source": "def two_sum(n, t):\n    return n[99]\n"}).json()
 check("run: runtime error shown with line", r["verdict"] == "runtime_error" and "IndexError" in r["cases"][0]["error"], r)
-check("run: language not on the problem → 422", client.post(RUN, json={"language": "java", "source": "x"}).status_code == 422)
+check("run: language not on the problem → 422", client.post(RUN, json={"language": "ruby", "source": "x"}).status_code == 422)
 check("run: empty source → 422", client.post(RUN, json={"language": "python", "source": "  "}).status_code == 422)
 check("run is not stored", "oa_submissions" not in db.store or not db.store["oa_submissions"])
 

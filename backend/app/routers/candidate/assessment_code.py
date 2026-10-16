@@ -23,7 +23,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
 from ...deps import db_client, require_candidate_role
-from ...services.candidate import oa_judge
+from ...services.candidate import oa_judge, oa_signature
 from .assessment import (
     _active_attempt,
     _first,
@@ -129,7 +129,8 @@ def _run_judge(problem: dict, language: str, source: str, cases: List[dict]) -> 
     if not source.strip():
         raise HTTPException(status_code=422, detail="Write some code first.")
     try:
-        return oa_judge.judge(language, source, problem["function_name"], cases, problem.get("compare") or "exact")
+        return oa_judge.judge(language, source, problem["function_name"], cases,
+                              problem.get("compare") or "exact", oa_signature.signature_for(problem))
     except oa_judge.JudgeBusy:
         raise HTTPException(status_code=503, detail="The code runner is busy. Try again in a few seconds.")
     except oa_judge.JudgeUnavailable as e:

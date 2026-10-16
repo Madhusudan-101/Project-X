@@ -11,16 +11,22 @@ cd backend/deploy/piston
 docker compose up -d
 ```
 
-## 2. Install the two runtimes the judge uses
+## 2. Install the runtimes the judge uses
+
+Python, JavaScript (node), Java and C++ (`gcc` provides the `c++` runtime).
 
 ```bash
-curl -s localhost:2000/api/v2/packages | grep -E '"language": "(python|javascript)"'   # pick versions
-curl -X POST localhost:2000/api/v2/packages -H 'Content-Type: application/json' \
-     -d '{"language":"python","version":"<version>"}'
-curl -X POST localhost:2000/api/v2/packages -H 'Content-Type: application/json' \
-     -d '{"language":"javascript","version":"<version>"}'
-curl localhost:2000/api/v2/runtimes          # python + javascript (node) must be listed
+curl -s localhost:2000/api/v2/packages | grep -E '"language": "(python|javascript|java|gcc)"'   # pick versions
+for lang in python javascript java gcc; do
+  curl -X POST localhost:2000/api/v2/packages -H 'Content-Type: application/json' \
+       -d "{\"language\":\"$lang\",\"version\":\"<version of $lang>\"}"
+done
+curl localhost:2000/api/v2/runtimes          # python, javascript, java and c++ must be listed
 ```
+
+Java and C++ are compiled inside Piston before they run, so the compose file raises its
+compile/run time limits (Piston's defaults are 10 s / 3 s) and the process cap: the C++
+grader forks once per test case.
 
 (The container needs outbound internet to fetch packages once.)
 
@@ -37,7 +43,8 @@ OA_PISTON_URL=http://localhost:2000        # or your private address
 cd backend && python scripts/check_judge.py
 ```
 
-It runs a correct and a wrong solution in both languages and checks the verdicts.
+It runs a correct solution, a wrong one, a syntax error and an infinite loop in all four
+languages and checks the verdicts.
 
 ## Security
 

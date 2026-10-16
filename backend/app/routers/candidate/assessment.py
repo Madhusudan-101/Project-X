@@ -36,7 +36,7 @@ from pydantic import BaseModel, Field
 
 from ...crud import get_application, get_company_names, get_drive_for_job_college, get_job
 from ...deps import _parse_ts, db_client, require_candidate_role
-from ...services.candidate import oa_judge
+from ...services.candidate import oa_judge, oa_signature
 from ...services.candidate.oa_bank import pick_template, template_sections
 
 log = logging.getLogger(__name__)
@@ -599,6 +599,8 @@ def load_problems(problem_ids: List[str]) -> Dict[str, dict]:
 
 def allowed_languages(problem: dict) -> List[str]:
     langs = [l for l in (problem.get("languages") or []) if l in oa_judge.SUPPORTED_LANGUAGES]
+    if oa_signature.signature_for(problem) is None:   # Java / C++ need argument types
+        langs = [l for l in langs if l not in oa_judge.TYPED_LANGUAGES]
     return langs or ["javascript"]
 
 
@@ -609,8 +611,9 @@ def _question_out(q: dict, problem: Optional[dict], saved: dict) -> OAQuestionOu
     if problem:
         langs = allowed_languages(problem)
         stored = problem.get("starter_code") or {}
+        sig = oa_signature.signature_for(problem)
         starter = {
-            l: oa_judge.starter_for(l, problem["function_name"], problem.get("params") or [], stored)
+            l: oa_judge.starter_for(l, problem["function_name"], problem.get("params") or [], stored, sig)
             for l in langs
         }
         problem_out = OAProblemOut(

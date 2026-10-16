@@ -29,6 +29,19 @@ JS = {
     "syntax": "function twoSum( {",
     "loop": "function twoSum(nums, target) { while (true) {} }",
 }
+SIG = {"params": ["int[]", "int"], "returns": "int[]"}
+JAVA = {
+    "good": "import java.util.*;\nclass Solution { public int[] twoSum(int[] nums, int target) { Map<Integer,Integer> m = new HashMap<>(); for (int i = 0; i < nums.length; i++) { if (m.containsKey(target - nums[i])) return new int[]{m.get(target - nums[i]), i}; m.put(nums[i], i); } return null; } }",
+    "wrong": "class Solution { public int[] twoSum(int[] nums, int target) { return new int[]{0, 0}; } }",
+    "syntax": "class Solution { public int[] twoSum(int[] nums, int target) { return new int[]{0, 0} } }",
+    "loop": "class Solution { public int[] twoSum(int[] nums, int target) { while (true) {} } }",
+}
+CPP = {
+    "good": "class Solution { public: vector<int> twoSum(vector<int>& nums, int target) { unordered_map<int,int> m; for (int i = 0; i < (int)nums.size(); i++) { if (m.count(target - nums[i])) return {m[target - nums[i]], i}; m[nums[i]] = i; } return {}; } };",
+    "wrong": "class Solution { public: vector<int> twoSum(vector<int>& nums, int target) { return {0, 0}; } };",
+    "syntax": "class Solution { public: vector<int> twoSum(vector<int>& nums, int target) { return {0, 0} } };",
+    "loop": "class Solution { public: vector<int> twoSum(vector<int>& nums, int target) { while (true) {} return {}; } };",
+}
 EXPECT = {"good": "accepted", "wrong": "wrong_answer", "syntax": "compile_error", "loop": "time_limit"}
 
 
@@ -38,10 +51,10 @@ def main() -> int:
         print("Judge is not enabled. Set OA_JUDGE_BACKEND=piston and OA_PISTON_URL (see deploy/piston/README.md).")
         return 2
     ok = True
-    for lang, progs in (("python", PY), ("javascript", JS)):
+    for lang, progs in (("python", PY), ("javascript", JS), ("java", JAVA), ("cpp", CPP)):
         for name, src in progs.items():
             try:
-                verdict = j.overall_verdict(j.judge(lang, src, "twoSum", CASES))
+                verdict = j.overall_verdict(j.judge(lang, src, "twoSum", CASES, signature=SIG))
             except Exception as e:  # noqa: BLE001
                 verdict = f"ERROR {e.__class__.__name__}: {e}"
             good = verdict == EXPECT[name]

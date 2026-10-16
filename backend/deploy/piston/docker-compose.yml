@@ -9,6 +9,11 @@ services:
     privileged: true            # required by Piston's isolate sandbox
     ports:
       - "127.0.0.1:2000:2000"   # bind to localhost; put the backend on the same host or a private network
+    environment:
+      # Java / C++ compile before they run; the judge sends a 20 s compile and 10 s run limit.
+      PISTON_COMPILE_TIMEOUT: "30000"
+      PISTON_RUN_TIMEOUT: "15000"
+      PISTON_MAX_PROCESS_COUNT: "256"      # the C++ grader forks once per test case
     volumes:
       - piston_packages:/piston/packages
     tmpfs:

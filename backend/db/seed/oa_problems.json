@@ -19,7 +19,9 @@
   },
   "languages": [
    "javascript",
-   "python"
+   "python",
+   "java",
+   "cpp"
   ],
   "compare": "exact",
   "validated": true,
@@ -95,7 +97,15 @@
     "expected": -2,
     "is_visible": false
    }
-  ]
+  ],
+  "signature": {
+   "params": [
+    "int[]",
+    "int"
+   ],
+   "returns": "int",
+   "guessed": []
+  }
  },
  {
   "id": "alien-dictionary",
@@ -116,7 +126,9 @@
   },
   "languages": [
    "javascript",
-   "python"
+   "python",
+   "java",
+   "cpp"
   ],
   "compare": "exact",
   "validated": false,
@@ -185,7 +197,14 @@
     "expected": "a",
     "is_visible": false
    }
-  ]
+  ],
+  "signature": {
+   "params": [
+    "string[]"
+   ],
+   "returns": "string",
+   "guessed": []
+  }
  },
  {
   "id": "assign-cookies",
@@ -207,7 +226,9 @@
   },
   "languages": [
    "javascript",
-   "python"
+   "python",
+   "java",
+   "cpp"
   ],
   "compare": "exact",
   "validated": true,
@@ -284,7 +305,15 @@
     "expected": 0,
     "is_visible": false
    }
-  ]
+  ],
+  "signature": {
+   "params": [
+    "int[]",
+    "int[]"
+   ],
+   "returns": "int",
+   "guessed": []
+  }
  },
  {
   "id": "asteroid-collision",
@@ -305,7 +334,9 @@
   },
   "languages": [
    "javascript",
-   "python"
+   "python",
+   "java",
+   "cpp"
   ],
   "compare": "exact",
   "validated": true,
@@ -394,7 +425,14 @@
     ],
     "is_visible": false
    }
-  ]
+  ],
+  "signature": {
+   "params": [
+    "int[]"
+   ],
+   "returns": "int[]",
+   "guessed": []
+  }
  },
  {
   "id": "backspace-string-compare",
@@ -416,7 +454,9 @@
   },
   "languages": [
    "javascript",
-   "python"
+   "python",
+   "java",
+   "cpp"
   ],
   "compare": "exact",
   "validated": true,
@@ -469,7 +509,15 @@
     "expected": true,
     "is_visible": false
    }
-  ]
+  ],
+  "signature": {
+   "params": [
+    "string",
+    "string"
+   ],
+   "returns": "bool",
+   "guessed": []
+  }
  },
  {
   "id": "basic-calculator",
@@ -490,7 +538,9 @@
   },
   "languages": [
    "javascript",
-   "python"
+   "python",
+   "java",
+   "cpp"
   ],
   "compare": "exact",
   "validated": true,
@@ -537,7 +587,14 @@
     "expected": 3,
     "is_visible": false
    }
-  ]
+  ],
+  "signature": {
+   "params": [
+    "string"
+   ],
+   "returns": "int",
+   "guessed": []
+  }
  },
  {
   "id": "best-time-to-buy-and-sell-stock-ii",
@@ -558,7 +615,9 @@
   },
   "languages": [
    "javascript",
-   "python"
+   "python",
+   "java",
+   "cpp"
   ],
   "compare": "exact",
   "validated": true,
@@ -638,7 +697,14 @@
     "expected": 8,
     "is_visible": false
    }
-  ]
+  ],
+  "signature": {
+   "params": [
+    "int[]"
+   ],
+   "returns": "int",
+   "guessed": []
+  }
  },
  {
   "id": "best-time-to-buy-and-sell-stock-iii",
@@ -659,7 +725,9 @@
   },
   "languages": [
    "javascript",
-   "python"
+   "python",
+   "java",
+   "cpp"
   ],
   "compare": "exact",
   "validated": true,
@@ -733,7 +801,14 @@
     "expected": 13,
     "is_visible": false
    }
-  ]
+  ],
+  "signature": {
+   "params": [
+    "int[]"
+   ],
+   "returns": "int",
+   "guessed": []
+  }
  },
  {
   "id": "best-time-to-buy-and-sell-stock-iv",
@@ -755,7 +830,9 @@
   },
   "languages": [
    "javascript",
-   "python"
+   "python",
+   "java",
+   "cpp"
   ],
   "compare": "exact",
   "validated": true,
@@ -824,7 +901,15 @@
     "expected": 4,
     "is_visible": false
    }
-  ]
+  ],
+  "signature": {
+   "params": [
+    "int",
+    "int[]"
+   ],
+   "returns": "int",
+   "guessed": []
+  }
  },
  {
   "id": "best-time-to-buy-and-sell-stock-with-cooldown",
@@ -845,7 +930,9 @@
   },
   "languages": [
    "javascript",
-   "python"
+   "python",
+   "java",
+   "cpp"
   ],
   "compare": "exact",
   "validated": true,
@@ -920,7 +1007,14 @@
     "expected": 0,
     "is_visible": false
    }
-  ]
+  ],
+  "signature": {
+   "params": [
+    "int[]"
+   ],
+   "returns": "int",
+   "guessed": []
+  }
  },
  {
   "id": "best-time-to-buy-and-sell-stock",
@@ -941,7 +1035,9 @@
   },
   "languages": [
    "javascript",
-   "python"
+   "python",
+   "java",
+   "cpp"
   ],
   "compare": "exact",
   "validated": true,
@@ -1023,7 +1119,14 @@
     "expected": 8,
     "is_visible": false
    }
-  ]
+  ],
+  "signature": {
+   "params": [
+    "int[]"
+   ],
+   "returns": "int",
+   "guessed": []
+  }
  },
  {
   "id": "binary-search",
@@ -1045,7 +1148,9 @@
   },
   "languages": [
    "javascript",
-   "python"
+   "python",
+   "java",
+   "cpp"
   ],
   "compare": "exact",
   "validated": true,
@@ -1132,7 +1237,15 @@
     "expected": 6,
     "is_visible": false
    }
-  ]
+  ],
+  "signature": {
+   "params": [
+    "int[]",
+    "int"
+   ],
+   "returns": "int",
+   "guessed": []
+  }
  },
  {
   "id": "bitwise-and-of-numbers-range",
@@ -1154,7 +1267,9 @@
   },
   "languages": [
    "javascript",
-   "python"
+   "python",
+   "java",
+   "cpp"
   ],
   "compare": "exact",
   "validated": true,
@@ -1207,7 +1322,15 @@
     "expected": 0,
     "is_visible": false
    }
-  ]
+  ],
+  "signature": {
+   "params": [
+    "int",
+    "int"
+   ],
+   "returns": "int",
+   "guessed": []
+  }
  },
  {
   "id": "boats-to-save-people",
@@ -1229,7 +1352,9 @@
   },
   "languages": [
    "javascript",
-   "python"
+   "python",
+   "java",
+   "cpp"
   ],
   "compare": "exact",
   "validated": true,
@@ -1297,7 +1422,15 @@
     "expected": 2,
     "is_visible": false
    }
-  ]
+  ],
+  "signature": {
+   "params": [
+    "int[]",
+    "int"
+   ],
+   "returns": "int",
+   "guessed": []
+  }
  },
  {
   "id": "candy",
@@ -1318,7 +1451,9 @@
   },
   "languages": [
    "javascript",
-   "python"
+   "python",
+   "java",
+   "cpp"
   ],
   "compare": "exact",
   "validated": true,
@@ -1378,7 +1513,14 @@
     "expected": 6,
     "is_visible": false
    }
-  ]
+  ],
+  "signature": {
+   "params": [
+    "int[]"
+   ],
+   "returns": "int",
+   "guessed": []
+  }
  },
  {
   "id": "capacity-to-ship-packages-within-d-days",
@@ -1400,7 +1542,9 @@
   },
   "languages": [
    "javascript",
-   "python"
+   "python",
+   "java",
+   "cpp"
   ],
   "compare": "exact",
   "validated": true,
@@ -1489,7 +1633,15 @@
     "expected": 1,
     "is_visible": false
    }
-  ]
+  ],
+  "signature": {
+   "params": [
+    "int[]",
+    "int"
+   ],
+   "returns": "int",
+   "guessed": []
+  }
  },
  {
   "id": "car-fleet",
@@ -1512,7 +1664,9 @@
   },
   "languages": [
    "javascript",
-   "python"
+   "python",
+   "java",
+   "cpp"
   ],
   "compare": "exact",
   "validated": true,
@@ -1602,7 +1756,16 @@
     "expected": 3,
     "is_visible": false
    }
-  ]
+  ],
+  "signature": {
+   "params": [
+    "int",
+    "int[]",
+    "int[]"
+   ],
+   "returns": "int",
+   "guessed": []
+  }
  },
  {
   "id": "car-pooling",
@@ -1624,7 +1787,9 @@
   },
   "languages": [
    "javascript",
-   "python"
+   "python",
+   "java",
+   "cpp"
   ],
   "compare": "exact",
   "validated": true,
@@ -1724,7 +1889,15 @@
     "expected": true,
     "is_visible": false
    }
-  ]
+  ],
+  "signature": {
+   "params": [
+    "int[][]",
+    "int"
+   ],
+   "returns": "bool",
+   "guessed": []
+  }
  },
  {
   "id": "cheapest-flights-within-k-stops",
@@ -1749,7 +1922,9 @@
   },
   "languages": [
    "javascript",
-   "python"
+   "python",
+   "java",
+   "cpp"
   ],
   "compare": "exact",
   "validated": true,
@@ -1884,7 +2059,18 @@
     "expected": 100,
     "is_visible": false
    }
-  ]
+  ],
+  "signature": {
+   "params": [
+    "int",
+    "int[][]",
+    "int",
+    "int",
+    "int"
+   ],
+   "returns": "int",
+   "guessed": []
+  }
  },
  {
   "id": "cherry-pickup",
@@ -1905,7 +2091,9 @@
   },
   "languages": [
    "javascript",
-   "python"
+   "python",
+   "java",
+   "cpp"
   ],
   "compare": "exact",
   "validated": true,
@@ -2022,7 +2210,14 @@
     "expected": 0,
     "is_visible": false
    }
-  ]
+  ],
+  "signature": {
+   "params": [
+    "int[][]"
+   ],
+   "returns": "int",
+   "guessed": []
+  }
  },
  {
   "id": "climbing-stairs",
@@ -2043,7 +2238,9 @@
   },
   "languages": [
    "javascript",
-   "python"
+   "python",
+   "java",
+   "cpp"
   ],
   "compare": "exact",
   "validated": true,
@@ -2090,7 +2287,14 @@
     "expected": 10946,
     "is_visible": false
    }
-  ]
+  ],
+  "signature": {
+   "params": [
+    "int"
+   ],
+   "returns": "int",
+   "guessed": []
+  }
  },
  {
   "id": "coin-change-ii",
@@ -2112,7 +2316,9 @@
   },
   "languages": [
    "javascript",
-   "python"
+   "python",
+   "java",
+   "cpp"
   ],
   "compare": "exact",
   "validated": true,
@@ -2168,7 +2374,15 @@
     "expected": 3,
     "is_visible": false
    }
-  ]
+  ],
+  "signature": {
+   "params": [
+    "int",
+    "int[]"
+   ],
+   "returns": "int",
+   "guessed": []
+  }
  },
  {
   "id": "coin-change",
@@ -2190,7 +2404,9 @@
   },
   "languages": [
    "javascript",
-   "python"
+   "python",
+   "java",
+   "cpp"
   ],
   "compare": "exact",
   "validated": true,
@@ -2253,7 +2469,15 @@
     "expected": 20,
     "is_visible": false
    }
-  ]
+  ],
+  "signature": {
+   "params": [
+    "int[]",
+    "int"
+   ],
+   "returns": "int",
+   "guessed": []
+  }
  },
  {
   "id": "combination-sum-ii",
@@ -2275,7 +2499,9 @@
   },
   "languages": [
    "javascript",
-   "python"
+   "python",
+   "java",
+   "cpp"
   ],
   "compare": "unordered",
   "validated": true,
@@ -2383,7 +2609,15 @@
     "expected": [],
     "is_visible": false
    }
-  ]
+  ],
+  "signature": {
+   "params": [
+    "int[]",
+    "int"
+   ],
+   "returns": "int[][]",
+   "guessed": []
+  }
  },
  {
   "id": "combination-sum-iv",
@@ -2405,7 +2639,9 @@
   },
   "languages": [
    "javascript",
-   "python"
+   "python",
+   "java",
+   "cpp"
   ],
   "compare": "exact",
   "validated": true,
@@ -2465,7 +2701,15 @@
     "expected": 6,
     "is_visible": false
    }
-  ]
+  ],
+  "signature": {
+   "params": [
+    "int[]",
+    "int"
+   ],
+   "returns": "int",
+   "guessed": []
+  }
  },
  {
   "id": "combination-sum",
@@ -2487,7 +2731,9 @@
   },
   "languages": [
    "javascript",
-   "python"
+   "python",
+   "java",
+   "cpp"
   ],
   "compare": "unordered",
   "validated": true,
@@ -2589,7 +2835,15 @@
     ],
     "is_visible": false
    }
-  ]
+  ],
+  "signature": {
+   "params": [
+    "int[]",
+    "int"
+   ],
+   "returns": "int[][]",
+   "guessed": []
+  }
  },
  {
   "id": "compare-version-numbers",
@@ -2611,7 +2865,9 @@
   },
   "languages": [
    "javascript",
-   "python"
+   "python",
+   "java",
+   "cpp"
   ],
   "compare": "exact",
   "validated": true,
@@ -2664,7 +2920,15 @@
     "expected": 0,
     "is_visible": false
    }
-  ]
+  ],
+  "signature": {
+   "params": [
+    "string",
+    "string"
+   ],
+   "returns": "int",
+   "guessed": []
+  }
  },
  {
   "id": "container-with-most-water",
@@ -2685,7 +2949,9 @@
   },
   "languages": [
    "javascript",
-   "python"
+   "python",
+   "java",
+   "cpp"
   ],
   "compare": "exact",
   "validated": true,
@@ -2753,7 +3019,14 @@
     "expected": 4,
     "is_visible": false
    }
-  ]
+  ],
+  "signature": {
+   "params": [
+    "int[]"
+   ],
+   "returns": "int",
+   "guessed": []
+  }
  },
  {
   "id": "contains-duplicate",
@@ -2774,7 +3047,9 @@
   },
   "languages": [
    "javascript",
-   "python"
+   "python",
+   "java",
+   "cpp"
   ],
   "compare": "exact",
   "validated": true,
@@ -2849,7 +3124,14 @@
     "expected": true,
     "is_visible": false
    }
-  ]
+  ],
+  "signature": {
+   "params": [
+    "int[]"
+   ],
+   "returns": "bool",
+   "guessed": []
+  }
  },
  {
   "id": "continuous-subarray-sum",
@@ -2871,7 +3153,9 @@
   },
   "languages": [
    "javascript",
-   "python"
+   "python",
+   "java",
+   "cpp"
   ],
   "compare": "exact",
   "validated": true,
@@ -2951,7 +3235,15 @@
     "expected": true,
     "is_visible": false
    }
-  ]
+  ],
+  "signature": {
+   "params": [
+    "int[]",
+    "int"
+   ],
+   "returns": "bool",
+   "guessed": []
+  }
  },
  {
   "id": "count-and-say",
@@ -2972,7 +3264,9 @@
   },
   "languages": [
    "javascript",
-   "python"
+   "python",
+   "java",
+   "cpp"
   ],
   "compare": "exact",
   "validated": true,
@@ -3019,7 +3313,14 @@
     "expected": "312211",
     "is_visible": false
    }
-  ]
+  ],
+  "signature": {
+   "params": [
+    "int"
+   ],
+   "returns": "string",
+   "guessed": []
+  }
  },
  {
   "id": "counting-bits",
@@ -3040,7 +3341,9 @@
   },
   "languages": [
    "javascript",
-   "python"
+   "python",
+   "java",
+   "cpp"
   ],
   "compare": "exact",
   "validated": true,
@@ -3133,7 +3436,14 @@
     ],
     "is_visible": false
    }
-  ]
+  ],
+  "signature": {
+   "params": [
+    "int"
+   ],
+   "returns": "int[]",
+   "guessed": []
+  }
  },
  {
   "id": "course-schedule",
@@ -3155,7 +3465,9 @@
   },
   "languages": [
    "javascript",
-   "python"
+   "python",
+   "java",
+   "cpp"
   ],
   "compare": "exact",
   "validated": true,
@@ -3269,7 +3581,15 @@
     "expected": true,
     "is_visible": false
    }
-  ]
+  ],
+  "signature": {
+   "params": [
+    "int",
+    "int[][]"
+   ],
+   "returns": "bool",
+   "guessed": []
+  }
  },
  {
   "id": "critical-connections-in-a-network",
@@ -3291,7 +3611,9 @@
   },
   "languages": [
    "javascript",
-   "python"
+   "python",
+   "java",
+   "cpp"
   ],
   "compare": "unordered",
   "validated": true,
@@ -3432,7 +3754,15 @@
     ],
     "is_visible": false
    }
-  ]
+  ],
+  "signature": {
+   "params": [
+    "int",
+    "int[][]"
+   ],
+   "returns": "int[][]",
+   "guessed": []
+  }
  },
  {
   "id": "daily-temperatures",
@@ -3453,7 +3783,9 @@
   },
   "languages": [
    "javascript",
-   "python"
+   "python",
+   "java",
+   "cpp"
   ],
   "compare": "exact",
   "validated": true,
@@ -3570,7 +3902,14 @@
     ],
     "is_visible": false
    }
-  ]
+  ],
+  "signature": {
+   "params": [
+    "int[]"
+   ],
+   "returns": "int[]",
+   "guessed": []
+  }
  },
  {
   "id": "decode-string",
@@ -3591,7 +3930,9 @@
   },
   "languages": [
    "javascript",
-   "python"
+   "python",
+   "java",
+   "cpp"
   ],
   "compare": "exact",
   "validated": true,
@@ -3638,7 +3979,14 @@
     "expected": "aaaaaaaaaa",
     "is_visible": false
    }
-  ]
+  ],
+  "signature": {
+   "params": [
+    "string"
+   ],
+   "returns": "string",
+   "guessed": []
+  }
  },
  {
   "id": "decode-ways",
@@ -3659,7 +4007,9 @@
   },
   "languages": [
    "javascript",
-   "python"
+   "python",
+   "java",
+   "cpp"
   ],
   "compare": "exact",
   "validated": true,
@@ -3713,7 +4063,14 @@
     "expected": 0,
     "is_visible": false
    }
-  ]
+  ],
+  "signature": {
+   "params": [
+    "string"
+   ],
+   "returns": "int",
+   "guessed": []
+  }
  },
  {
   "id": "delete-and-earn",
@@ -3734,7 +4091,9 @@
   },
   "languages": [
    "javascript",
-   "python"
+   "python",
+   "java",
+   "cpp"
   ],
   "compare": "exact",
   "validated": true,
@@ -3817,7 +4176,14 @@
     "expected": 37,
     "is_visible": false
    }
-  ]
+  ],
+  "signature": {
+   "params": [
+    "int[]"
+   ],
+   "returns": "int",
+   "guessed": []
+  }
  },
  {
   "id": "diagonal-traverse",
@@ -3838,7 +4204,9 @@
   },
   "languages": [
    "javascript",
-   "python"
+   "python",
+   "java",
+   "cpp"
   ],
   "compare": "exact",
   "validated": true,
@@ -3954,7 +4322,14 @@
     ],
     "is_visible": false
    }
-  ]
+  ],
+  "signature": {
+   "params": [
+    "int[][]"
+   ],
+   "returns": "int[]",
+   "guessed": []
+  }
  },
  {
   "id": "distinct-subsequences",
@@ -3976,7 +4351,9 @@
   },
   "languages": [
    "javascript",
-   "python"
+   "python",
+   "java",
+   "cpp"
   ],
   "compare": "exact",
   "validated": true,
@@ -4029,7 +4406,15 @@
     "expected": 6,
     "is_visible": false
    }
-  ]
+  ],
+  "signature": {
+   "params": [
+    "string",
+    "string"
+   ],
+   "returns": "int",
+   "guessed": []
+  }
  },
  {
   "id": "domino-and-tromino-tiling",
@@ -4050,7 +4435,9 @@
   },
   "languages": [
    "javascript",
-   "python"
+   "python",
+   "java",
+   "cpp"
   ],
   "compare": "exact",
   "validated": true,
@@ -4097,7 +4484,14 @@
     "expected": 312342182,
     "is_visible": false
    }
-  ]
+  ],
+  "signature": {
+   "params": [
+    "int"
+   ],
+   "returns": "int",
+   "guessed": []
+  }
  },
  {
   "id": "edit-distance",
@@ -4119,7 +4513,9 @@
   },
   "languages": [
    "javascript",
-   "python"
+   "python",
+   "java",
+   "cpp"
   ],
   "compare": "exact",
   "validated": true,
@@ -4172,7 +4568,15 @@
     "expected": 3,
     "is_visible": false
    }
-  ]
+  ],
+  "signature": {
+   "params": [
+    "string",
+    "string"
+   ],
+   "returns": "int",
+   "guessed": []
+  }
  },
  {
   "id": "employee-free-time",
@@ -4193,7 +4597,9 @@
   },
   "languages": [
    "javascript",
-   "python"
+   "python",
+   "java",
+   "cpp"
   ],
   "compare": "exact",
   "validated": true,
@@ -4339,7 +4745,14 @@
     "expected": [],
     "is_visible": false
    }
-  ]
+  ],
+  "signature": {
+   "params": [
+    "int[][][]"
+   ],
+   "returns": "int[][]",
+   "guessed": []
+  }
  },
  {
   "id": "evaluate-reverse-polish-notation",
@@ -4360,7 +4773,9 @@
   },
   "languages": [
    "javascript",
-   "python"
+   "python",
+   "java",
+   "cpp"
   ],
   "compare": "exact",
   "validated": true,
@@ -4455,7 +4870,14 @@
     "expected": 5,
     "is_visible": false
    }
-  ]
+  ],
+  "signature": {
+   "params": [
+    "string[]"
+   ],
+   "returns": "int",
+   "guessed": []
+  }
  },
  {
   "id": "excel-sheet-column-number",
@@ -4476,7 +4898,9 @@
   },
   "languages": [
    "javascript",
-   "python"
+   "python",
+   "java",
+   "cpp"
   ],
   "compare": "exact",
   "validated": true,
@@ -4523,7 +4947,14 @@
     "expected": 2147483647,
     "is_visible": false
    }
-  ]
+  ],
+  "signature": {
+   "params": [
+    "string"
+   ],
+   "returns": "int",
+   "guessed": []
+  }
  },
  {
   "id": "fibonacci-number",
@@ -4544,7 +4975,9 @@
   },
   "languages": [
    "javascript",
-   "python"
+   "python",
+   "java",
+   "cpp"
   ],
   "compare": "exact",
   "validated": true,
@@ -4598,7 +5031,14 @@
     "expected": 6765,
     "is_visible": false
    }
-  ]
+  ],
+  "signature": {
+   "params": [
+    "int"
+   ],
+   "returns": "int",
+   "guessed": []
+  }
  },
  {
   "id": "find-all-anagrams-in-a-string",
@@ -4620,7 +5060,9 @@
   },
   "languages": [
    "javascript",
-   "python"
+   "python",
+   "java",
+   "cpp"
   ],
   "compare": "unordered",
   "validated": true,
@@ -4684,7 +5126,15 @@
     ],
     "is_visible": false
    }
-  ]
+  ],
+  "signature": {
+   "params": [
+    "string",
+    "string"
+   ],
+   "returns": "int[]",
+   "guessed": []
+  }
  },
  {
   "id": "find-all-numbers-disappeared-in-an-array",
@@ -4705,7 +5155,9 @@
   },
   "languages": [
    "javascript",
-   "python"
+   "python",
+   "java",
+   "cpp"
   ],
   "compare": "exact",
   "validated": true,
@@ -4793,7 +5245,14 @@
     ],
     "is_visible": false
    }
-  ]
+  ],
+  "signature": {
+   "params": [
+    "int[]"
+   ],
+   "returns": "int[]",
+   "guessed": []
+  }
  },
  {
   "id": "find-first-and-last-position-of-element-in-sorted-array",
@@ -4815,7 +5274,9 @@
   },
   "languages": [
    "javascript",
-   "python"
+   "python",
+   "java",
+   "cpp"
   ],
   "compare": "exact",
   "validated": true,
@@ -4911,7 +5372,15 @@
     ],
     "is_visible": false
    }
-  ]
+  ],
+  "signature": {
+   "params": [
+    "int[]",
+    "int"
+   ],
+   "returns": "int[]",
+   "guessed": []
+  }
  },
  {
   "id": "find-minimum-in-rotated-sorted-array-ii",
@@ -4932,7 +5401,9 @@
   },
   "languages": [
    "javascript",
-   "python"
+   "python",
+   "java",
+   "cpp"
   ],
   "compare": "exact",
   "validated": true,
@@ -5007,7 +5478,14 @@
     "expected": 1,
     "is_visible": false
    }
-  ]
+  ],
+  "signature": {
+   "params": [
+    "int[]"
+   ],
+   "returns": "int",
+   "guessed": []
+  }
  },
  {
   "id": "find-minimum-in-rotated-sorted-array",
@@ -5028,7 +5506,9 @@
   },
   "languages": [
    "javascript",
-   "python"
+   "python",
+   "java",
+   "cpp"
   ],
   "compare": "exact",
   "validated": true,
@@ -5105,7 +5585,14 @@
     "expected": 1,
     "is_visible": false
    }
-  ]
+  ],
+  "signature": {
+   "params": [
+    "int[]"
+   ],
+   "returns": "int",
+   "guessed": []
+  }
  },
  {
   "id": "find-the-city-with-the-smallest-number-of-neighbors-at-a-threshold-distance",
@@ -5128,7 +5615,9 @@
   },
   "languages": [
    "javascript",
-   "python"
+   "python",
+   "java",
+   "cpp"
   ],
   "compare": "exact",
   "validated": true,
@@ -5268,7 +5757,16 @@
     "expected": 3,
     "is_visible": false
    }
-  ]
+  ],
+  "signature": {
+   "params": [
+    "int",
+    "int[][]",
+    "int"
+   ],
+   "returns": "int",
+   "guessed": []
+  }
  },
  {
   "id": "first-missing-positive",
@@ -5289,7 +5787,9 @@
   },
   "languages": [
    "javascript",
-   "python"
+   "python",
+   "java",
+   "cpp"
   ],
   "compare": "exact",
   "validated": true,
@@ -5359,7 +5859,14 @@
     "expected": 6,
     "is_visible": false
    }
-  ]
+  ],
+  "signature": {
+   "params": [
+    "int[]"
+   ],
+   "returns": "int",
+   "guessed": []
+  }
  },
  {
   "id": "flood-fill",
@@ -5383,7 +5890,9 @@
   },
   "languages": [
    "javascript",
-   "python"
+   "python",
+   "java",
+   "cpp"
   ],
   "compare": "exact",
   "validated": true,
@@ -5564,7 +6073,17 @@
     ],
     "is_visible": false
    }
-  ]
+  ],
+  "signature": {
+   "params": [
+    "int[][]",
+    "int",
+    "int",
+    "int"
+   ],
+   "returns": "int[][]",
+   "guessed": []
+  }
  },
  {
   "id": "frequency-of-the-most-frequent-element",
@@ -5586,7 +6105,9 @@
   },
   "languages": [
    "javascript",
-   "python"
+   "python",
+   "java",
+   "cpp"
   ],
   "compare": "exact",
   "validated": true,
@@ -5665,7 +6186,15 @@
     "expected": 1,
     "is_visible": false
    }
-  ]
+  ],
+  "signature": {
+   "params": [
+    "int[]",
+    "int"
+   ],
+   "returns": "int",
+   "guessed": []
+  }
  },
  {
   "id": "fruit-into-baskets",
@@ -5686,7 +6215,9 @@
   },
   "languages": [
    "javascript",
-   "python"
+   "python",
+   "java",
+   "cpp"
   ],
   "compare": "exact",
   "validated": true,
@@ -5766,7 +6297,14 @@
     "expected": 3,
     "is_visible": false
    }
-  ]
+  ],
+  "signature": {
+   "params": [
+    "int[]"
+   ],
+   "returns": "int",
+   "guessed": []
+  }
  },
  {
   "id": "gas-station",
@@ -5788,7 +6326,9 @@
   },
   "languages": [
    "javascript",
-   "python"
+   "python",
+   "java",
+   "cpp"
   ],
   "compare": "exact",
   "validated": true,
@@ -5879,7 +6419,15 @@
     "expected": -1,
     "is_visible": false
    }
-  ]
+  ],
+  "signature": {
+   "params": [
+    "int[]",
+    "int[]"
+   ],
+   "returns": "int",
+   "guessed": []
+  }
  },
  {
   "id": "graph-valid-tree",
@@ -5901,7 +6449,9 @@
   },
   "languages": [
    "javascript",
-   "python"
+   "python",
+   "java",
+   "cpp"
   ],
   "compare": "exact",
   "validated": true,
@@ -6023,7 +6573,15 @@
     "expected": false,
     "is_visible": false
    }
-  ]
+  ],
+  "signature": {
+   "params": [
+    "int",
+    "int[][]"
+   ],
+   "returns": "bool",
+   "guessed": []
+  }
  },
  {
   "id": "group-anagrams",
@@ -6044,7 +6602,9 @@
   },
   "languages": [
    "javascript",
-   "python"
+   "python",
+   "java",
+   "cpp"
   ],
   "compare": "unordered",
   "validated": true,
@@ -6159,7 +6719,14 @@
     ],
     "is_visible": false
    }
-  ]
+  ],
+  "signature": {
+   "params": [
+    "string[]"
+   ],
+   "returns": "string[][]",
+   "guessed": []
+  }
  },
  {
   "id": "group-shifted-strings",
@@ -6180,7 +6747,9 @@
   },
   "languages": [
    "javascript",
-   "python"
+   "python",
+   "java",
+   "cpp"
   ],
   "compare": "unordered",
   "validated": true,
@@ -6288,7 +6857,14 @@
     ],
     "is_visible": false
    }
-  ]
+  ],
+  "signature": {
+   "params": [
+    "string[]"
+   ],
+   "returns": "string[][]",
+   "guessed": []
+  }
  },
  {
   "id": "grumpy-bookstore-owner",
@@ -6311,7 +6887,9 @@
   },
   "languages": [
    "javascript",
-   "python"
+   "python",
+   "java",
+   "cpp"
   ],
   "compare": "exact",
   "validated": true,
@@ -6413,7 +6991,16 @@
     "expected": 7,
     "is_visible": false
    }
-  ]
+  ],
+  "signature": {
+   "params": [
+    "int[]",
+    "int[]",
+    "int"
+   ],
+   "returns": "int",
+   "guessed": []
+  }
  },
  {
   "id": "hand-of-straights",
@@ -6435,7 +7022,9 @@
   },
   "languages": [
    "javascript",
-   "python"
+   "python",
+   "java",
+   "cpp"
   ],
   "compare": "exact",
   "validated": true,
@@ -6530,7 +7119,15 @@
     "expected": true,
     "is_visible": false
    }
-  ]
+  ],
+  "signature": {
+   "params": [
+    "int[]",
+    "int"
+   ],
+   "returns": "bool",
+   "guessed": []
+  }
  },
  {
   "id": "happy-number",
@@ -6551,7 +7148,9 @@
   },
   "languages": [
    "javascript",
-   "python"
+   "python",
+   "java",
+   "cpp"
   ],
   "compare": "exact",
   "validated": true,
@@ -6598,7 +7197,14 @@
     "expected": true,
     "is_visible": false
    }
-  ]
+  ],
+  "signature": {
+   "params": [
+    "int"
+   ],
+   "returns": "bool",
+   "guessed": []
+  }
  },
  {
   "id": "house-robber-ii",
@@ -6619,7 +7225,9 @@
   },
   "languages": [
    "javascript",
-   "python"
+   "python",
+   "java",
+   "cpp"
   ],
   "compare": "exact",
   "validated": true,
@@ -6689,7 +7297,14 @@
     "expected": 3,
     "is_visible": false
    }
-  ]
+  ],
+  "signature": {
+   "params": [
+    "int[]"
+   ],
+   "returns": "int",
+   "guessed": []
+  }
  },
  {
   "id": "house-robber",
@@ -6710,7 +7325,9 @@
   },
   "languages": [
    "javascript",
-   "python"
+   "python",
+   "java",
+   "cpp"
   ],
   "compare": "exact",
   "validated": true,
@@ -6771,7 +7388,14 @@
     "expected": 4,
     "is_visible": false
    }
-  ]
+  ],
+  "signature": {
+   "params": [
+    "int[]"
+   ],
+   "returns": "int",
+   "guessed": []
+  }
  },
  {
   "id": "insert-interval",
@@ -6793,7 +7417,9 @@
   },
   "languages": [
    "javascript",
-   "python"
+   "python",
+   "java",
+   "cpp"
   ],
   "compare": "exact",
   "validated": true,
@@ -6934,7 +7560,15 @@
     ],
     "is_visible": false
    }
-  ]
+  ],
+  "signature": {
+   "params": [
+    "int[][]",
+    "int[]"
+   ],
+   "returns": "int[][]",
+   "guessed": []
+  }
  },
  {
   "id": "integer-break",
@@ -6955,7 +7589,9 @@
   },
   "languages": [
    "javascript",
-   "python"
+   "python",
+   "java",
+   "cpp"
   ],
   "compare": "exact",
   "validated": true,
@@ -7002,7 +7638,14 @@
     "expected": 6,
     "is_visible": false
    }
-  ]
+  ],
+  "signature": {
+   "params": [
+    "int"
+   ],
+   "returns": "int",
+   "guessed": []
+  }
  },
  {
   "id": "integer-to-roman",
@@ -7023,7 +7666,9 @@
   },
   "languages": [
    "javascript",
-   "python"
+   "python",
+   "java",
+   "cpp"
   ],
   "compare": "exact",
   "validated": true,
@@ -7084,7 +7729,14 @@
     "expected": "CDXLIV",
     "is_visible": false
    }
-  ]
+  ],
+  "signature": {
+   "params": [
+    "int"
+   ],
+   "returns": "string",
+   "guessed": []
+  }
  },
  {
   "id": "interleaving-string",
@@ -7107,7 +7759,9 @@
   },
   "languages": [
    "javascript",
-   "python"
+   "python",
+   "java",
+   "cpp"
   ],
   "compare": "exact",
   "validated": true,
@@ -7166,7 +7820,16 @@
     "expected": true,
     "is_visible": false
    }
-  ]
+  ],
+  "signature": {
+   "params": [
+    "string",
+    "string",
+    "string"
+   ],
+   "returns": "bool",
+   "guessed": []
+  }
  },
  {
   "id": "interval-list-intersections",
@@ -7188,7 +7851,9 @@
   },
   "languages": [
    "javascript",
-   "python"
+   "python",
+   "java",
+   "cpp"
   ],
   "compare": "exact",
   "validated": true,
@@ -7372,7 +8037,15 @@
     ],
     "is_visible": false
    }
-  ]
+  ],
+  "signature": {
+   "params": [
+    "int[][]",
+    "int[][]"
+   ],
+   "returns": "int[][]",
+   "guessed": []
+  }
  },
  {
   "id": "is-graph-bipartite",
@@ -7393,7 +8066,9 @@
   },
   "languages": [
    "javascript",
-   "python"
+   "python",
+   "java",
+   "cpp"
   ],
   "compare": "exact",
   "validated": true,
@@ -7501,7 +8176,14 @@
     "expected": true,
     "is_visible": false
    }
-  ]
+  ],
+  "signature": {
+   "params": [
+    "int[][]"
+   ],
+   "returns": "bool",
+   "guessed": []
+  }
  },
  {
   "id": "is-subsequence",
@@ -7523,7 +8205,9 @@
   },
   "languages": [
    "javascript",
-   "python"
+   "python",
+   "java",
+   "cpp"
   ],
   "compare": "exact",
   "validated": true,
@@ -7576,7 +8260,15 @@
     "expected": false,
     "is_visible": false
    }
-  ]
+  ],
+  "signature": {
+   "params": [
+    "string",
+    "string"
+   ],
+   "returns": "bool",
+   "guessed": []
+  }
  },
  {
   "id": "isomorphic-strings",
@@ -7598,7 +8290,9 @@
   },
   "languages": [
    "javascript",
-   "python"
+   "python",
+   "java",
+   "cpp"
   ],
   "compare": "exact",
   "validated": true,
@@ -7651,7 +8345,15 @@
     "expected": true,
     "is_visible": false
    }
-  ]
+  ],
+  "signature": {
+   "params": [
+    "string",
+    "string"
+   ],
+   "returns": "bool",
+   "guessed": []
+  }
  },
  {
   "id": "jump-game-ii",
@@ -7672,7 +8374,9 @@
   },
   "languages": [
    "javascript",
-   "python"
+   "python",
+   "java",
+   "cpp"
   ],
   "compare": "exact",
   "validated": true,
@@ -7749,7 +8453,14 @@
     "expected": 1,
     "is_visible": false
    }
-  ]
+  ],
+  "signature": {
+   "params": [
+    "int[]"
+   ],
+   "returns": "int",
+   "guessed": []
+  }
  },
  {
   "id": "jump-game-iii",
@@ -7771,7 +8482,9 @@
   },
   "languages": [
    "javascript",
-   "python"
+   "python",
+   "java",
+   "cpp"
   ],
   "compare": "exact",
   "validated": true,
@@ -7843,7 +8556,15 @@
     "expected": true,
     "is_visible": false
    }
-  ]
+  ],
+  "signature": {
+   "params": [
+    "int[]",
+    "int"
+   ],
+   "returns": "bool",
+   "guessed": []
+  }
  },
  {
   "id": "jump-game",
@@ -7864,7 +8585,9 @@
   },
   "languages": [
    "javascript",
-   "python"
+   "python",
+   "java",
+   "cpp"
   ],
   "compare": "exact",
   "validated": true,
@@ -7918,7 +8641,14 @@
     "expected": true,
     "is_visible": false
    }
-  ]
+  ],
+  "signature": {
+   "params": [
+    "int[]"
+   ],
+   "returns": "bool",
+   "guessed": []
+  }
  },
  {
   "id": "koko-eating-bananas",
@@ -7940,7 +8670,9 @@
   },
   "languages": [
    "javascript",
-   "python"
+   "python",
+   "java",
+   "cpp"
   ],
   "compare": "exact",
   "validated": true,
@@ -8020,7 +8752,15 @@
     "expected": 5,
     "is_visible": false
    }
-  ]
+  ],
+  "signature": {
+   "params": [
+    "int[]",
+    "int"
+   ],
+   "returns": "int",
+   "guessed": []
+  }
  },
  {
   "id": "kth-largest-element-in-an-array",
@@ -8042,7 +8782,9 @@
   },
   "languages": [
    "javascript",
-   "python"
+   "python",
+   "java",
+   "cpp"
   ],
   "compare": "exact",
   "validated": true,
@@ -8130,7 +8872,15 @@
     "expected": -2,
     "is_visible": false
    }
-  ]
+  ],
+  "signature": {
+   "params": [
+    "int[]",
+    "int"
+   ],
+   "returns": "int",
+   "guessed": []
+  }
  },
  {
   "id": "kth-smallest-element-in-a-sorted-matrix",
@@ -8152,7 +8902,9 @@
   },
   "languages": [
    "javascript",
-   "python"
+   "python",
+   "java",
+   "cpp"
   ],
   "compare": "exact",
   "validated": true,
@@ -8234,7 +8986,15 @@
     "expected": 7,
     "is_visible": false
    }
-  ]
+  ],
+  "signature": {
+   "params": [
+    "int[][]",
+    "int"
+   ],
+   "returns": "int",
+   "guessed": []
+  }
  },
  {
   "id": "largest-rectangle-in-histogram",
@@ -8255,7 +9015,9 @@
   },
   "languages": [
    "javascript",
-   "python"
+   "python",
+   "java",
+   "cpp"
   ],
   "compare": "exact",
   "validated": true,
@@ -8331,7 +9093,14 @@
     "expected": 12,
     "is_visible": false
    }
-  ]
+  ],
+  "signature": {
+   "params": [
+    "int[]"
+   ],
+   "returns": "int",
+   "guessed": []
+  }
  },
  {
   "id": "last-stone-weight",
@@ -8352,7 +9121,9 @@
   },
   "languages": [
    "javascript",
-   "python"
+   "python",
+   "java",
+   "cpp"
   ],
   "compare": "exact",
   "validated": true,
@@ -8423,7 +9194,14 @@
     "expected": 2,
     "is_visible": false
    }
-  ]
+  ],
+  "signature": {
+   "params": [
+    "int[]"
+   ],
+   "returns": "int",
+   "guessed": []
+  }
  },
  {
   "id": "lemonade-change",
@@ -8444,7 +9222,9 @@
   },
   "languages": [
    "javascript",
-   "python"
+   "python",
+   "java",
+   "cpp"
   ],
   "compare": "exact",
   "validated": true,
@@ -8505,7 +9285,14 @@
     "expected": true,
     "is_visible": false
    }
-  ]
+  ],
+  "signature": {
+   "params": [
+    "int[]"
+   ],
+   "returns": "bool",
+   "guessed": []
+  }
  },
  {
   "id": "length-of-last-word",
@@ -8526,7 +9313,9 @@
   },
   "languages": [
    "javascript",
-   "python"
+   "python",
+   "java",
+   "cpp"
   ],
   "compare": "exact",
   "validated": true,
@@ -8573,7 +9362,14 @@
     "expected": 3,
     "is_visible": false
    }
-  ]
+  ],
+  "signature": {
+   "params": [
+    "string"
+   ],
+   "returns": "int",
+   "guessed": []
+  }
  },
  {
   "id": "longest-common-prefix",
@@ -8594,7 +9390,9 @@
   },
   "languages": [
    "javascript",
-   "python"
+   "python",
+   "java",
+   "cpp"
   ],
   "compare": "exact",
   "validated": true,
@@ -8663,7 +9461,14 @@
     "expected": "abc",
     "is_visible": false
    }
-  ]
+  ],
+  "signature": {
+   "params": [
+    "string[]"
+   ],
+   "returns": "string",
+   "guessed": []
+  }
  },
  {
   "id": "longest-common-subsequence",
@@ -8685,7 +9490,9 @@
   },
   "languages": [
    "javascript",
-   "python"
+   "python",
+   "java",
+   "cpp"
   ],
   "compare": "exact",
   "validated": true,
@@ -8738,7 +9545,15 @@
     "expected": 5,
     "is_visible": false
    }
-  ]
+  ],
+  "signature": {
+   "params": [
+    "string",
+    "string"
+   ],
+   "returns": "int",
+   "guessed": []
+  }
  },
  {
   "id": "longest-consecutive-sequence",
@@ -8759,7 +9574,9 @@
   },
   "languages": [
    "javascript",
-   "python"
+   "python",
+   "java",
+   "cpp"
   ],
   "compare": "exact",
   "validated": true,
@@ -8843,7 +9660,14 @@
     "expected": 7,
     "is_visible": false
    }
-  ]
+  ],
+  "signature": {
+   "params": [
+    "int[]"
+   ],
+   "returns": "int",
+   "guessed": []
+  }
  },
  {
   "id": "longest-increasing-path-in-a-matrix",
@@ -8864,7 +9688,9 @@
   },
   "languages": [
    "javascript",
-   "python"
+   "python",
+   "java",
+   "cpp"
   ],
   "compare": "exact",
   "validated": true,
@@ -9007,7 +9833,14 @@
     "expected": 2,
     "is_visible": false
    }
-  ]
+  ],
+  "signature": {
+   "params": [
+    "int[][]"
+   ],
+   "returns": "int",
+   "guessed": []
+  }
  },
  {
   "id": "longest-increasing-subsequence",
@@ -9028,7 +9861,9 @@
   },
   "languages": [
    "javascript",
-   "python"
+   "python",
+   "java",
+   "cpp"
   ],
   "compare": "exact",
   "validated": true,
@@ -9114,7 +9949,14 @@
     "expected": 5,
     "is_visible": false
    }
-  ]
+  ],
+  "signature": {
+   "params": [
+    "int[]"
+   ],
+   "returns": "int",
+   "guessed": []
+  }
  },
  {
   "id": "longest-repeating-character-replacement",
@@ -9136,7 +9978,9 @@
   },
   "languages": [
    "javascript",
-   "python"
+   "python",
+   "java",
+   "cpp"
   ],
   "compare": "exact",
   "validated": true,
@@ -9181,7 +10025,15 @@
     "expected": 1,
     "is_visible": false
    }
-  ]
+  ],
+  "signature": {
+   "params": [
+    "string",
+    "int"
+   ],
+   "returns": "int",
+   "guessed": []
+  }
  },
  {
   "id": "longest-substring-with-at-most-k-distinct-characters",
@@ -9203,7 +10055,9 @@
   },
   "languages": [
    "javascript",
-   "python"
+   "python",
+   "java",
+   "cpp"
   ],
   "compare": "exact",
   "validated": true,
@@ -9256,7 +10110,15 @@
     "expected": 6,
     "is_visible": false
    }
-  ]
+  ],
+  "signature": {
+   "params": [
+    "string",
+    "int"
+   ],
+   "returns": "int",
+   "guessed": []
+  }
  },
  {
   "id": "longest-substring-with-at-most-two-distinct-characters",
@@ -9277,7 +10139,9 @@
   },
   "languages": [
    "javascript",
-   "python"
+   "python",
+   "java",
+   "cpp"
   ],
   "compare": "exact",
   "validated": true,
@@ -9324,7 +10188,14 @@
     "expected": 2,
     "is_visible": false
    }
-  ]
+  ],
+  "signature": {
+   "params": [
+    "string"
+   ],
+   "returns": "int",
+   "guessed": []
+  }
  },
  {
   "id": "longest-substring-without-repeating-characters",
@@ -9345,7 +10216,9 @@
   },
   "languages": [
    "javascript",
-   "python"
+   "python",
+   "java",
+   "cpp"
   ],
   "compare": "exact",
   "validated": true,
@@ -9392,7 +10265,14 @@
     "expected": 3,
     "is_visible": false
    }
-  ]
+  ],
+  "signature": {
+   "params": [
+    "string"
+   ],
+   "returns": "int",
+   "guessed": []
+  }
  },
  {
   "id": "longest-word-in-dictionary",
@@ -9413,7 +10293,9 @@
   },
   "languages": [
    "javascript",
-   "python"
+   "python",
+   "java",
+   "cpp"
   ],
   "compare": "exact",
   "validated": true,
@@ -9503,7 +10385,14 @@
     "expected": "",
     "is_visible": false
    }
-  ]
+  ],
+  "signature": {
+   "params": [
+    "string[]"
+   ],
+   "returns": "string",
+   "guessed": []
+  }
  },
  {
   "id": "majority-element",
@@ -9524,7 +10413,9 @@
   },
   "languages": [
    "javascript",
-   "python"
+   "python",
+   "java",
+   "cpp"
   ],
   "compare": "exact",
   "validated": true,
@@ -9603,7 +10494,14 @@
     "expected": -1,
     "is_visible": false
    }
-  ]
+  ],
+  "signature": {
+   "params": [
+    "int[]"
+   ],
+   "returns": "int",
+   "guessed": []
+  }
  },
  {
   "id": "max-area-of-island",
@@ -9624,7 +10522,9 @@
   },
   "languages": [
    "javascript",
-   "python"
+   "python",
+   "java",
+   "cpp"
   ],
   "compare": "exact",
   "validated": true,
@@ -9862,7 +10762,14 @@
     "expected": 1,
     "is_visible": false
    }
-  ]
+  ],
+  "signature": {
+   "params": [
+    "int[][]"
+   ],
+   "returns": "int",
+   "guessed": []
+  }
  },
  {
   "id": "max-consecutive-ones-iii",
@@ -9884,7 +10791,9 @@
   },
   "languages": [
    "javascript",
-   "python"
+   "python",
+   "java",
+   "cpp"
   ],
   "compare": "exact",
   "validated": true,
@@ -9982,7 +10891,15 @@
     "expected": 4,
     "is_visible": false
    }
-  ]
+  ],
+  "signature": {
+   "params": [
+    "int[]",
+    "int"
+   ],
+   "returns": "int",
+   "guessed": []
+  }
  },
  {
   "id": "max-increase-to-keep-city-skyline",
@@ -10003,7 +10920,9 @@
   },
   "languages": [
    "javascript",
-   "python"
+   "python",
+   "java",
+   "cpp"
   ],
   "compare": "exact",
   "validated": true,
@@ -10083,7 +11002,14 @@
     "expected": 1,
     "is_visible": false
    }
-  ]
+  ],
+  "signature": {
+   "params": [
+    "int[][]"
+   ],
+   "returns": "int",
+   "guessed": []
+  }
  },
  {
   "id": "maximal-square",
@@ -10104,7 +11030,9 @@
   },
   "languages": [
    "javascript",
-   "python"
+   "python",
+   "java",
+   "cpp"
   ],
   "compare": "exact",
   "validated": true,
@@ -10260,7 +11188,14 @@
     "expected": 9,
     "is_visible": false
    }
-  ]
+  ],
+  "signature": {
+   "params": [
+    "string[][]"
+   ],
+   "returns": "int",
+   "guessed": []
+  }
  },
  {
   "id": "maximum-product-subarray",
@@ -10281,7 +11216,9 @@
   },
   "languages": [
    "javascript",
-   "python"
+   "python",
+   "java",
+   "cpp"
   ],
   "compare": "exact",
   "validated": true,
@@ -10352,7 +11289,14 @@
     "expected": 24,
     "is_visible": false
    }
-  ]
+  ],
+  "signature": {
+   "params": [
+    "int[]"
+   ],
+   "returns": "int",
+   "guessed": []
+  }
  },
  {
   "id": "maximum-subarray",
@@ -10373,7 +11317,9 @@
   },
   "languages": [
    "javascript",
-   "python"
+   "python",
+   "java",
+   "cpp"
   ],
   "compare": "exact",
   "validated": true,
@@ -10450,7 +11396,14 @@
     "expected": -1,
     "is_visible": false
    }
-  ]
+  ],
+  "signature": {
+   "params": [
+    "int[]"
+   ],
+   "returns": "int",
+   "guessed": []
+  }
  },
  {
   "id": "median-of-two-sorted-arrays",
@@ -10472,7 +11425,9 @@
   },
   "languages": [
    "javascript",
-   "python"
+   "python",
+   "java",
+   "cpp"
   ],
   "compare": "exact",
   "validated": true,
@@ -10554,7 +11509,15 @@
     "expected": 3.5,
     "is_visible": false
    }
-  ]
+  ],
+  "signature": {
+   "params": [
+    "int[]",
+    "int[]"
+   ],
+   "returns": "double",
+   "guessed": []
+  }
  },
  {
   "id": "meeting-rooms-ii",
@@ -10575,7 +11538,9 @@
   },
   "languages": [
    "javascript",
-   "python"
+   "python",
+   "java",
+   "cpp"
   ],
   "compare": "exact",
   "validated": true,
@@ -10675,7 +11640,14 @@
     "expected": 4,
     "is_visible": false
    }
-  ]
+  ],
+  "signature": {
+   "params": [
+    "int[][]"
+   ],
+   "returns": "int",
+   "guessed": []
+  }
  },
  {
   "id": "meeting-rooms",
@@ -10696,7 +11668,9 @@
   },
   "languages": [
    "javascript",
-   "python"
+   "python",
+   "java",
+   "cpp"
   ],
   "compare": "exact",
   "validated": true,
@@ -10776,7 +11750,14 @@
     "expected": false,
     "is_visible": false
    }
-  ]
+  ],
+  "signature": {
+   "params": [
+    "int[][]"
+   ],
+   "returns": "bool",
+   "guessed": []
+  }
  },
  {
   "id": "merge-intervals",
@@ -10797,7 +11778,9 @@
   },
   "languages": [
    "javascript",
-   "python"
+   "python",
+   "java",
+   "cpp"
   ],
   "compare": "exact",
   "validated": true,
@@ -10909,7 +11892,14 @@
     ],
     "is_visible": false
    }
-  ]
+  ],
+  "signature": {
+   "params": [
+    "int[][]"
+   ],
+   "returns": "int[][]",
+   "guessed": []
+  }
  },
  {
   "id": "merge-triplets-to-form-target-triplet",
@@ -10931,7 +11921,9 @@
   },
   "languages": [
    "javascript",
-   "python"
+   "python",
+   "java",
+   "cpp"
   ],
   "compare": "exact",
   "validated": true,
@@ -11056,7 +12048,15 @@
     "expected": true,
     "is_visible": false
    }
-  ]
+  ],
+  "signature": {
+   "params": [
+    "int[][]",
+    "int[]"
+   ],
+   "returns": "bool",
+   "guessed": []
+  }
  },
  {
   "id": "min-cost-climbing-stairs",
@@ -11077,7 +12077,9 @@
   },
   "languages": [
    "javascript",
-   "python"
+   "python",
+   "java",
+   "cpp"
   ],
   "compare": "exact",
   "validated": true,
@@ -11145,7 +12147,14 @@
     "expected": 2,
     "is_visible": false
    }
-  ]
+  ],
+  "signature": {
+   "params": [
+    "int[]"
+   ],
+   "returns": "int",
+   "guessed": []
+  }
  },
  {
   "id": "min-cost-to-connect-all-points",
@@ -11166,7 +12175,9 @@
   },
   "languages": [
    "javascript",
-   "python"
+   "python",
+   "java",
+   "cpp"
   ],
   "compare": "exact",
   "validated": true,
@@ -11271,7 +12282,14 @@
     "expected": 3,
     "is_visible": false
    }
-  ]
+  ],
+  "signature": {
+   "params": [
+    "int[][]"
+   ],
+   "returns": "int",
+   "guessed": []
+  }
  },
  {
   "id": "minimum-interval-to-include-each-query",
@@ -11293,7 +12311,9 @@
   },
   "languages": [
    "javascript",
-   "python"
+   "python",
+   "java",
+   "cpp"
   ],
   "compare": "exact",
   "validated": false,
@@ -11429,7 +12449,15 @@
     ],
     "is_visible": false
    }
-  ]
+  ],
+  "signature": {
+   "params": [
+    "int[][]",
+    "int[]"
+   ],
+   "returns": "int[]",
+   "guessed": []
+  }
  },
  {
   "id": "minimum-number-of-arrows-to-burst-balloons",
@@ -11450,7 +12478,9 @@
   },
   "languages": [
    "javascript",
-   "python"
+   "python",
+   "java",
+   "cpp"
   ],
   "compare": "exact",
   "validated": true,
@@ -11546,7 +12576,14 @@
     "expected": 0,
     "is_visible": false
    }
-  ]
+  ],
+  "signature": {
+   "params": [
+    "int[][]"
+   ],
+   "returns": "int",
+   "guessed": []
+  }
  },
  {
   "id": "minimum-path-sum",
@@ -11567,7 +12604,9 @@
   },
   "languages": [
    "javascript",
-   "python"
+   "python",
+   "java",
+   "cpp"
   ],
   "compare": "exact",
   "validated": true,
@@ -11640,7 +12679,14 @@
     "expected": 3,
     "is_visible": false
    }
-  ]
+  ],
+  "signature": {
+   "params": [
+    "int[][]"
+   ],
+   "returns": "int",
+   "guessed": []
+  }
  },
  {
   "id": "minimum-size-subarray-sum",
@@ -11662,7 +12708,9 @@
   },
   "languages": [
    "javascript",
-   "python"
+   "python",
+   "java",
+   "cpp"
   ],
   "compare": "exact",
   "validated": true,
@@ -11748,7 +12796,15 @@
     "expected": 1,
     "is_visible": false
    }
-  ]
+  ],
+  "signature": {
+   "params": [
+    "int",
+    "int[]"
+   ],
+   "returns": "int",
+   "guessed": []
+  }
  },
  {
   "id": "minimum-window-substring",
@@ -11770,7 +12826,9 @@
   },
   "languages": [
    "javascript",
-   "python"
+   "python",
+   "java",
+   "cpp"
   ],
   "compare": "exact",
   "validated": true,
@@ -11823,7 +12881,15 @@
     "expected": "ba",
     "is_visible": false
    }
-  ]
+  ],
+  "signature": {
+   "params": [
+    "string",
+    "string"
+   ],
+   "returns": "string",
+   "guessed": []
+  }
  },
  {
   "id": "missing-number-ii",
@@ -11844,7 +12910,9 @@
   },
   "languages": [
    "javascript",
-   "python"
+   "python",
+   "java",
+   "cpp"
   ],
   "compare": "exact",
   "validated": true,
@@ -11922,7 +12990,14 @@
     "expected": 4,
     "is_visible": false
    }
-  ]
+  ],
+  "signature": {
+   "params": [
+    "int[]"
+   ],
+   "returns": "int",
+   "guessed": []
+  }
  },
  {
   "id": "missing-number",
@@ -11943,7 +13018,9 @@
   },
   "languages": [
    "javascript",
-   "python"
+   "python",
+   "java",
+   "cpp"
   ],
   "compare": "exact",
   "validated": true,
@@ -12022,7 +13099,14 @@
     "expected": 10,
     "is_visible": false
    }
-  ]
+  ],
+  "signature": {
+   "params": [
+    "int[]"
+   ],
+   "returns": "int",
+   "guessed": []
+  }
  },
  {
   "id": "multiply-strings",
@@ -12044,7 +13128,9 @@
   },
   "languages": [
    "javascript",
-   "python"
+   "python",
+   "java",
+   "cpp"
   ],
   "compare": "exact",
   "validated": true,
@@ -12097,7 +13183,15 @@
     "expected": "1",
     "is_visible": false
    }
-  ]
+  ],
+  "signature": {
+   "params": [
+    "string",
+    "string"
+   ],
+   "returns": "string",
+   "guessed": []
+  }
  },
  {
   "id": "my-calendar-i",
@@ -12118,7 +13212,9 @@
   },
   "languages": [
    "javascript",
-   "python"
+   "python",
+   "java",
+   "cpp"
   ],
   "compare": "exact",
   "validated": true,
@@ -12228,7 +13324,14 @@
     ],
     "is_visible": false
    }
-  ]
+  ],
+  "signature": {
+   "params": [
+    "int[][]"
+   ],
+   "returns": "bool[]",
+   "guessed": []
+  }
  },
  {
   "id": "n-queens-ii",
@@ -12249,7 +13352,9 @@
   },
   "languages": [
    "javascript",
-   "python"
+   "python",
+   "java",
+   "cpp"
   ],
   "compare": "exact",
   "validated": true,
@@ -12296,7 +13401,14 @@
     "expected": 92,
     "is_visible": false
    }
-  ]
+  ],
+  "signature": {
+   "params": [
+    "int"
+   ],
+   "returns": "int",
+   "guessed": []
+  }
  },
  {
   "id": "network-delay-time",
@@ -12319,7 +13431,9 @@
   },
   "languages": [
    "javascript",
-   "python"
+   "python",
+   "java",
+   "cpp"
   ],
   "compare": "exact",
   "validated": true,
@@ -12433,7 +13547,16 @@
     "expected": 0,
     "is_visible": false
    }
-  ]
+  ],
+  "signature": {
+   "params": [
+    "int[][]",
+    "int",
+    "int"
+   ],
+   "returns": "int",
+   "guessed": []
+  }
  },
  {
   "id": "next-greater-element-i",
@@ -12455,7 +13578,9 @@
   },
   "languages": [
    "javascript",
-   "python"
+   "python",
+   "java",
+   "cpp"
   ],
   "compare": "exact",
   "validated": true,
@@ -12561,7 +13686,15 @@
     ],
     "is_visible": false
    }
-  ]
+  ],
+  "signature": {
+   "params": [
+    "int[]",
+    "int[]"
+   ],
+   "returns": "int[]",
+   "guessed": []
+  }
  },
  {
   "id": "next-greater-element-ii",
@@ -12582,7 +13715,9 @@
   },
   "languages": [
    "javascript",
-   "python"
+   "python",
+   "java",
+   "cpp"
   ],
   "compare": "exact",
   "validated": true,
@@ -12666,7 +13801,14 @@
     ],
     "is_visible": false
    }
-  ]
+  ],
+  "signature": {
+   "params": [
+    "int[]"
+   ],
+   "returns": "int[]",
+   "guessed": []
+  }
  },
  {
   "id": "non-overlapping-intervals",
@@ -12687,7 +13829,9 @@
   },
   "languages": [
    "javascript",
-   "python"
+   "python",
+   "java",
+   "cpp"
   ],
   "compare": "exact",
   "validated": true,
@@ -12783,7 +13927,14 @@
     "expected": 2,
     "is_visible": false
    }
-  ]
+  ],
+  "signature": {
+   "params": [
+    "int[][]"
+   ],
+   "returns": "int",
+   "guessed": []
+  }
  },
  {
   "id": "number-of-1-bits",
@@ -12804,7 +13955,9 @@
   },
   "languages": [
    "javascript",
-   "python"
+   "python",
+   "java",
+   "cpp"
   ],
   "compare": "exact",
   "validated": true,
@@ -12851,7 +14004,14 @@
     "expected": 1,
     "is_visible": false
    }
-  ]
+  ],
+  "signature": {
+   "params": [
+    "long"
+   ],
+   "returns": "int",
+   "guessed": []
+  }
  },
  {
   "id": "number-of-connected-components-in-an-undirected-graph",
@@ -12873,7 +14033,9 @@
   },
   "languages": [
    "javascript",
-   "python"
+   "python",
+   "java",
+   "cpp"
   ],
   "compare": "exact",
   "validated": true,
@@ -12986,7 +14148,15 @@
     "expected": 1,
     "is_visible": false
    }
-  ]
+  ],
+  "signature": {
+   "params": [
+    "int",
+    "int[][]"
+   ],
+   "returns": "int",
+   "guessed": []
+  }
  },
  {
   "id": "number-of-distinct-islands",
@@ -13007,7 +14177,9 @@
   },
   "languages": [
    "javascript",
-   "python"
+   "python",
+   "java",
+   "cpp"
   ],
   "compare": "exact",
   "validated": true,
@@ -13136,7 +14308,14 @@
     "expected": 1,
     "is_visible": false
    }
-  ]
+  ],
+  "signature": {
+   "params": [
+    "int[][]"
+   ],
+   "returns": "int",
+   "guessed": []
+  }
  },
  {
   "id": "number-of-islands",
@@ -13157,7 +14336,9 @@
   },
   "languages": [
    "javascript",
-   "python"
+   "python",
+   "java",
+   "cpp"
   ],
   "compare": "exact",
   "validated": true,
@@ -13294,7 +14475,14 @@
     "expected": 1,
     "is_visible": false
    }
-  ]
+  ],
+  "signature": {
+   "params": [
+    "string[][]"
+   ],
+   "returns": "int",
+   "guessed": []
+  }
  },
  {
   "id": "number-of-provinces",
@@ -13315,7 +14503,9 @@
   },
   "languages": [
    "javascript",
-   "python"
+   "python",
+   "java",
+   "cpp"
   ],
   "compare": "exact",
   "validated": true,
@@ -13416,7 +14606,14 @@
     "expected": 2,
     "is_visible": false
    }
-  ]
+  ],
+  "signature": {
+   "params": [
+    "int[][]"
+   ],
+   "returns": "int",
+   "guessed": []
+  }
  },
  {
   "id": "one-edit-distance",
@@ -13438,7 +14635,9 @@
   },
   "languages": [
    "javascript",
-   "python"
+   "python",
+   "java",
+   "cpp"
   ],
   "compare": "exact",
   "validated": true,
@@ -13499,7 +14698,15 @@
     "expected": false,
     "is_visible": false
    }
-  ]
+  ],
+  "signature": {
+   "params": [
+    "string",
+    "string"
+   ],
+   "returns": "bool",
+   "guessed": []
+  }
  },
  {
   "id": "palindrome-number",
@@ -13520,7 +14727,9 @@
   },
   "languages": [
    "javascript",
-   "python"
+   "python",
+   "java",
+   "cpp"
   ],
   "compare": "exact",
   "validated": true,
@@ -13567,7 +14776,14 @@
     "expected": true,
     "is_visible": false
    }
-  ]
+  ],
+  "signature": {
+   "params": [
+    "int"
+   ],
+   "returns": "bool",
+   "guessed": []
+  }
  },
  {
   "id": "palindromic-substrings",
@@ -13588,7 +14804,9 @@
   },
   "languages": [
    "javascript",
-   "python"
+   "python",
+   "java",
+   "cpp"
   ],
   "compare": "exact",
   "validated": true,
@@ -13635,7 +14853,14 @@
     "expected": 10,
     "is_visible": false
    }
-  ]
+  ],
+  "signature": {
+   "params": [
+    "string"
+   ],
+   "returns": "int",
+   "guessed": []
+  }
  },
  {
   "id": "partition-equal-subset-sum",
@@ -13656,7 +14881,9 @@
   },
   "languages": [
    "javascript",
-   "python"
+   "python",
+   "java",
+   "cpp"
   ],
   "compare": "exact",
   "validated": true,
@@ -13730,7 +14957,14 @@
     "expected": true,
     "is_visible": false
    }
-  ]
+  ],
+  "signature": {
+   "params": [
+    "int[]"
+   ],
+   "returns": "bool",
+   "guessed": []
+  }
  },
  {
   "id": "partition-labels",
@@ -13751,7 +14985,9 @@
   },
   "languages": [
    "javascript",
-   "python"
+   "python",
+   "java",
+   "cpp"
   ],
   "compare": "exact",
   "validated": true,
@@ -13804,7 +15040,14 @@
     ],
     "is_visible": false
    }
-  ]
+  ],
+  "signature": {
+   "params": [
+    "string"
+   ],
+   "returns": "int[]",
+   "guessed": []
+  }
  },
  {
   "id": "pascal-s-triangle",
@@ -13825,7 +15068,9 @@
   },
   "languages": [
    "javascript",
-   "python"
+   "python",
+   "java",
+   "cpp"
   ],
   "compare": "exact",
   "validated": true,
@@ -13950,7 +15195,14 @@
     ],
     "is_visible": false
    }
-  ]
+  ],
+  "signature": {
+   "params": [
+    "int"
+   ],
+   "returns": "int[][]",
+   "guessed": []
+  }
  },
  {
   "id": "perfect-squares",
@@ -13971,7 +15223,9 @@
   },
   "languages": [
    "javascript",
-   "python"
+   "python",
+   "java",
+   "cpp"
   ],
   "compare": "exact",
   "validated": true,
@@ -14018,7 +15272,14 @@
     "expected": 1,
     "is_visible": false
    }
-  ]
+  ],
+  "signature": {
+   "params": [
+    "int"
+   ],
+   "returns": "int",
+   "guessed": []
+  }
  },
  {
   "id": "permutation-in-string",
@@ -14040,7 +15301,9 @@
   },
   "languages": [
    "javascript",
-   "python"
+   "python",
+   "java",
+   "cpp"
   ],
   "compare": "exact",
   "validated": true,
@@ -14093,7 +15356,15 @@
     "expected": false,
     "is_visible": false
    }
-  ]
+  ],
+  "signature": {
+   "params": [
+    "string",
+    "string"
+   ],
+   "returns": "bool",
+   "guessed": []
+  }
  },
  {
   "id": "plus-one",
@@ -14114,7 +15385,9 @@
   },
   "languages": [
    "javascript",
-   "python"
+   "python",
+   "java",
+   "cpp"
   ],
   "compare": "exact",
   "validated": true,
@@ -14205,7 +15478,14 @@
     ],
     "is_visible": false
    }
-  ]
+  ],
+  "signature": {
+   "params": [
+    "int[]"
+   ],
+   "returns": "int[]",
+   "guessed": []
+  }
  },
  {
   "id": "power-of-four",
@@ -14226,7 +15506,9 @@
   },
   "languages": [
    "javascript",
-   "python"
+   "python",
+   "java",
+   "cpp"
   ],
   "compare": "exact",
   "validated": true,
@@ -14273,7 +15555,14 @@
     "expected": false,
     "is_visible": false
    }
-  ]
+  ],
+  "signature": {
+   "params": [
+    "int"
+   ],
+   "returns": "bool",
+   "guessed": []
+  }
  },
  {
   "id": "power-of-two",
@@ -14294,7 +15583,9 @@
   },
   "languages": [
    "javascript",
-   "python"
+   "python",
+   "java",
+   "cpp"
   ],
   "compare": "exact",
   "validated": true,
@@ -14341,7 +15632,14 @@
     "expected": true,
     "is_visible": false
    }
-  ]
+  ],
+  "signature": {
+   "params": [
+    "int"
+   ],
+   "returns": "bool",
+   "guessed": []
+  }
  },
  {
   "id": "queue-reconstruction-by-height",
@@ -14362,7 +15660,9 @@
   },
   "languages": [
    "javascript",
-   "python"
+   "python",
+   "java",
+   "cpp"
   ],
   "compare": "exact",
   "validated": true,
@@ -14531,7 +15831,14 @@
     ],
     "is_visible": false
    }
-  ]
+  ],
+  "signature": {
+   "params": [
+    "int[][]"
+   ],
+   "returns": "int[][]",
+   "guessed": []
+  }
  },
  {
   "id": "ransom-note",
@@ -14553,7 +15860,9 @@
   },
   "languages": [
    "javascript",
-   "python"
+   "python",
+   "java",
+   "cpp"
   ],
   "compare": "exact",
   "validated": true,
@@ -14598,7 +15907,15 @@
     "expected": true,
     "is_visible": false
    }
-  ]
+  ],
+  "signature": {
+   "params": [
+    "string",
+    "string"
+   ],
+   "returns": "bool",
+   "guessed": []
+  }
  },
  {
   "id": "reconstruct-itinerary",
@@ -14619,7 +15936,9 @@
   },
   "languages": [
    "javascript",
-   "python"
+   "python",
+   "java",
+   "cpp"
   ],
   "compare": "exact",
   "validated": true,
@@ -14734,7 +16053,14 @@
     ],
     "is_visible": false
    }
-  ]
+  ],
+  "signature": {
+   "params": [
+    "string[][]"
+   ],
+   "returns": "string[]",
+   "guessed": []
+  }
  },
  {
   "id": "redundant-connection",
@@ -14755,7 +16081,9 @@
   },
   "languages": [
    "javascript",
-   "python"
+   "python",
+   "java",
+   "cpp"
   ],
   "compare": "exact",
   "validated": true,
@@ -14895,7 +16223,14 @@
     ],
     "is_visible": false
    }
-  ]
+  ],
+  "signature": {
+   "params": [
+    "int[][]"
+   ],
+   "returns": "int[]",
+   "guessed": []
+  }
  },
  {
   "id": "regular-expression-matching",
@@ -14917,7 +16252,9 @@
   },
   "languages": [
    "javascript",
-   "python"
+   "python",
+   "java",
+   "cpp"
   ],
   "compare": "exact",
   "validated": true,
@@ -14970,7 +16307,15 @@
     "expected": true,
     "is_visible": false
    }
-  ]
+  ],
+  "signature": {
+   "params": [
+    "string",
+    "string"
+   ],
+   "returns": "bool",
+   "guessed": []
+  }
  },
  {
   "id": "remove-all-adjacent-duplicates-in-string",
@@ -14991,7 +16336,9 @@
   },
   "languages": [
    "javascript",
-   "python"
+   "python",
+   "java",
+   "cpp"
   ],
   "compare": "exact",
   "validated": true,
@@ -15038,7 +16385,14 @@
     "expected": "",
     "is_visible": false
    }
-  ]
+  ],
+  "signature": {
+   "params": [
+    "string"
+   ],
+   "returns": "string",
+   "guessed": []
+  }
  },
  {
   "id": "remove-covered-intervals",
@@ -15059,7 +16413,9 @@
   },
   "languages": [
    "javascript",
-   "python"
+   "python",
+   "java",
+   "cpp"
   ],
   "compare": "exact",
   "validated": true,
@@ -15164,7 +16520,14 @@
     "expected": 3,
     "is_visible": false
    }
-  ]
+  ],
+  "signature": {
+   "params": [
+    "int[][]"
+   ],
+   "returns": "int",
+   "guessed": []
+  }
  },
  {
   "id": "repeated-substring-pattern",
@@ -15185,7 +16548,9 @@
   },
   "languages": [
    "javascript",
-   "python"
+   "python",
+   "java",
+   "cpp"
   ],
   "compare": "exact",
   "validated": true,
@@ -15232,7 +16597,14 @@
     "expected": true,
     "is_visible": false
    }
-  ]
+  ],
+  "signature": {
+   "params": [
+    "string"
+   ],
+   "returns": "bool",
+   "guessed": []
+  }
  },
  {
   "id": "replace-words",
@@ -15254,7 +16626,9 @@
   },
   "languages": [
    "javascript",
-   "python"
+   "python",
+   "java",
+   "cpp"
   ],
   "compare": "exact",
   "validated": true,
@@ -15330,7 +16704,15 @@
     "expected": "a a a a a a",
     "is_visible": false
    }
-  ]
+  ],
+  "signature": {
+   "params": [
+    "string[]",
+    "string"
+   ],
+   "returns": "string",
+   "guessed": []
+  }
  },
  {
   "id": "reshape-the-matrix",
@@ -15353,7 +16735,9 @@
   },
   "languages": [
    "javascript",
-   "python"
+   "python",
+   "java",
+   "cpp"
   ],
   "compare": "exact",
   "validated": true,
@@ -15493,7 +16877,16 @@
     ],
     "is_visible": false
    }
-  ]
+  ],
+  "signature": {
+   "params": [
+    "int[][]",
+    "int",
+    "int"
+   ],
+   "returns": "int[][]",
+   "guessed": []
+  }
  },
  {
   "id": "reverse-bits",
@@ -15514,7 +16907,9 @@
   },
   "languages": [
    "javascript",
-   "python"
+   "python",
+   "java",
+   "cpp"
   ],
   "compare": "exact",
   "validated": true,
@@ -15561,7 +16956,14 @@
     "expected": 3221225472,
     "is_visible": false
    }
-  ]
+  ],
+  "signature": {
+   "params": [
+    "long"
+   ],
+   "returns": "long",
+   "guessed": []
+  }
  },
  {
   "id": "reverse-vowels-of-a-string",
@@ -15582,7 +16984,9 @@
   },
   "languages": [
    "javascript",
-   "python"
+   "python",
+   "java",
+   "cpp"
   ],
   "compare": "exact",
   "validated": true,
@@ -15629,7 +17033,14 @@
     "expected": "xyz",
     "is_visible": false
    }
-  ]
+  ],
+  "signature": {
+   "params": [
+    "string"
+   ],
+   "returns": "string",
+   "guessed": []
+  }
  },
  {
   "id": "roman-to-integer",
@@ -15650,7 +17061,9 @@
   },
   "languages": [
    "javascript",
-   "python"
+   "python",
+   "java",
+   "cpp"
   ],
   "compare": "exact",
   "validated": true,
@@ -15704,7 +17117,14 @@
     "expected": 621,
     "is_visible": false
    }
-  ]
+  ],
+  "signature": {
+   "params": [
+    "string"
+   ],
+   "returns": "int",
+   "guessed": []
+  }
  },
  {
   "id": "rotate-image",
@@ -15725,7 +17145,9 @@
   },
   "languages": [
    "javascript",
-   "python"
+   "python",
+   "java",
+   "cpp"
   ],
   "compare": "exact",
   "validated": true,
@@ -15905,7 +17327,14 @@
     ],
     "is_visible": false
    }
-  ]
+  ],
+  "signature": {
+   "params": [
+    "int[][]"
+   ],
+   "returns": "int[][]",
+   "guessed": []
+  }
  },
  {
   "id": "rotting-oranges",
@@ -15926,7 +17355,9 @@
   },
   "languages": [
    "javascript",
-   "python"
+   "python",
+   "java",
+   "cpp"
   ],
   "compare": "exact",
   "validated": true,
@@ -16037,7 +17468,14 @@
     "expected": -1,
     "is_visible": false
    }
-  ]
+  ],
+  "signature": {
+   "params": [
+    "int[][]"
+   ],
+   "returns": "int",
+   "guessed": []
+  }
  },
  {
   "id": "search-a-2d-matrix-ii",
@@ -16059,7 +17497,9 @@
   },
   "languages": [
    "javascript",
-   "python"
+   "python",
+   "java",
+   "cpp"
   ],
   "compare": "exact",
   "validated": true,
@@ -16264,7 +17704,15 @@
     "expected": false,
     "is_visible": false
    }
-  ]
+  ],
+  "signature": {
+   "params": [
+    "int[][]",
+    "int"
+   ],
+   "returns": "bool",
+   "guessed": []
+  }
  },
  {
   "id": "search-a-2d-matrix",
@@ -16286,7 +17734,9 @@
   },
   "languages": [
    "javascript",
-   "python"
+   "python",
+   "java",
+   "cpp"
   ],
   "compare": "exact",
   "validated": true,
@@ -16481,7 +17931,15 @@
     "expected": false,
     "is_visible": false
    }
-  ]
+  ],
+  "signature": {
+   "params": [
+    "int[][]",
+    "int"
+   ],
+   "returns": "bool",
+   "guessed": []
+  }
  },
  {
   "id": "search-in-rotated-sorted-array-ii",
@@ -16503,7 +17961,9 @@
   },
   "languages": [
    "javascript",
-   "python"
+   "python",
+   "java",
+   "cpp"
   ],
   "compare": "exact",
   "validated": true,
@@ -16586,7 +18046,15 @@
     "expected": true,
     "is_visible": false
    }
-  ]
+  ],
+  "signature": {
+   "params": [
+    "int[]",
+    "int"
+   ],
+   "returns": "bool",
+   "guessed": []
+  }
  },
  {
   "id": "search-in-rotated-sorted-array",
@@ -16608,7 +18076,9 @@
   },
   "languages": [
    "javascript",
-   "python"
+   "python",
+   "java",
+   "cpp"
   ],
   "compare": "exact",
   "validated": true,
@@ -16688,7 +18158,15 @@
     "expected": 1,
     "is_visible": false
    }
-  ]
+  ],
+  "signature": {
+   "params": [
+    "int[]",
+    "int"
+   ],
+   "returns": "int",
+   "guessed": []
+  }
  },
  {
   "id": "search-insert-position",
@@ -16710,7 +18188,9 @@
   },
   "languages": [
    "javascript",
-   "python"
+   "python",
+   "java",
+   "cpp"
   ],
   "compare": "exact",
   "validated": true,
@@ -16785,7 +18265,15 @@
     "expected": 0,
     "is_visible": false
    }
-  ]
+  ],
+  "signature": {
+   "params": [
+    "int[]",
+    "int"
+   ],
+   "returns": "int",
+   "guessed": []
+  }
  },
  {
   "id": "shortest-path-in-binary-matrix",
@@ -16806,7 +18294,9 @@
   },
   "languages": [
    "javascript",
-   "python"
+   "python",
+   "java",
+   "cpp"
   ],
   "compare": "exact",
   "validated": true,
@@ -16907,7 +18397,14 @@
     "expected": 4,
     "is_visible": false
    }
-  ]
+  ],
+  "signature": {
+   "params": [
+    "int[][]"
+   ],
+   "returns": "int",
+   "guessed": []
+  }
  },
  {
   "id": "simplify-path",
@@ -16928,7 +18425,9 @@
   },
   "languages": [
    "javascript",
-   "python"
+   "python",
+   "java",
+   "cpp"
   ],
   "compare": "exact",
   "validated": true,
@@ -16975,7 +18474,14 @@
     "expected": "/c",
     "is_visible": false
    }
-  ]
+  ],
+  "signature": {
+   "params": [
+    "string"
+   ],
+   "returns": "string",
+   "guessed": []
+  }
  },
  {
   "id": "single-number-ii",
@@ -16996,7 +18502,9 @@
   },
   "languages": [
    "javascript",
-   "python"
+   "python",
+   "java",
+   "cpp"
   ],
   "compare": "exact",
   "validated": true,
@@ -17079,7 +18587,14 @@
     "expected": 4,
     "is_visible": false
    }
-  ]
+  ],
+  "signature": {
+   "params": [
+    "int[]"
+   ],
+   "returns": "int",
+   "guessed": []
+  }
  },
  {
   "id": "single-number-iv",
@@ -17100,7 +18615,9 @@
   },
   "languages": [
    "javascript",
-   "python"
+   "python",
+   "java",
+   "cpp"
   ],
   "compare": "exact",
   "validated": true,
@@ -17173,7 +18690,14 @@
     "expected": 4,
     "is_visible": false
    }
-  ]
+  ],
+  "signature": {
+   "params": [
+    "int[]"
+   ],
+   "returns": "int",
+   "guessed": []
+  }
  },
  {
   "id": "single-number",
@@ -17194,7 +18718,9 @@
   },
   "languages": [
    "javascript",
-   "python"
+   "python",
+   "java",
+   "cpp"
   ],
   "compare": "exact",
   "validated": true,
@@ -17269,7 +18795,14 @@
     "expected": 8,
     "is_visible": false
    }
-  ]
+  ],
+  "signature": {
+   "params": [
+    "int[]"
+   ],
+   "returns": "int",
+   "guessed": []
+  }
  },
  {
   "id": "sliding-window-maximum",
@@ -17291,7 +18824,9 @@
   },
   "languages": [
    "javascript",
-   "python"
+   "python",
+   "java",
+   "cpp"
   ],
   "compare": "exact",
   "validated": true,
@@ -17392,7 +18927,15 @@
     ],
     "is_visible": false
    }
-  ]
+  ],
+  "signature": {
+   "params": [
+    "int[]",
+    "int"
+   ],
+   "returns": "int[]",
+   "guessed": []
+  }
  },
  {
   "id": "spiral-matrix-ii",
@@ -17413,7 +18956,9 @@
   },
   "languages": [
    "javascript",
-   "python"
+   "python",
+   "java",
+   "cpp"
   ],
   "compare": "exact",
   "validated": true,
@@ -17543,7 +19088,14 @@
     ],
     "is_visible": false
    }
-  ]
+  ],
+  "signature": {
+   "params": [
+    "int"
+   ],
+   "returns": "int[][]",
+   "guessed": []
+  }
  },
  {
   "id": "spiral-matrix",
@@ -17564,7 +19116,9 @@
   },
   "languages": [
    "javascript",
-   "python"
+   "python",
+   "java",
+   "cpp"
   ],
   "compare": "exact",
   "validated": true,
@@ -17696,7 +19250,14 @@
     ],
     "is_visible": false
    }
-  ]
+  ],
+  "signature": {
+   "params": [
+    "int[][]"
+   ],
+   "returns": "int[]",
+   "guessed": []
+  }
  },
  {
   "id": "split-array-largest-sum",
@@ -17718,7 +19279,9 @@
   },
   "languages": [
    "javascript",
-   "python"
+   "python",
+   "java",
+   "cpp"
   ],
   "compare": "exact",
   "validated": true,
@@ -17802,7 +19365,15 @@
     "expected": 15,
     "is_visible": false
    }
-  ]
+  ],
+  "signature": {
+   "params": [
+    "int[]",
+    "int"
+   ],
+   "returns": "int",
+   "guessed": []
+  }
  },
  {
   "id": "squares-of-a-sorted-array",
@@ -17823,7 +19394,9 @@
   },
   "languages": [
    "javascript",
-   "python"
+   "python",
+   "java",
+   "cpp"
   ],
   "compare": "exact",
   "validated": true,
@@ -17907,7 +19480,14 @@
     ],
     "is_visible": false
    }
-  ]
+  ],
+  "signature": {
+   "params": [
+    "int[]"
+   ],
+   "returns": "int[]",
+   "guessed": []
+  }
  },
  {
   "id": "string-to-integer",
@@ -17928,7 +19508,9 @@
   },
   "languages": [
    "javascript",
-   "python"
+   "python",
+   "java",
+   "cpp"
   ],
   "compare": "exact",
   "validated": true,
@@ -18003,7 +19585,14 @@
     "expected": 2147483647,
     "is_visible": false
    }
-  ]
+  ],
+  "signature": {
+   "params": [
+    "string"
+   ],
+   "returns": "int",
+   "guessed": []
+  }
  },
  {
   "id": "subarray-sum-equals-k",
@@ -18025,7 +19614,9 @@
   },
   "languages": [
    "javascript",
-   "python"
+   "python",
+   "java",
+   "cpp"
   ],
   "compare": "exact",
   "validated": true,
@@ -18105,7 +19696,15 @@
     "expected": 1,
     "is_visible": false
    }
-  ]
+  ],
+  "signature": {
+   "params": [
+    "int[]",
+    "int"
+   ],
+   "returns": "int",
+   "guessed": []
+  }
  },
  {
   "id": "subarrays-with-k-different-integers",
@@ -18127,7 +19726,9 @@
   },
   "languages": [
    "javascript",
-   "python"
+   "python",
+   "java",
+   "cpp"
   ],
   "compare": "exact",
   "validated": true,
@@ -18210,7 +19811,15 @@
     "expected": 5,
     "is_visible": false
    }
-  ]
+  ],
+  "signature": {
+   "params": [
+    "int[]",
+    "int"
+   ],
+   "returns": "int",
+   "guessed": []
+  }
  },
  {
   "id": "subsets-ii",
@@ -18231,7 +19840,9 @@
   },
   "languages": [
    "javascript",
-   "python"
+   "python",
+   "java",
+   "cpp"
   ],
   "compare": "unordered",
   "validated": true,
@@ -18398,7 +20009,14 @@
     ],
     "is_visible": false
    }
-  ]
+  ],
+  "signature": {
+   "params": [
+    "int[]"
+   ],
+   "returns": "int[][]",
+   "guessed": []
+  }
  },
  {
   "id": "subsets",
@@ -18419,7 +20037,9 @@
   },
   "languages": [
    "javascript",
-   "python"
+   "python",
+   "java",
+   "cpp"
   ],
   "compare": "unordered",
   "validated": true,
@@ -18584,7 +20204,14 @@
     ],
     "is_visible": false
    }
-  ]
+  ],
+  "signature": {
+   "params": [
+    "int[]"
+   ],
+   "returns": "int[][]",
+   "guessed": []
+  }
  },
  {
   "id": "sum-of-two-integers",
@@ -18606,7 +20233,9 @@
   },
   "languages": [
    "javascript",
-   "python"
+   "python",
+   "java",
+   "cpp"
   ],
   "compare": "exact",
   "validated": true,
@@ -18659,7 +20288,15 @@
     "expected": 0,
     "is_visible": false
    }
-  ]
+  ],
+  "signature": {
+   "params": [
+    "int",
+    "int"
+   ],
+   "returns": "int",
+   "guessed": []
+  }
  },
  {
   "id": "swim-in-rising-water",
@@ -18680,7 +20317,9 @@
   },
   "languages": [
    "javascript",
-   "python"
+   "python",
+   "java",
+   "cpp"
   ],
   "compare": "exact",
   "validated": true,
@@ -18787,7 +20426,14 @@
     "expected": 3,
     "is_visible": false
    }
-  ]
+  ],
+  "signature": {
+   "params": [
+    "int[][]"
+   ],
+   "returns": "int",
+   "guessed": []
+  }
  },
  {
   "id": "target-sum",
@@ -18809,7 +20455,9 @@
   },
   "languages": [
    "javascript",
-   "python"
+   "python",
+   "java",
+   "cpp"
   ],
   "compare": "exact",
   "validated": true,
@@ -18874,7 +20522,15 @@
     "expected": 2,
     "is_visible": false
    }
-  ]
+  ],
+  "signature": {
+   "params": [
+    "int[]",
+    "int"
+   ],
+   "returns": "int",
+   "guessed": []
+  }
  },
  {
   "id": "task-scheduler",
@@ -18896,7 +20552,9 @@
   },
   "languages": [
    "javascript",
-   "python"
+   "python",
+   "java",
+   "cpp"
   ],
   "compare": "exact",
   "validated": true,
@@ -18991,7 +20649,15 @@
     "expected": 7,
     "is_visible": false
    }
-  ]
+  ],
+  "signature": {
+   "params": [
+    "string[]",
+    "int"
+   ],
+   "returns": "int",
+   "guessed": []
+  }
  },
  {
   "id": "text-justification",
@@ -19013,7 +20679,9 @@
   },
   "languages": [
    "javascript",
-   "python"
+   "python",
+   "java",
+   "cpp"
   ],
   "compare": "exact",
   "validated": true,
@@ -19116,7 +20784,15 @@
     ],
     "is_visible": false
    }
-  ]
+  ],
+  "signature": {
+   "params": [
+    "string[]",
+    "int"
+   ],
+   "returns": "string[]",
+   "guessed": []
+  }
  },
  {
   "id": "toeplitz-matrix",
@@ -19137,7 +20813,9 @@
   },
   "languages": [
    "javascript",
-   "python"
+   "python",
+   "java",
+   "cpp"
   ],
   "compare": "exact",
   "validated": true,
@@ -19236,7 +20914,14 @@
     "expected": true,
     "is_visible": false
    }
-  ]
+  ],
+  "signature": {
+   "params": [
+    "int[][]"
+   ],
+   "returns": "bool",
+   "guessed": []
+  }
  },
  {
   "id": "top-k-frequent-words",
@@ -19258,7 +20943,9 @@
   },
   "languages": [
    "javascript",
-   "python"
+   "python",
+   "java",
+   "cpp"
   ],
   "compare": "exact",
   "validated": true,
@@ -19357,7 +21044,15 @@
     ],
     "is_visible": false
    }
-  ]
+  ],
+  "signature": {
+   "params": [
+    "string[]",
+    "int"
+   ],
+   "returns": "string[]",
+   "guessed": []
+  }
  },
  {
   "id": "total-hamming-distance",
@@ -19378,7 +21073,9 @@
   },
   "languages": [
    "javascript",
-   "python"
+   "python",
+   "java",
+   "cpp"
   ],
   "compare": "exact",
   "validated": true,
@@ -19449,7 +21146,14 @@
     "expected": 8,
     "is_visible": false
    }
-  ]
+  ],
+  "signature": {
+   "params": [
+    "int[]"
+   ],
+   "returns": "int",
+   "guessed": []
+  }
  },
  {
   "id": "trapping-rain-water",
@@ -19470,7 +21174,9 @@
   },
   "languages": [
    "javascript",
-   "python"
+   "python",
+   "java",
+   "cpp"
   ],
   "compare": "exact",
   "validated": true,
@@ -19552,7 +21258,14 @@
     "expected": 3,
     "is_visible": false
    }
-  ]
+  ],
+  "signature": {
+   "params": [
+    "int[]"
+   ],
+   "returns": "int",
+   "guessed": []
+  }
  },
  {
   "id": "two-city-scheduling",
@@ -19573,7 +21286,9 @@
   },
   "languages": [
    "javascript",
-   "python"
+   "python",
+   "java",
+   "cpp"
   ],
   "compare": "exact",
   "validated": true,
@@ -19706,7 +21421,14 @@
     "expected": 0,
     "is_visible": false
    }
-  ]
+  ],
+  "signature": {
+   "params": [
+    "int[][]"
+   ],
+   "returns": "int",
+   "guessed": []
+  }
  },
  {
   "id": "two-sum-ii-input-array-is-sorted",
@@ -19728,7 +21450,9 @@
   },
   "languages": [
    "javascript",
-   "python"
+   "python",
+   "java",
+   "cpp"
   ],
   "compare": "exact",
   "validated": true,
@@ -19813,7 +21537,15 @@
     ],
     "is_visible": false
    }
-  ]
+  ],
+  "signature": {
+   "params": [
+    "int[]",
+    "int"
+   ],
+   "returns": "int[]",
+   "guessed": []
+  }
  },
  {
   "id": "two-sum",
@@ -19835,7 +21567,9 @@
   },
   "languages": [
    "javascript",
-   "python"
+   "python",
+   "java",
+   "cpp"
   ],
   "compare": "unordered",
   "validated": true,
@@ -21946,7 +23680,15 @@
     ],
     "is_visible": false
    }
-  ]
+  ],
+  "signature": {
+   "params": [
+    "int[]",
+    "int"
+   ],
+   "returns": "int[]",
+   "guessed": []
+  }
  },
  {
   "id": "ugly-number-ii",
@@ -21967,7 +23709,9 @@
   },
   "languages": [
    "javascript",
-   "python"
+   "python",
+   "java",
+   "cpp"
   ],
   "compare": "exact",
   "validated": true,
@@ -22014,7 +23758,14 @@
     "expected": 1536,
     "is_visible": false
    }
-  ]
+  ],
+  "signature": {
+   "params": [
+    "int"
+   ],
+   "returns": "int",
+   "guessed": []
+  }
  },
  {
   "id": "unique-paths-ii",
@@ -22035,7 +23786,9 @@
   },
   "languages": [
    "javascript",
-   "python"
+   "python",
+   "java",
+   "cpp"
   ],
   "compare": "exact",
   "validated": true,
@@ -22119,7 +23872,14 @@
     "expected": 1,
     "is_visible": false
    }
-  ]
+  ],
+  "signature": {
+   "params": [
+    "int[][]"
+   ],
+   "returns": "int",
+   "guessed": []
+  }
  },
  {
   "id": "unique-paths-iii",
@@ -22140,7 +23900,9 @@
   },
   "languages": [
    "javascript",
-   "python"
+   "python",
+   "java",
+   "cpp"
   ],
   "compare": "exact",
   "validated": true,
@@ -22267,7 +24029,14 @@
     "expected": 1,
     "is_visible": false
    }
-  ]
+  ],
+  "signature": {
+   "params": [
+    "int[][]"
+   ],
+   "returns": "int",
+   "guessed": []
+  }
  },
  {
   "id": "unique-paths",
@@ -22289,7 +24058,9 @@
   },
   "languages": [
    "javascript",
-   "python"
+   "python",
+   "java",
+   "cpp"
   ],
   "compare": "exact",
   "validated": true,
@@ -22334,7 +24105,15 @@
     "expected": 6,
     "is_visible": false
    }
-  ]
+  ],
+  "signature": {
+   "params": [
+    "int",
+    "int"
+   ],
+   "returns": "int",
+   "guessed": []
+  }
  },
  {
   "id": "valid-anagram",
@@ -22356,7 +24135,9 @@
   },
   "languages": [
    "javascript",
-   "python"
+   "python",
+   "java",
+   "cpp"
   ],
   "compare": "exact",
   "validated": true,
@@ -22417,7 +24198,15 @@
     "expected": true,
     "is_visible": false
    }
-  ]
+  ],
+  "signature": {
+   "params": [
+    "string",
+    "string"
+   ],
+   "returns": "bool",
+   "guessed": []
+  }
  },
  {
   "id": "valid-palindrome",
@@ -22438,7 +24227,9 @@
   },
   "languages": [
    "javascript",
-   "python"
+   "python",
+   "java",
+   "cpp"
   ],
   "compare": "exact",
   "validated": true,
@@ -22485,7 +24276,14 @@
     "expected": true,
     "is_visible": false
    }
-  ]
+  ],
+  "signature": {
+   "params": [
+    "string"
+   ],
+   "returns": "bool",
+   "guessed": []
+  }
  },
  {
   "id": "valid-parentheses",
@@ -22506,7 +24304,9 @@
   },
   "languages": [
    "javascript",
-   "python"
+   "python",
+   "java",
+   "cpp"
   ],
   "compare": "exact",
   "validated": true,
@@ -22581,7 +24381,14 @@
     "expected": true,
     "is_visible": false
    }
-  ]
+  ],
+  "signature": {
+   "params": [
+    "string"
+   ],
+   "returns": "bool",
+   "guessed": []
+  }
  },
  {
   "id": "valid-parenthesis-string",
@@ -22602,7 +24409,9 @@
   },
   "languages": [
    "javascript",
-   "python"
+   "python",
+   "java",
+   "cpp"
   ],
   "compare": "exact",
   "validated": true,
@@ -22649,7 +24458,14 @@
     "expected": true,
     "is_visible": false
    }
-  ]
+  ],
+  "signature": {
+   "params": [
+    "string"
+   ],
+   "returns": "bool",
+   "guessed": []
+  }
  },
  {
   "id": "wildcard-matching",
@@ -22671,7 +24487,9 @@
   },
   "languages": [
    "javascript",
-   "python"
+   "python",
+   "java",
+   "cpp"
   ],
   "compare": "exact",
   "validated": true,
@@ -22724,7 +24542,15 @@
     "expected": true,
     "is_visible": false
    }
-  ]
+  ],
+  "signature": {
+   "params": [
+    "string",
+    "string"
+   ],
+   "returns": "bool",
+   "guessed": []
+  }
  },
  {
   "id": "word-break",
@@ -22746,7 +24572,9 @@
   },
   "languages": [
    "javascript",
-   "python"
+   "python",
+   "java",
+   "cpp"
   ],
   "compare": "exact",
   "validated": true,
@@ -22820,7 +24648,15 @@
     "expected": true,
     "is_visible": false
    }
-  ]
+  ],
+  "signature": {
+   "params": [
+    "string",
+    "string[]"
+   ],
+   "returns": "bool",
+   "guessed": []
+  }
  },
  {
   "id": "word-ladder",
@@ -22843,7 +24679,9 @@
   },
   "languages": [
    "javascript",
-   "python"
+   "python",
+   "java",
+   "cpp"
   ],
   "compare": "exact",
   "validated": true,
@@ -22926,7 +24764,16 @@
     "expected": 2,
     "is_visible": false
    }
-  ]
+  ],
+  "signature": {
+   "params": [
+    "string",
+    "string",
+    "string[]"
+   ],
+   "returns": "int",
+   "guessed": []
+  }
  },
  {
   "id": "word-pattern",
@@ -22948,7 +24795,9 @@
   },
   "languages": [
    "javascript",
-   "python"
+   "python",
+   "java",
+   "cpp"
   ],
   "compare": "exact",
   "validated": true,
@@ -23001,7 +24850,15 @@
     "expected": false,
     "is_visible": false
    }
-  ]
+  ],
+  "signature": {
+   "params": [
+    "string",
+    "string"
+   ],
+   "returns": "bool",
+   "guessed": []
+  }
  },
  {
   "id": "word-search",
@@ -23024,7 +24881,9 @@
   },
   "languages": [
    "javascript",
-   "python"
+   "python",
+   "java",
+   "cpp"
   ],
   "compare": "exact",
   "validated": true,
@@ -23135,7 +24994,15 @@
     "expected": false,
     "is_visible": false
    }
-  ]
+  ],
+  "signature": {
+   "params": [
+    "string[][]",
+    "string"
+   ],
+   "returns": "bool",
+   "guessed": []
+  }
  },
  {
   "id": "zigzag-conversion",
@@ -23157,7 +25024,9 @@
   },
   "languages": [
    "javascript",
-   "python"
+   "python",
+   "java",
+   "cpp"
   ],
   "compare": "exact",
   "validated": true,
@@ -23210,6 +25079,14 @@
     "expected": "ABCED",
     "is_visible": false
    }
-  ]
+  ],
+  "signature": {
+   "params": [
+    "string",
+    "int"
+   ],
+   "returns": "string",
+   "guessed": []
+  }
  }
 ]
