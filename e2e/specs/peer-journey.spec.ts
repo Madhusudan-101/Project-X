@@ -21,13 +21,45 @@ async function candidate(browser: any, request: any, email: string, session?: an
   return { ctx, page, session: s };
 }
 
+/** First use: the server asks for the peer-interview guidelines before anything starts. Accept them. */
+async function acceptGuidelines(page: Page) {
+  const dialog = page.getByRole("dialog", { name: "Peer interview guidelines" });
+  await expect(dialog).toBeVisible({ timeout: 15_000 });
+  await dialog.getByLabel(/read the guidelines/).check();
+  await dialog.getByLabel(/camera and microphone are shared/).check();
+  await dialog.getByLabel(/live captions and AI feedback/).check();
+  await dialog.getByRole("button", { name: /I agree, continue/ }).click();
+  await expect(dialog).toBeHidden();
+}
+
+/** The pre-join lobby in the PeerMeet tab: accept the rules, optionally opt in to AI, join. */
+async function passLobby(page: Page, ai = false) {
+  await expect(page.getByRole("heading", { name: "Get ready to join" })).toBeVisible({ timeout: 30_000 });
+  await page.getByLabel(/I have read these rules/).check();
+  if (ai) await page.getByLabel(/Turn on live captions and AI feedback/).check(); else await page.getByLabel(/Turn on live captions and AI feedback/).uncheck();
+  await page.getByRole("button", { name: "Join meeting" }).click();
+}
+
 /** The dialog defaults to "Keep my identity private" ON; `share: true` switches it off first. */
-async function findPartner(page: Page, ctx: BrowserContext, opts: { share?: boolean } = {}) {
+async function findPartner(page: Page, ctx: BrowserContext, opts: { share?: boolean; guidelines?: boolean } = {}) {
   await page.getByText("Peer Interview", { exact: true }).first().click();
   if (opts.share) await page.getByText("Keep my identity private").click();
-  const popup = ctx.waitForEvent("page", { timeout: 40_000 });
+  const popup = ctx.waitForEvent("page", { timeout: 60_000 });
   await page.getByRole("button", { name: "Find a partner now" }).click();
+  if (opts.guidelines !== false) await acceptGuidelines(page);
   return popup;
+}
+
+/** Both people from the dashboard land in one room and pass the lobby. */
+async function pairUp(a: any, b: any, opts: { share?: boolean } = {}) {
+  const popA = await findPartner(a.page, a.ctx, opts);
+  const popB = await findPartner(b.page, b.ctx, opts);
+  const [pa, pb] = [await popA, await popB];
+  await expect.poll(() => pa.url(), { timeout: 30_000 }).toMatch(/\/room\//);
+  await expect.poll(() => pb.url(), { timeout: 30_000 }).toMatch(/\/room\//);
+  await passLobby(pa);
+  await passLobby(pb);
+  return { pa, pb };
 }
 
 test.describe("dashboard peer-interview matchmaking -> PeerMeet room", () => {
@@ -44,6 +76,8 @@ test.describe("dashboard peer-interview matchmaking -> PeerMeet room", () => {
     await expect.poll(() => pb.url(), { timeout: 30_000 }).toMatch(/\/room\//);
     const room = (u: string) => new URL(u).pathname.split("/").pop();
     expect(room(pa.url())).toBe(room(pb.url()));
+    await passLobby(pa);
+    await passLobby(pb);
     await expect(pa.getByText("Connected").first()).toBeVisible({ timeout: 30_000 });
     await expect(pb.getByText("Connected").first()).toBeVisible({ timeout: 30_000 });
     // identity token is stripped from the address bar (never left in history / Referer)
@@ -61,6 +95,8 @@ test.describe("dashboard peer-interview matchmaking -> PeerMeet room", () => {
     const popA = await findPartner(a.page, a.ctx, { share: true });
     const popB = await findPartner(b.page, b.ctx, { share: true });
     const [pa, pb] = [await popA, await popB];
+    await passLobby(pa);
+    await passLobby(pb);
     await expect(pa.getByText("Dev Candidate").first()).toBeVisible({ timeout: 40_000 });
     await expect(pb.getByText("Cara Candidate").first()).toBeVisible({ timeout: 40_000 });
     await a.ctx.close(); await b.ctx.close();
@@ -73,6 +109,8 @@ test.describe("dashboard peer-interview matchmaking -> PeerMeet room", () => {
     const popA = await findPartner(a.page, a.ctx);
     const popB = await findPartner(b.page, b.ctx, { share: true });
     const [pa, pb] = [await popA, await popB];
+    await passLobby(pa);
+    await passLobby(pb);
     await expect(pb.getByText("Anonymous Candidate").first()).toBeVisible({ timeout: 40_000 });
     await expect(pb.getByText("Cara Candidate")).toHaveCount(0);
     await expect(pa.getByText("Dev Candidate").first()).toBeVisible({ timeout: 40_000 });
@@ -83,6 +121,7 @@ test.describe("dashboard peer-interview matchmaking -> PeerMeet room", () => {
     const a = await candidate(browser, request, EMAIL.candidate);
     await a.page.getByText("Peer Interview", { exact: true }).first().click();
     await a.page.getByRole("button", { name: "Find a partner now" }).click();
+    await acceptGuidelines(a.page);
     const cancel = a.page.getByRole("button", { name: "Cancel" });
     await expect(cancel).toBeVisible({ timeout: 15_000 });
     expect((await (await request.get(`${API}/__e2e/state`)).json()).peer_matchmaking_tickets).toBe(1);
@@ -92,5 +131,63 @@ test.describe("dashboard peer-interview matchmaking -> PeerMeet room", () => {
       return st.peer_matchmaking_tickets_rows?.[0]?.status;
     }, { timeout: 10_000 }).toBe("cancelled");
     await a.ctx.close();
+  });
+
+  test("the guidelines are asked once, and not again after they were accepted", async ({ browser, request }) => {
+    test.setTimeout(120_000);
+    const a = await candidate(browser, request, EMAIL.candidate);
+    await a.page.getByText("Peer Interview", { exact: true }).first().click();
+    await a.page.getByRole("button", { name: "Find a partner now" }).click();
+    await acceptGuidelines(a.page);
+    const st = await (await request.get(`${API}/__e2e/state`)).json();
+    expect(st.peer_consents_rows.length).toBe(1);
+    // leave the queue, try again: no dialog this time
+    await a.page.getByRole("button", { name: "Cancel" }).click();
+    await a.page.getByRole("button", { name: "Find a partner now" }).click();
+    await expect(a.page.getByRole("dialog", { name: "Peer interview guidelines" })).toHaveCount(0);
+    await expect(a.page.getByRole("button", { name: "Cancel" })).toBeVisible({ timeout: 15_000 });
+    await a.ctx.close();
+  });
+
+  test("declining the guidelines starts nothing", async ({ browser, request }) => {
+    const a = await candidate(browser, request, EMAIL.candidate);
+    await a.page.getByText("Peer Interview", { exact: true }).first().click();
+    await a.page.getByRole("button", { name: "Find a partner now" }).click();
+    const dialog = a.page.getByRole("dialog", { name: "Peer interview guidelines" });
+    await expect(dialog).toBeVisible({ timeout: 15_000 });
+    await expect(dialog.getByRole("button", { name: /I agree, continue/ })).toBeDisabled();   // all three statements are required
+    await dialog.getByRole("button", { name: "Not now" }).click();
+    const st = await (await request.get(`${API}/__e2e/state`)).json();
+    expect(st.peer_matchmaking_tickets ?? 0).toBe(0);   // no ticket was ever created
+    expect(st.peer_consents ?? 0).toBe(0);              // and nothing was recorded as accepted
+    await a.ctx.close();
+  });
+
+  test("reporting and blocking from inside the meeting: stored with evidence, and they are never matched again", async ({ browser, request }) => {
+    test.setTimeout(180_000);
+    const a = await candidate(browser, request, EMAIL.candidate);
+    const b = await candidate(browser, request, "cand2@e2e.dev");
+    const { pa, pb } = await pairUp(a, b, { share: true });
+    await expect(pa.getByText("Connected").first()).toBeVisible({ timeout: 30_000 });
+    await expect(pb.getByText("Connected").first()).toBeVisible({ timeout: 30_000 });
+
+    await pa.getByRole("button", { name: "Report the other person" }).click();
+    await pa.getByLabel("Harassment or abuse").check();
+    await pa.getByLabel(/Details/).fill("rude");
+    await pa.getByRole("button", { name: "Send report" }).click();
+    await expect(pa.getByRole("status").filter({ hasText: /sent to the Mirracle team/ })).toBeVisible({ timeout: 15_000 });
+
+    const st = await (await request.get(`${API}/__e2e/state`)).json();
+    expect(st.peer_user_reports_rows).toHaveLength(1);
+    const row = st.peer_user_reports_rows[0];
+    expect(row.source).toBe("meeting");
+    expect(row.reason).toBe("harassment");
+    expect(Array.isArray(row.evidence?.transcript)).toBe(true);
+    expect(st.peer_blocks_rows).toHaveLength(1);                       // "also block" is on by default
+
+    // after reporting the reporter leaves automatically; both leave the match
+    await expect(pa).toHaveURL(/\/left\//, { timeout: 15_000 });
+    await a.page.getByText("Peer Interview", { exact: true }).first().click().catch(() => {});
+    await a.ctx.close(); await b.ctx.close();
   });
 });

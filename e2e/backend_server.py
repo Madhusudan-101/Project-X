@@ -104,14 +104,19 @@ def seed():
          domain="tech", cgpa=7.9, branch="IT", graduation_year=2026, skills=["Go"], college_name="Alpha College")
 
     def claim_ticket(p):
-        """Port of public.claim_peer_matchmaking_ticket(): atomically pair with the oldest other waiting ticket."""
+        """Port of public.claim_peer_matchmaking_ticket(): pair with the best other waiting ticket (not blocked, same topic first, oldest first)."""
+        me = p["p_student_id"]
+        blocks = db.tables.get("peer_blocks", [])
+        blocked = lambda o: any((b["blocker_id"], b["blocked_id"]) in ((me, o), (o, me)) for b in blocks)
+        topic = p.get("p_topic")
         waiting = sorted([t for t in db.tables.get("peer_matchmaking_tickets", [])
-                          if t.get("status") == "waiting" and t["student_id"] != p["p_student_id"]], key=lambda t: t["created_at"])
+                          if t.get("status") == "waiting" and t["student_id"] != me and not blocked(t["student_id"])],
+                         key=lambda t: (0 if (topic is None or t.get("topic") is None or t.get("topic") == topic) else 1, t["created_at"]))
         if not waiting:
             return []
         t = waiting[0]
-        t.update(status="matched", room_id=p["p_room_id"], matched_with=p["p_student_id"])
-        return [{"peer_id": t["student_id"], "ticket_id": t["id"]}]
+        t.update(status="matched", room_id=p["p_room_id"], matched_with=me, matched_at=__import__("datetime").datetime.now(__import__("datetime").timezone.utc).isoformat())
+        return [{"peer_id": t["student_id"], "ticket_id": t["id"], "peer_private": bool(t.get("keep_private"))}]
 
     db.rpc_handlers["claim_peer_matchmaking_ticket"] = claim_ticket
     _empty_ctc = lambda: {"roles": 0, "average": None, "highest": None, "lowest": None,
@@ -168,7 +173,7 @@ def _patch(body: dict):
 def _state():
     """Test-only: lets specs assert on what the backend actually stored."""
     return {t: len(rows) for t, rows in db.tables.items()} | {
-        "applications_rows": db.tables.get("applications", []), "peer_matchmaking_tickets_rows": db.tables.get("peer_matchmaking_tickets", []), "students_rows": db.tables.get("students", [])}
+        "applications_rows": db.tables.get("applications", []), "peer_matchmaking_tickets_rows": db.tables.get("peer_matchmaking_tickets", []), "peer_user_reports_rows": db.tables.get("peer_user_reports", []), "peer_blocks_rows": db.tables.get("peer_blocks", []), "peer_consents_rows": db.tables.get("peer_consents", []), "students_rows": db.tables.get("students", [])}
 
 
 if __name__ == "__main__":
