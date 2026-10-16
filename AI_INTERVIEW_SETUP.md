@@ -7,6 +7,61 @@ Work through it top to bottom. Tick each box.
 
 ---
 
+## 0. Get the code (which branch, which commands)
+
+All of this work is on the branch **`feat/ai-interview-meeting-room`** of
+`github.com/Madhusudan-101/Project-X`. It is **not** merged into `main`, so pull this branch to test it.
+
+```bash
+# first time
+git clone https://github.com/Madhusudan-101/Project-X.git
+cd Project-X
+git checkout feat/ai-interview-meeting-room
+
+# already cloned
+git fetch origin
+git checkout feat/ai-interview-meeting-room
+git pull origin feat/ai-interview-meeting-room
+```
+
+Check you are on the right branch and up to date: `git status -sb` should show
+`## feat/ai-interview-meeting-room...origin/feat/ai-interview-meeting-room` with nothing ahead or behind.
+Pull again before every test session in case more fixes were pushed.
+
+### Commands to run for testing
+
+**Backend** (from `backend/`):
+```bash
+pip install -r requirements.txt -r requirements-dev.txt
+uvicorn app.main:app --reload --port 8000        # run it
+# automated tests for this feature (run by path):
+python -m pytest tests/test_ai_interview.py tests/integration tests/unit
+```
+
+**Agent** (from `ai-interviewer/`):
+```bash
+uv sync
+uv run python agent.py download-files    # one time
+uv run python agent.py dev               # run it (keep the terminal open and watch its log)
+uv run python -m pytest                  # automated tests
+```
+
+**Frontend** (from `frontend/`):
+```bash
+npm install
+npm run dev                              # run it
+npm test                                 # automated tests (vitest)
+npx tsc --noEmit -p tsconfig.json        # type check
+```
+
+Run order for a manual test: SQL (section 3) → backend → agent → frontend → follow section 8.
+
+Expected automated results on this branch: backend 465 passed, agent 74 passed, frontend 262 passed.
+(Running plain `pytest tests` over the whole backend folder stops early during collection; use the
+path form above.)
+
+---
+
 ## 1. Accounts and API keys
 
 | Needed for | Service | Where the key goes |
