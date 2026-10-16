@@ -39,6 +39,10 @@ This is a **practice/mock interview tool**, not a hiring platform — the AI's o
 
 ---
 
+## Peer-interview experience (Mirracle integration)
+
+Pre-join lobby (device pickers, mic meter, permission help), partner/self video swap, in-call chat, partner mic/camera state, people panel, leave confirmation and an ended screen, scheduled-meeting countdown, and an in-call **Report** that sends the transcript and chat excerpt to Mirracle's moderators. Entry tokens are bound to one room and expire; set `PEERMEET_REQUIRE_TOKEN=1` in production. Report webhooks are HMAC-signed. See `../PEERMEET_SETUP.md` for setup, SQL order, scheduler and the manual test plan.
+
 ## Architecture
 
 ```

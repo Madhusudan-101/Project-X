@@ -1,5 +1,7 @@
 # PeerMeet: implementation plan (bug fixes + features)
 
+> **Status: phases 1–5 implemented, tested and pushed on `feat/peermeet-end-to-end`.** Phase 6 (tests) was written alongside each phase. What you need to do (SQL, keys, scheduler) and the manual test plan are in `PEERMEET_SETUP.md`. Not built: mid-call device switching, join without camera, connection-quality indicator, waiting-room admit/deny, shared store for multiple PeerMeet instances, invitee decline.
+
 Branch: `feat/peermeet-end-to-end` (cut from `main`; separate from the AI interview branch).
 
 **Status of the evidence**
