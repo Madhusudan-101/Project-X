@@ -555,4 +555,36 @@ def result_detail(
         "assessment_title": assessment["title"],
         "questions": detail_qs,
         "section_titles": {s["position"]: s["title"] for s in definition["sections"]},
+        "events": _timeline(attempt, questions, sec_pos),
     }
+
+
+MAX_TIMELINE_EVENTS = 2000
+
+
+def _timeline(attempt: dict, questions: List[dict], sec_pos: Dict[str, int]) -> Dict[str, Any]:
+    """The attempt's integrity events in order, each placed on the clock and on a question."""
+    rows = (
+        db_client.table("oa_events").select("type, question_id, occurred_at, meta")
+        .eq("attempt_id", attempt["id"]).order("occurred_at", desc=False).limit(MAX_TIMELINE_EVENTS)
+        .execute().data or []
+    )
+    where = {q["id"]: {"section": sec_pos.get(q["section_id"]), "position": q["position"], "title": q["title"]}
+             for q in questions}
+    started = _parse_ts(attempt["started_at"])
+    items: List[Dict[str, Any]] = []
+    counts: Dict[str, int] = {}
+    largest_paste = 0
+    for r in rows:
+        at = _parse_ts(r["occurred_at"])
+        meta = r.get("meta") or {}
+        counts[r["type"]] = counts.get(r["type"], 0) + 1
+        if r["type"] == "paste":
+            largest_paste = max(largest_paste, int(meta.get("length") or 0))
+        items.append({
+            "type": r["type"], "at": str(r["occurred_at"]),
+            "offset_seconds": max(0, int((at - started).total_seconds())) if at and started else None,
+            "question": where.get(r.get("question_id")), "detail": meta,
+        })
+    return {"items": items, "counts": counts, "largest_paste": largest_paste,
+            "logged": int(attempt.get("events_logged") or 0), "capped": len(rows) >= MAX_TIMELINE_EVENTS}

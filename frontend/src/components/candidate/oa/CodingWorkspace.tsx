@@ -33,7 +33,7 @@ interface Props {
   code: string;
   codingEnabled: boolean;
   onEdit: (code: string, language: CodeLanguage) => void;
-  onPaste: () => void;
+  onPaste: (text: string) => void;
   /** Called after a graded submission so the runner can show progress. */
   onSubmitted: (result: OASubmitResult) => void;
   best: OASubmitResult | null;

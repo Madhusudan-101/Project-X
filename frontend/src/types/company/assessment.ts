@@ -144,7 +144,41 @@ export interface ResultQuestion {
   submissions?: CodeSubmission[];
 }
 
+export type IntegrityEventType =
+  | "tab_switch"
+  | "tab_return"
+  | "window_blur"
+  | "window_focus"
+  | "fullscreen_exit"
+  | "fullscreen_enter"
+  | "paste"
+  | "copy"
+  | "cut";
+
+export interface IntegrityEvent {
+  type: IntegrityEventType;
+  at: string;
+  /** seconds since the candidate started */
+  offsetSeconds: number | null;
+  question: { section: number | null; position: number; title: string } | null;
+  text?: string;
+  length?: number;
+  truncated?: boolean;
+  target?: "editor" | "other";
+  awayMs?: number;
+}
+
+export interface IntegrityTimeline {
+  items: IntegrityEvent[];
+  counts: Partial<Record<IntegrityEventType, number>>;
+  largestPaste: number;
+  /** events the candidate's browser sent, including any past the log cap */
+  logged: number;
+  capped: boolean;
+}
+
 export interface ResultDetail {
+  events: IntegrityTimeline;
   candidate: ResultRow;
   assessmentTitle: string;
   sectionTitles: Record<number, string>;

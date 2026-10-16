@@ -12,6 +12,8 @@
 
 import { request } from "../client";
 import type {
+  IntegrityEvent,
+  IntegrityTimeline,
   Assessment,
   AssessmentDraft,
   InviteResult,
@@ -55,6 +57,29 @@ function normalizeAssessment(raw: Raw): Assessment {
         problemId: (q.problem_id as string | null) ?? null,
       })),
     })),
+  };
+}
+
+function normalizeTimeline(t: Raw): IntegrityTimeline {
+  return {
+    items: ((t.items as Raw[]) ?? []).map((e) => {
+      const d = (e.detail as Raw | undefined) ?? {};
+      return {
+        type: e.type as IntegrityEvent["type"],
+        at: e.at as string,
+        offsetSeconds: e.offset_seconds == null ? null : Number(e.offset_seconds),
+        question: (e.question as IntegrityEvent["question"]) ?? null,
+        text: typeof d.text === "string" ? d.text : undefined,
+        length: d.length == null ? undefined : Number(d.length),
+        truncated: d.truncated ? true : undefined,
+        target: d.target as IntegrityEvent["target"],
+        awayMs: d.away_ms == null ? undefined : Number(d.away_ms),
+      };
+    }),
+    counts: (t.counts as IntegrityTimeline["counts"]) ?? {},
+    largestPaste: Number(t.largest_paste ?? 0),
+    logged: Number(t.logged ?? 0),
+    capped: Boolean(t.capped),
   };
 }
 
@@ -221,6 +246,7 @@ export const companyAssessmentService = {
       candidate: normalizeRow(r.candidate as Raw),
       assessmentTitle: r.assessment_title as string,
       sectionTitles: (r.section_titles as Record<number, string>) ?? {},
+      events: normalizeTimeline((r.events as Raw | undefined) ?? {}),
       questions: ((r.questions as Raw[]) ?? []).map((q) => ({
         section: (q.section as number | null) ?? null,
         position: Number(q.position),

@@ -6,6 +6,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { companyAssessmentService } from "@/services/api/company/assessment";
 import type { ResultDetail } from "@/types/company/assessment";
 import { fmtDuration } from "./format";
+import { IntegrityTimelineCard } from "./IntegrityTimeline";
 
 const VERDICT: Record<string, string> = {
   accepted: "Accepted",
@@ -62,6 +63,8 @@ export function CandidateResultSheet({
                 value={`${data.candidate.pasteEvents} / ${data.candidate.fullscreenExits}`}
               />
             </dl>
+
+            <IntegrityTimelineCard timeline={data.events} />
 
             {data.questions.map((q, i) => (
               <section key={i} className="space-y-2 rounded-lg border border-border p-4">

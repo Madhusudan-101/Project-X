@@ -24,6 +24,7 @@ import { useCandidateGuard } from "@/hooks/candidate/use-candidate-guard";
 import { candidateAssessmentService } from "@/services/api/candidate/assessment";
 import type {
   CodeLanguage,
+  OAEventExtra,
   OAEventType,
   OAQuestion,
   OASession,
@@ -214,41 +215,88 @@ function AssessmentRunnerPage() {
 
   // ── Integrity: tab switches, fullscreen exits, pastes, second tabs ──
   const inProgress = data?.status === "in_progress";
+  // The question on screen, so every event is filed under it (set below, once `q` exists).
+  const activeQuestionId = useRef<string | null>(null);
+  const fullscreenRef = useRef(false);
   const report = useCallback(
-    (type: OAEventType) => {
-      candidateAssessmentService.reportEvent(applicationId, type).catch(() => undefined);
+    (type: OAEventType, extra: OAEventExtra = {}) => {
+      candidateAssessmentService
+        .reportEvent(applicationId, type, { questionId: activeQuestionId.current, ...extra })
+        .catch(() => undefined);
     },
     [applicationId],
   );
 
   useEffect(() => {
     if (!inProgress) return;
+    let hiddenAt = 0;
+    let blurredAt = 0;
     const onVisibility = () => {
-      if (document.visibilityState !== "hidden") return;
-      setTabSwitches((n) => n + 1);
-      report("tab_switch");
-      toast.warning("You left the assessment tab. This has been recorded.");
+      if (document.visibilityState === "hidden") {
+        hiddenAt = Date.now();
+        setTabSwitches((n) => n + 1);
+        report("tab_switch");
+        toast.warning("You left the assessment tab. This has been recorded.");
+      } else if (hiddenAt) {
+        report("tab_return", { awayMs: Date.now() - hiddenAt });
+        hiddenAt = 0;
+      }
+    };
+    // Focus lost while the tab is still visible: another window, a second monitor, a popup.
+    const onBlur = () => {
+      window.setTimeout(() => {
+        if (document.visibilityState === "visible" && !document.hasFocus() && !blurredAt) {
+          blurredAt = Date.now();
+          report("window_blur");
+        }
+      }, 50);
+    };
+    const onFocus = () => {
+      if (!blurredAt) return;
+      report("window_focus", { awayMs: Date.now() - blurredAt });
+      blurredAt = 0;
     };
     const onFullscreen = () => {
       const now = !!document.fullscreenElement;
-      setInFullscreen((was) => {
-        if (was && !now) {
-          report("fullscreen_exit");
-          toast.warning("You left fullscreen. This has been recorded.");
-        }
-        return now;
-      });
+      const was = fullscreenRef.current;
+      fullscreenRef.current = now;
+      setInFullscreen(now);
+      if (was && !now) {
+        report("fullscreen_exit");
+        toast.warning("You left fullscreen. This has been recorded.");
+      } else if (!was && now) {
+        report("fullscreen_enter");
+      }
     };
+    // What leaves the page is as telling as what comes in (e.g. the problem statement copied out).
+    const onClipboard = (type: "copy" | "cut") => (e: ClipboardEvent) => {
+      const el = e.target;
+      const inEditor = el instanceof HTMLTextAreaElement;
+      const text = inEditor
+        ? el.value.slice(el.selectionStart, el.selectionEnd)
+        : (window.getSelection()?.toString() ?? "");
+      if (text) report(type, { text, target: inEditor ? "editor" : "other" });
+    };
+    const onCopy = onClipboard("copy");
+    const onCut = onClipboard("cut");
     const onBeforeUnload = (e: BeforeUnloadEvent) => {
       e.preventDefault();
       e.returnValue = "";
     };
     document.addEventListener("visibilitychange", onVisibility);
     document.addEventListener("fullscreenchange", onFullscreen);
+    document.addEventListener("copy", onCopy);
+    document.addEventListener("cut", onCut);
+    window.addEventListener("blur", onBlur);
+    window.addEventListener("focus", onFocus);
     window.addEventListener("beforeunload", onBeforeUnload);
     return () => {
       document.removeEventListener("visibilitychange", onVisibility);
       document.removeEventListener("fullscreenchange", onFullscreen);
+      document.removeEventListener("copy", onCopy);
+      document.removeEventListener("cut", onCut);
+      window.removeEventListener("blur", onBlur);
+      window.removeEventListener("focus", onFocus);
       window.removeEventListener("beforeunload", onBeforeUnload);
     };
   }, [inProgress, report]);
@@ -307,6 +355,7 @@ function AssessmentRunnerPage() {
   }
 
   const q = section.questions[Math.min(activeIdx, section.questions.length - 1)];
+  activeQuestionId.current = q.id;
   const a = answers[q.id];
   const isLast = section.position === section.totalSections;
   const answeredCount = section.questions.filter((x) => isAnswered(x, answers[x.id])).length;
@@ -436,7 +485,7 @@ function AssessmentRunnerPage() {
             code={a?.answer ?? ""}
             codingEnabled={data.codingEnabled}
             best={best[q.id] ?? null}
-            onPaste={() => report("paste")}
+            onPaste={(text) => report("paste", { text, target: "editor" })}
             onSubmitted={(r) =>
               setBest((prev) =>
                 !prev[q.id] || r.score >= prev[q.id].score ? { ...prev, [q.id]: r } : prev,
@@ -466,7 +515,7 @@ function AssessmentRunnerPage() {
             </Card>
             <CodeEditor
               key={q.id}
-              onPaste={() => report("paste")}
+              onPaste={(text) => report("paste", { text, target: "editor" })}
               languages={Object.keys(q.starterCode ?? { python: "" })}
               language={a?.language ?? defaultLanguage(q) ?? "python"}
               value={a?.answer ?? ""}

@@ -9,7 +9,7 @@
  *   GET  /candidate/oa/{applicationId}/session          current section + questions
  *   PUT  /candidate/oa/{applicationId}/answers          autosave one answer
  *   POST /candidate/oa/{applicationId}/sections/submit  close the current section
- *   POST /candidate/oa/{applicationId}/events           integrity signal (tab switch / fullscreen exit / paste)
+ *   POST /candidate/oa/{applicationId}/events           timestamped integrity event (tab / focus / fullscreen / clipboard)
  *   POST /candidate/oa/{applicationId}/questions/{qid}/run     run visible examples (+ custom input)
  *   POST /candidate/oa/{applicationId}/questions/{qid}/submit  grade against all tests
  */
@@ -17,6 +17,7 @@
 import { request } from "../client";
 import type {
   OACaseResult,
+  OAEventExtra,
   OAEventType,
   OAListItem,
   OAOverview,
@@ -28,6 +29,9 @@ import type {
   OASubmitResult,
   CodeLanguage,
 } from "@/types/candidate/assessment";
+
+/** Mirrors the server cap; keeps a huge paste from becoming a huge request. */
+const EVENT_TEXT_LIMIT = 4000;
 
 type Raw = Record<string, unknown>;
 
@@ -168,11 +172,23 @@ export const candidateAssessmentService = {
       normalizeSession,
     ),
 
-  reportEvent: (applicationId: string, type: OAEventType): Promise<void> =>
-    request<unknown>(`/candidate/oa/${applicationId}/events`, {
+  reportEvent: (
+    applicationId: string,
+    type: OAEventType,
+    extra: OAEventExtra = {},
+  ): Promise<void> => {
+    const detail: Record<string, unknown> = {};
+    if (extra.text !== undefined) {
+      detail.text = extra.text.slice(0, EVENT_TEXT_LIMIT);
+      detail.length = extra.text.length;
+    }
+    if (extra.target) detail.target = extra.target;
+    if (extra.awayMs !== undefined) detail.away_ms = Math.round(extra.awayMs);
+    return request<unknown>(`/candidate/oa/${applicationId}/events`, {
       method: "POST",
-      body: { type },
-    }).then(() => undefined),
+      body: { type, question_id: extra.questionId ?? null, detail },
+    }).then(() => undefined);
+  },
 
   runCode: (
     applicationId: string,
