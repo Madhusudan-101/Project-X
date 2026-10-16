@@ -37,6 +37,7 @@ export function useInterviewRoom() {
   const [secondsLeft, setSecondsLeft] = useState<number | null>(null);
   const [interviewerJoined, setInterviewerJoined] = useState(false);
   const [interviewerMissing, setInterviewerMissing] = useState(false);
+  const [interviewerSpeaking, setInterviewerSpeaking] = useState(false);
 
   const stopTimer = () => {
     if (timerRef.current) clearInterval(timerRef.current);
@@ -71,6 +72,7 @@ export function useInterviewRoom() {
       setMuted(false);
       setInterviewerJoined(false);
       setInterviewerMissing(false);
+      setInterviewerSpeaking(false);
       setPhase("connecting");
       try {
         const session = await aiInterviewService.startSession(domain);
@@ -92,6 +94,9 @@ export function useInterviewRoom() {
         room.on(RoomEvent.ParticipantConnected, () => {
           setInterviewerJoined(true);
           setInterviewerMissing(false);
+        });
+        room.on(RoomEvent.ActiveSpeakersChanged, (speakers) => {
+          setInterviewerSpeaking(speakers.some((s) => !s.isLocal));
         });
         room.on(RoomEvent.AudioPlaybackStatusChanged, () => {
           setNeedsAudioUnlock(!room.canPlaybackAudio);
@@ -185,6 +190,7 @@ export function useInterviewRoom() {
     setSecondsLeft(null);
     setInterviewerJoined(false);
     setInterviewerMissing(false);
+    setInterviewerSpeaking(false);
     setError(null);
     setPhase("setup");
   }, [teardown]);
@@ -198,6 +204,7 @@ export function useInterviewRoom() {
     secondsLeft,
     interviewerJoined,
     interviewerMissing,
+    interviewerSpeaking,
     needsAudioUnlock,
     audioHostRef,
     start,
