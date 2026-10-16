@@ -103,3 +103,49 @@ def test_suspension_still_takes_priority_over_consent(peer):
     peer.db.add("peer_sanctions", student_id=ALICE, kind="suspension", reason="x", ends_at=iso(now() + timedelta(days=1)), lifted_at=None)
     r = peer.client.post("/candidate/peer-matchmaking/request", json={}, headers=peer.h[ALICE])
     assert r.status_code == 403 and "paused" in r.json()["detail"]
+
+
+# ── feedback ─────────────────────────────────────────────────────────────────
+def _matched_room(peer):
+    consent(peer, ALICE, BOB)
+    peer.client.post("/candidate/peer-matchmaking/request", json={}, headers=peer.h[ALICE])
+    return peer.client.post("/candidate/peer-matchmaking/request", json={}, headers=peer.h[BOB]).json()["room_id"]
+
+
+def test_feedback_is_saved_once_per_meeting_and_can_be_changed(peer):
+    room = _matched_room(peer)
+    H = peer.h[ALICE]
+    r = peer.client.post("/candidate/peer-safety/feedback", headers=H,
+                         json={"room_id": room, "rating": 4, "tags": ["helpful", "respectful"], "comment": "  great  "})
+    assert r.status_code == 200 and r.json()["tags"] == ["helpful", "respectful"]
+    peer.client.post("/candidate/peer-safety/feedback", headers=H, json={"room_id": room, "rating": 2, "tags": ["late"]})
+    rows = peer.db.rows("peer_feedback", student_id=ALICE)
+    assert len(rows) == 1 and rows[0]["rating"] == 2 and rows[0]["tags"] == ["late"]
+    assert peer.client.get("/candidate/peer-safety/feedback", headers=H).json() == [{"room_id": room, "rating": 2}]
+    assert peer.client.get("/candidate/peer-safety/feedback", headers=peer.h[BOB]).json() == []
+
+
+def test_feedback_is_validated(peer):
+    room = _matched_room(peer)
+    H = peer.h[ALICE]
+    for bad in (
+        {"rating": 0}, {"rating": 6}, {"rating": 3, "tags": ["not-a-tag"]},
+        {"rating": 3, "comment": "x" * 501}, {"rating": 3, "tags": ["helpful"] * 10},
+    ):
+        assert peer.client.post("/candidate/peer-safety/feedback", headers=H, json={"room_id": room, **bad}).status_code == 422
+    assert peer.db.rows("peer_feedback") == []
+
+
+def test_feedback_only_from_people_who_were_in_the_room(peer):
+    room = _matched_room(peer)
+    peer.h["eve"] = peer.user("eve", "candidate")
+    r = peer.client.post("/candidate/peer-safety/feedback", headers=peer.h["eve"], json={"room_id": room, "rating": 5})
+    assert r.status_code == 422
+    assert peer.client.post("/candidate/peer-safety/feedback", headers=peer.h[ALICE], json={"room_id": "no-such-room", "rating": 5}).status_code == 422
+
+
+def test_feedback_does_not_require_the_guidelines_or_a_clean_record(peer):
+    """Rating a meeting that already happened must never be blocked."""
+    room = _matched_room(peer)
+    peer.db.add("peer_sanctions", student_id=ALICE, kind="suspension", reason="x", ends_at=iso(now() + timedelta(days=1)), lifted_at=None)
+    assert peer.client.post("/candidate/peer-safety/feedback", headers=peer.h[ALICE], json={"room_id": room, "rating": 5}).status_code == 200

@@ -26,6 +26,25 @@ export interface BlockedPerson {
   label: string;
   created_at: string;
 }
+export interface GuidelinesState {
+  version: string;
+  accepted: boolean;
+  accepted_at: string | null;
+}
+
+export const FEEDBACK_TAGS = [
+  { id: "helpful", label: "Helpful" },
+  { id: "well_prepared", label: "Well prepared" },
+  { id: "respectful", label: "Respectful" },
+  { id: "good_questions", label: "Good questions" },
+  { id: "clear_feedback", label: "Clear feedback" },
+  { id: "late", label: "Arrived late" },
+  { id: "unprepared", label: "Unprepared" },
+  { id: "off_topic", label: "Went off topic" },
+  { id: "technical_problems", label: "Technical problems" },
+] as const;
+export const MAX_FEEDBACK_COMMENT = 500;
+
 export interface SafetyStatus {
   suspended: boolean;
   suspended_until: string | null;
@@ -58,4 +77,16 @@ export const peerSafetyService = {
     request<{ ok: boolean }>(`${base}/blocks`, { method: "POST", body: { room_id } }),
   unblock: (id: string) => request<void>(`${base}/blocks/${id}`, { method: "DELETE" }),
   status: () => request<SafetyStatus>(`${base}/status`),
+  guidelines: () => request<GuidelinesState>(`${base}/guidelines`),
+  acceptGuidelines: (version: string) =>
+    request<GuidelinesState>(`${base}/guidelines/accept`, {
+      method: "POST",
+      body: { version, rules: true, media: true, ai: true },
+    }),
+  saveFeedback: (body: { room_id: string; rating: number; tags: string[]; comment?: string }) =>
+    request<{ ok: boolean }>(`${base}/feedback`, {
+      method: "POST",
+      body: { comment: "", ...body },
+    }),
+  myFeedback: () => request<{ room_id: string; rating: number }[]>(`${base}/feedback`),
 };

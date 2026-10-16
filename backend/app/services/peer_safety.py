@@ -194,6 +194,30 @@ def partner_in_room(user_id: str, room_id: str) -> Optional[Dict[str, Any]]:
     return {"id": pid, "label": ANON_NAME if private else _name_of(pid)}
 
 
+# ── feedback ─────────────────────────────────────────────────────────────────
+
+FEEDBACK_TAGS = (
+    "helpful", "well_prepared", "respectful", "good_questions", "clear_feedback",
+    "late", "unprepared", "off_topic", "technical_problems",
+)
+
+
+def save_feedback(user_id: str, room_id: str, rating: int, tags: list, comment: str) -> Dict[str, Any]:
+    """One rating per person per meeting; saving again replaces it. Only people who were in the room."""
+    if not partner_in_room(user_id, room_id):
+        raise HTTPException(status_code=422, detail="You can only rate a meeting you were in.")
+    if not 1 <= rating <= 5:
+        raise HTTPException(status_code=422, detail="Choose a rating from 1 to 5.")
+    clean = [t for t in dict.fromkeys(tags or []) if t in FEEDBACK_TAGS]
+    if len(clean) != len(set(tags or [])):
+        raise HTTPException(status_code=422, detail="Unknown feedback tag.")
+    db_client.table("peer_feedback").upsert({
+        "student_id": user_id, "room_id": room_id, "rating": rating, "tags": clean,
+        "comment": (comment or "").strip()[:500] or None, "updated_at": now().isoformat(),
+    }, on_conflict="student_id,room_id").execute()
+    return {"ok": True, "rating": rating, "tags": clean}
+
+
 # ── reports ──────────────────────────────────────────────────────────────────
 
 def add_block(blocker_id: str, blocked_id: str, label: str, room_id: Optional[str]) -> None:

@@ -24,6 +24,7 @@ def now_iso() -> str:
 UNIQUE: Dict[str, List[tuple]] = {
     "peer_user_reports": [("reporter_id", "reported_id", "room_id")],
     "peer_blocks": [("blocker_id", "blocked_id")],
+    "peer_feedback": [("student_id", "room_id")],
     "applications": [("student_id", "job_id")],
     "companies": [("owner_id",)],
     "job_drives": [("job_id", "college_id")],

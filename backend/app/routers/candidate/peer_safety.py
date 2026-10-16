@@ -38,6 +38,13 @@ class AcceptIn(BaseModel):
     ai: bool = False
 
 
+class FeedbackIn(BaseModel):
+    room_id: str = Field(min_length=3, max_length=64)
+    rating: int = Field(ge=1, le=5)
+    tags: list[str] = Field(default_factory=list, max_length=9)
+    comment: str = Field(default="", max_length=500)
+
+
 class BlockIn(BaseModel):
     room_id: str = Field(min_length=3, max_length=64)
 
@@ -102,6 +109,19 @@ def accept_guidelines(body: AcceptIn, current_user: dict = Depends(get_current_u
     return safety.accept_guidelines(
         current_user["id"], body.version, rules=body.rules, media=body.media, ai=body.ai
     )
+
+
+@router.post("/feedback")
+def save_feedback(body: FeedbackIn, current_user: dict = Depends(get_current_user)) -> dict:
+    """Rate a meeting you were in (1-5, optional tags and a short note). The partner never sees it."""
+    return safety.save_feedback(current_user["id"], body.room_id, body.rating, body.tags, body.comment)
+
+
+@router.get("/feedback")
+def my_feedback(current_user: dict = Depends(get_current_user)) -> list[dict]:
+    """Which meetings I already rated, so the UI does not ask twice."""
+    rows = db_client.table("peer_feedback").select("room_id, rating").eq("student_id", current_user["id"]).execute().data or []
+    return [{"room_id": r["room_id"], "rating": r["rating"]} for r in rows]
 
 
 @router.get("/status")

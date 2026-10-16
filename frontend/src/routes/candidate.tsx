@@ -76,6 +76,9 @@ import { ProfileSettingsDialog } from "@/components/candidate/ProfileSettingsDia
 import { PeerReportDialog } from "@/components/candidate/peer/PeerReportDialog";
 import { BlockedPeopleDialog } from "@/components/candidate/peer/BlockedPeopleDialog";
 import { PeerSuspensionNotice } from "@/components/candidate/peer/PeerSuspensionNotice";
+import { PeerGuidelinesGate } from "@/components/candidate/peer/PeerGuidelinesDialog";
+import { PeerFeedbackDialog } from "@/components/candidate/peer/PeerFeedbackDialog";
+import { peerSafetyService } from "@/services/api/candidate/peerSafety";
 import { PrepPlanDialog } from "@/components/candidate/PrepPlanDialog";
 import { ApplicationFormModal } from "@/components/candidate/ApplicationFormModal";
 import { OnlineAssessmentsPanel } from "@/components/candidate/OnlineAssessmentsPanel";
@@ -357,6 +360,27 @@ function CandidatePortal() {
 function OverviewTab({ onOpenAiInterview }: { onOpenAiInterview: () => void }) {
   const session = useAuthStore((s) => s.session);
   const [peerModalOpen, setPeerModalOpen] = useState(false);
+  // "How was your session?" for a meeting: opened by ending the session here, by a link from PeerMeet's
+  // "meeting ended" page (?peer_feedback=<room>), or by the Rate button in the recent list.
+  const [feedbackRoom, setFeedbackRoom] = useState<string | null>(null);
+  const [ratedRooms, setRatedRooms] = useState<Record<string, number>>({});
+  useEffect(() => {
+    peerSafetyService
+      .myFeedback()
+      .then((rows) => setRatedRooms(Object.fromEntries(rows.map((r) => [r.room_id, r.rating]))))
+      .catch(() => undefined);
+    try {
+      const url = new URL(window.location.href);
+      const room = url.searchParams.get("peer_feedback");
+      if (room && /^[A-Za-z0-9_-]{3,64}$/.test(room)) {
+        setFeedbackRoom(room);
+        url.searchParams.delete("peer_feedback");
+        window.history.replaceState(null, "", url.toString());
+      }
+    } catch {
+      /* no URL to read */
+    }
+  }, []);
   // Shares the ["candidate-applications"] cache with the Jobs tab — react-query
   // dedupes, so this is not a second network call.
   const { data: applications } = useQuery<Application[]>({
@@ -523,6 +547,7 @@ function OverviewTab({ onOpenAiInterview }: { onOpenAiInterview: () => void }) {
                 onEnd={() => {
                   // Tell the server too, otherwise this match stays "active" and blocks the next one.
                   void peerService.endMatch().catch(() => undefined);
+                  setFeedbackRoom(activePeerRoom.roomId);
                   clearPeerRoom();
                   toast.success("Peer Interview session cleared.");
                 }}
@@ -582,11 +607,21 @@ function OverviewTab({ onOpenAiInterview }: { onOpenAiInterview: () => void }) {
             </Button>
           </Card>
 
-          <RecentPeerInterviewsCard reports={peerReports} />
+          <RecentPeerInterviewsCard
+            ratedRooms={ratedRooms}
+            onRate={setFeedbackRoom}
+            reports={peerReports}
+          />
         </aside>
       </div>
 
       <PeerInterviewMatchModal open={peerModalOpen} onOpenChange={setPeerModalOpen} />
+      <PeerGuidelinesGate />
+      <PeerFeedbackDialog
+        roomId={feedbackRoom}
+        onClose={() => setFeedbackRoom(null)}
+        onSaved={(room, rating) => setRatedRooms((r) => ({ ...r, [room]: rating }))}
+      />
     </div>
   );
 }
@@ -1127,7 +1162,15 @@ function LearningCurveCard({ data }: { data: { week: string; score: number }[] }
   );
 }
 
-function RecentPeerInterviewsCard({ reports }: { reports: PeerReport[] | null }) {
+function RecentPeerInterviewsCard({
+  reports,
+  ratedRooms,
+  onRate,
+}: {
+  reports: PeerReport[] | null;
+  ratedRooms: Record<string, number>;
+  onRate: (roomId: string) => void;
+}) {
   const [reportRoom, setReportRoom] = useState<string | null>(null);
   const [blockedOpen, setBlockedOpen] = useState(false);
   if (reports === null) {
@@ -1194,6 +1237,15 @@ function RecentPeerInterviewsCard({ reports }: { reports: PeerReport[] | null })
                   <Badge variant="outline" className="font-mono text-[11px]">
                     {scoreLabel}
                   </Badge>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 px-2 text-xs text-muted-foreground"
+                    onClick={() => onRate(r.room_id)}
+                    aria-label={`${ratedRooms[r.room_id] ? "Change your rating of" : "Rate your session with"} ${r.partner_display_name || "this peer"}`}
+                  >
+                    {ratedRooms[r.room_id] ? `★ ${ratedRooms[r.room_id]}` : "Rate"}
+                  </Button>
                   <Button
                     variant="ghost"
                     size="sm"

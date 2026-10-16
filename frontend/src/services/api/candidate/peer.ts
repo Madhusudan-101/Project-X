@@ -1,4 +1,5 @@
 import { request } from "@/services/api/client";
+import { withGuidelines } from "@/store/candidate/peerGuidelines";
 
 export interface PeerSessionToken {
   token: string;
@@ -91,18 +92,22 @@ export const peerService = {
   /** Mint a short-lived token for ONE room of the separately-deployed PeerMeet app. The server only
    * issues it for a room the caller was matched into or may join. */
   createSessionToken(roomId: string): Promise<PeerSessionToken> {
-    return request<PeerSessionToken>("/candidate/peer-session-token", {
-      method: "POST",
-      body: { room_id: roomId },
-    });
+    return withGuidelines(() =>
+      request<PeerSessionToken>("/candidate/peer-session-token", {
+        method: "POST",
+        body: { room_id: roomId },
+      }),
+    );
   },
 
   /** Enter or poll the matchmaking queue. Idempotent — safe to call every 2s. */
   requestMatch(keepPrivate: boolean): Promise<MatchmakingStatus> {
-    return request<MatchmakingStatus>("/candidate/peer-matchmaking/request", {
-      method: "POST",
-      body: { keep_private: keepPrivate },
-    });
+    return withGuidelines(() =>
+      request<MatchmakingStatus>("/candidate/peer-matchmaking/request", {
+        method: "POST",
+        body: { keep_private: keepPrivate },
+      }),
+    );
   },
 
   /** Leave the queue (only affects `waiting` tickets). */
@@ -127,10 +132,12 @@ export const peerService = {
   },
 
   createScheduledMeeting(body: CreateScheduledMeetingIn): Promise<ScheduledMeeting> {
-    return request<ScheduledMeeting>("/candidate/peer-meetings", {
-      method: "POST",
-      body,
-    });
+    return withGuidelines(() =>
+      request<ScheduledMeeting>("/candidate/peer-meetings", {
+        method: "POST",
+        body,
+      }),
+    );
   },
 
   cancelScheduledMeeting(id: string): Promise<void> {
@@ -138,9 +145,11 @@ export const peerService = {
   },
 
   joinScheduledMeeting(id: string): Promise<JoinScheduledOut> {
-    return request<JoinScheduledOut>(`/candidate/peer-meetings/${id}/join`, {
-      method: "POST",
-    });
+    return withGuidelines(() =>
+      request<JoinScheduledOut>(`/candidate/peer-meetings/${id}/join`, {
+        method: "POST",
+      }),
+    );
   },
 
   /** List the caller's own past peer interview reports, newest first. Used
