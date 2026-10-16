@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { Room } from "livekit-client";
+import type { LocalVideoTrack, Room } from "livekit-client";
 import { ApiClientError } from "@/services/api/client";
 import { aiInterviewService } from "@/services/api/candidate/aiInterview";
 import type { AiInterviewDomain } from "@/types/candidate/aiInterview";
@@ -10,6 +10,11 @@ export interface CaptionLine {
   id: string;
   who: "you" | "interviewer";
   text: string;
+}
+
+export interface DevicePick {
+  micId?: string;
+  camId?: string;
 }
 
 const MAX_CAPTIONS = 8;
@@ -38,6 +43,8 @@ export function useInterviewRoom() {
   const [interviewerJoined, setInterviewerJoined] = useState(false);
   const [interviewerMissing, setInterviewerMissing] = useState(false);
   const [interviewerSpeaking, setInterviewerSpeaking] = useState(false);
+  const [selfVideo, setSelfVideo] = useState<LocalVideoTrack | null>(null);
+  const [cameraLost, setCameraLost] = useState(false);
 
   const stopTimer = () => {
     if (timerRef.current) clearInterval(timerRef.current);
@@ -66,13 +73,15 @@ export function useInterviewRoom() {
   }, [teardown]);
 
   const start = useCallback(
-    async (domain: AiInterviewDomain) => {
+    async (domain: AiInterviewDomain, devices: DevicePick = {}) => {
       setError(null);
       setCaptions([]);
       setMuted(false);
       setInterviewerJoined(false);
       setInterviewerMissing(false);
       setInterviewerSpeaking(false);
+      setSelfVideo(null);
+      setCameraLost(false);
       setPhase("connecting");
       try {
         const session = await aiInterviewService.startSession(domain);
@@ -97,6 +106,18 @@ export function useInterviewRoom() {
         });
         room.on(RoomEvent.ActiveSpeakersChanged, (speakers) => {
           setInterviewerSpeaking(speakers.some((s) => !s.isLocal));
+        });
+        room.on(RoomEvent.LocalTrackPublished, (pub) => {
+          if (pub.track?.kind === "video") {
+            setSelfVideo(pub.track as LocalVideoTrack);
+            setCameraLost(false);
+          }
+        });
+        room.on(RoomEvent.LocalTrackUnpublished, (pub) => {
+          if (pub.track?.kind === "video") {
+            setSelfVideo(null);
+            setCameraLost(true);
+          }
         });
         room.on(RoomEvent.AudioPlaybackStatusChanged, () => {
           setNeedsAudioUnlock(!room.canPlaybackAudio);
@@ -124,12 +145,29 @@ export function useInterviewRoom() {
         await room.connect(session.serverUrl, session.participantToken);
         await room.startAudio().catch(() => setNeedsAudioUnlock(true));
         try {
-          await room.localParticipant.setMicrophoneEnabled(true);
+          await room.localParticipant.setMicrophoneEnabled(
+            true,
+            devices.micId ? { deviceId: devices.micId } : undefined,
+          );
         } catch {
           teardown();
           setPhase("setup");
           setError(
             "Microphone access is required. Allow the microphone in your browser and try again.",
+          );
+          return;
+        }
+        // The camera is mandatory: it is how the session is supervised.
+        try {
+          await room.localParticipant.setCameraEnabled(
+            true,
+            devices.camId ? { deviceId: devices.camId } : undefined,
+          );
+        } catch {
+          teardown();
+          setPhase("setup");
+          setError(
+            "Camera access is required for this interview. Allow the camera in your browser and try again.",
           );
           return;
         }
@@ -178,6 +216,15 @@ export function useInterviewRoom() {
     setMuted(nextMuted);
   }, [muted]);
 
+  /** Re-enable the camera after it was lost (unplugged, revoked, or stopped by the browser). */
+  const retryCamera = useCallback(async () => {
+    try {
+      await roomRef.current?.localParticipant.setCameraEnabled(true);
+    } catch {
+      setCameraLost(true);
+    }
+  }, []);
+
   const unlockAudio = useCallback(async () => {
     await roomRef.current?.startAudio();
     setNeedsAudioUnlock(false);
@@ -191,6 +238,8 @@ export function useInterviewRoom() {
     setInterviewerJoined(false);
     setInterviewerMissing(false);
     setInterviewerSpeaking(false);
+    setSelfVideo(null);
+    setCameraLost(false);
     setError(null);
     setPhase("setup");
   }, [teardown]);
@@ -205,6 +254,9 @@ export function useInterviewRoom() {
     interviewerJoined,
     interviewerMissing,
     interviewerSpeaking,
+    selfVideo,
+    cameraLost,
+    retryCamera,
     needsAudioUnlock,
     audioHostRef,
     start,

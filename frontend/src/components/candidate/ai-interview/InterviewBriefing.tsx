@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Check, Clock, FileText, Mic, ShieldCheck } from "lucide-react";
+import { Check, Clock, FileText, ShieldCheck, Video } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -15,19 +15,28 @@ interface Props {
 
 const RULES_DO = [
   "Join from a quiet room. Headphones are recommended to avoid echo.",
-  "Keep your microphone on and stay on this page for the whole session.",
+  "Sit alone, facing the camera, with your face clearly visible and well lit.",
+  "Keep your camera and microphone on, and stay on this page for the whole session.",
   "Answer in your own words. You can ask for a question to be repeated or think aloud.",
 ];
 
 const RULES_DONT = [
   "Do not use AI assistants, search engines, notes or another person to help you answer.",
-  "Do not have anyone else speak on your behalf.",
+  "Do not have anyone else in the room, or speak on your behalf.",
+  "Do not switch tabs or windows, cover the camera or leave the frame.",
   "Do not copy, record or share the interview questions.",
+];
+
+const SUPERVISION = [
+  "This session is supervised. Your camera is live in the interview room from start to finish.",
+  "Leaving the interview tab or window is detected and flagged on screen while it happens.",
+  "If your camera stops, you are asked to restore it. Repeated violations can invalidate the interview.",
 ];
 
 const DATA_NOTES = [
   "You are speaking with an AI interviewer. Scores are generated automatically and can contain errors.",
   "Your voice is transcribed live. The transcript and your scored report are saved to your account.",
+  "Your camera video is streamed to the live interview session.",
   "Closing this tab or ending the call finishes the interview. You cannot resume it.",
 ];
 
@@ -94,7 +103,7 @@ export function InterviewBriefing({ domain, onDomain, onContinue, error }: Props
           <dl className="grid grid-cols-2 gap-px overflow-hidden rounded-lg border bg-border text-sm sm:grid-cols-4">
             {[
               { icon: Clock, k: "Duration", v: `Up to ${DEFAULT_MAX_MINUTES} min` },
-              { icon: Mic, k: "Format", v: "Live voice" },
+              { icon: Video, k: "Format", v: "Live voice and video" },
               { icon: FileText, k: "Outcome", v: "Scored report" },
               { icon: ShieldCheck, k: "Interviewer", v: "AI" },
             ].map(({ icon: Icon, k, v }) => (
@@ -140,6 +149,12 @@ export function InterviewBriefing({ domain, onDomain, onContinue, error }: Props
             </h3>
             <Bullets items={RULES_DONT} tone="no" />
           </section>
+          <section aria-labelledby="rules-watch" className="space-y-2">
+            <h3 id="rules-watch" className="text-sm font-semibold">
+              Supervision and plagiarism checks
+            </h3>
+            <Bullets items={SUPERVISION} tone="info" />
+          </section>
           <section aria-labelledby="rules-data" className="space-y-2">
             <h3 id="rules-data" className="text-sm font-semibold">
               AI disclosure and your data
@@ -154,7 +169,7 @@ export function InterviewBriefing({ domain, onDomain, onContinue, error }: Props
           <h2 className="font-display text-base font-semibold">Before you begin</h2>
           <ul className="space-y-1.5 text-sm text-muted-foreground">
             <li>Chrome, Edge or Safari, latest version</li>
-            <li>Working microphone</li>
+            <li>Working camera and microphone</li>
             <li>Stable internet connection</li>
             <li>About {DEFAULT_MAX_MINUTES} uninterrupted minutes</li>
           </ul>
@@ -169,7 +184,7 @@ export function InterviewBriefing({ domain, onDomain, onContinue, error }: Props
             />
             <span>
               I have read the rules. I agree to complete this interview on my own, without outside
-              help, and to have my voice transcribed and saved.
+              help, with my camera on, and to have my voice transcribed and saved.
             </span>
           </label>
           {error && <p className="text-sm text-destructive">{error}</p>}
@@ -178,7 +193,7 @@ export function InterviewBriefing({ domain, onDomain, onContinue, error }: Props
             disabled={!agreed || !domain}
             onClick={onContinue}
           >
-            Continue to microphone check
+            Continue to equipment check
           </Button>
           {!domain && (
             <p className="text-xs text-muted-foreground">Choose an interview track to continue.</p>

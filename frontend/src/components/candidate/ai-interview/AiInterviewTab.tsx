@@ -10,9 +10,9 @@ import type {
   AiInterviewReportDetail,
 } from "@/types/candidate/aiInterview";
 import { DOMAINS } from "./domains";
+import { DeviceCheck } from "./DeviceCheck";
 import { InterviewBriefing } from "./InterviewBriefing";
 import { MeetingRoom } from "./MeetingRoom";
-import { MicCheck } from "./MicCheck";
 import { ReportView } from "./ReportView";
 import { useInterviewRoom } from "./useInterviewRoom";
 import { WaitingRoom } from "./WaitingRoom";
@@ -128,10 +128,10 @@ export function AiInterviewTab() {
       )}
 
       {room.phase === "setup" && stage === "check" && domain && (
-        <MicCheck
+        <DeviceCheck
           domain={domain}
           onBack={() => setStage("briefing")}
-          onJoin={() => room.start(domain)}
+          onJoin={(devices) => room.start(domain, devices)}
         />
       )}
 

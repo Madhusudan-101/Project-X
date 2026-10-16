@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Loader2, Mic, MicOff, PhoneOff, Volume2 } from "lucide-react";
+import { Camera, Loader2, Mic, MicOff, PhoneOff, TriangleAlert, Volume2 } from "lucide-react";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -13,6 +13,7 @@ import {
 import { Button } from "@/components/ui/button";
 import type { AiInterviewDomain } from "@/types/candidate/aiInterview";
 import { domainInfo } from "./domains";
+import { useIntegrityMonitor } from "./useIntegrityMonitor";
 import type { useInterviewRoom } from "./useInterviewRoom";
 
 type Room = ReturnType<typeof useInterviewRoom>;
@@ -24,6 +25,18 @@ export function MeetingRoom({ room, domain }: { room: Room; domain: AiInterviewD
   const info = domainInfo(domain);
   const [confirmEnd, setConfirmEnd] = useState(false);
   const logRef = useRef<HTMLDivElement | null>(null);
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const { tabSwitches, away } = useIntegrityMonitor(true);
+
+  const { selfVideo } = room;
+  useEffect(() => {
+    const el = videoRef.current;
+    if (!el || !selfVideo) return;
+    selfVideo.attach(el);
+    return () => {
+      selfVideo.detach(el);
+    };
+  }, [selfVideo]);
 
   useEffect(() => {
     if (logRef.current) logRef.current.scrollTop = logRef.current.scrollHeight;
@@ -51,7 +64,7 @@ export function MeetingRoom({ room, domain }: { room: Room; domain: AiInterviewD
         <div className="flex items-center gap-2 text-xs tabular-nums">
           <span className="flex items-center gap-2 rounded-full border border-background/20 px-3 py-1.5">
             <span className="h-2 w-2 animate-pulse rounded-full bg-destructive" aria-hidden />
-            Live · transcribed
+            Live · camera on · supervised
           </span>
           {room.secondsLeft !== null && (
             <span
@@ -66,6 +79,25 @@ export function MeetingRoom({ room, domain }: { room: Room; domain: AiInterviewD
           )}
         </div>
       </header>
+
+      {(away || room.cameraLost) && (
+        <div
+          role="alert"
+          className="flex flex-wrap items-center gap-3 border-b border-destructive/60 bg-destructive/25 px-5 py-2.5 text-sm"
+        >
+          <TriangleAlert className="h-4 w-4 shrink-0" aria-hidden />
+          <span className="flex-1">
+            {room.cameraLost
+              ? "Your camera stopped. Restore it to continue. This has been flagged."
+              : "You left the interview tab. Return now and stay on this page. This has been flagged."}
+          </span>
+          {room.cameraLost && (
+            <Button size="sm" variant="secondary" onClick={room.retryCamera}>
+              Restore camera
+            </Button>
+          )}
+        </div>
+      )}
 
       <div className="grid min-h-[420px] gap-0 md:grid-cols-[minmax(0,1fr)_340px]">
         <div className="relative flex flex-col items-center justify-center gap-4 p-8">
@@ -89,8 +121,25 @@ export function MeetingRoom({ room, domain }: { room: Room; domain: AiInterviewD
               {status}
             </p>
           </div>
-          <div className="absolute bottom-4 left-4 rounded-md bg-background/10 px-2.5 py-1 text-xs">
-            You {room.muted ? "· muted" : ""}
+          <div className="absolute bottom-4 left-4 w-40 overflow-hidden rounded-lg border border-background/25 bg-background/10 sm:w-48">
+            <div className="relative aspect-video">
+              <video
+                ref={videoRef}
+                autoPlay
+                muted
+                playsInline
+                aria-label="Your camera"
+                className="h-full w-full -scale-x-100 object-cover"
+              />
+              {!room.selfVideo && (
+                <div className="absolute inset-0 flex items-center justify-center text-background/60">
+                  <Camera className="h-5 w-5" aria-hidden />
+                </div>
+              )}
+              <span className="absolute bottom-1 left-1 rounded bg-foreground/70 px-1.5 py-0.5 text-[11px]">
+                You {room.muted ? "· muted" : ""}
+              </span>
+            </div>
           </div>
           {room.interviewerMissing && (
             <p className="max-w-md rounded-lg border border-destructive/60 bg-destructive/20 p-3 text-center text-sm">
@@ -125,6 +174,11 @@ export function MeetingRoom({ room, domain }: { room: Room; domain: AiInterviewD
           </div>
           <p className="border-t border-background/15 px-4 py-3 text-xs text-background/60">
             Answer in your own words. No AI tools, notes or outside help.
+            {tabSwitches > 0 && (
+              <span className="mt-1 block text-destructive-foreground">
+                Tab switches flagged: {tabSwitches}
+              </span>
+            )}
           </p>
         </aside>
       </div>

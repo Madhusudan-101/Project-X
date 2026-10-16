@@ -1,10 +1,11 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, renderHook, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import { DOMAINS, domainInfo } from "@/components/candidate/ai-interview/domains";
 import { InterviewBriefing } from "@/components/candidate/ai-interview/InterviewBriefing";
 import { MeetingRoom } from "@/components/candidate/ai-interview/MeetingRoom";
-import { MicCheck } from "@/components/candidate/ai-interview/MicCheck";
+import { DeviceCheck } from "@/components/candidate/ai-interview/DeviceCheck";
+import { useIntegrityMonitor } from "@/components/candidate/ai-interview/useIntegrityMonitor";
 import { WaitingRoom } from "@/components/candidate/ai-interview/WaitingRoom";
 
 type RoomProp = Parameters<typeof MeetingRoom>[0]["room"];
@@ -20,6 +21,9 @@ const makeRoom = (over: Partial<RoomProp> = {}): RoomProp =>
     interviewerJoined: true,
     interviewerMissing: false,
     interviewerSpeaking: false,
+    selfVideo: null,
+    cameraLost: false,
+    retryCamera: vi.fn(),
     needsAudioUnlock: false,
     audioHostRef: { current: null },
     start: vi.fn(),
@@ -62,10 +66,19 @@ describe("InterviewBriefing", () => {
     expect(screen.getByText("Up to 20 min")).toBeTruthy();
   });
 
+  it("states that the camera is required and the session is supervised", () => {
+    setup();
+    expect(screen.getByText("Supervision and plagiarism checks")).toBeTruthy();
+    expect(screen.getByText(/camera is live in the interview room/i)).toBeTruthy();
+    expect(screen.getByText(/Do not switch tabs or windows/i)).toBeTruthy();
+    expect(screen.getByText("Live voice and video")).toBeTruthy();
+    expect(screen.getByText(/with my camera on/i)).toBeTruthy();
+  });
+
   it("keeps Continue disabled until a track is chosen and consent is given", async () => {
     const user = userEvent.setup();
     const { onContinue } = setup("ai_ml");
-    const btn = screen.getByRole("button", { name: /continue to microphone check/i });
+    const btn = screen.getByRole("button", { name: /continue to equipment check/i });
     expect((btn as HTMLButtonElement).disabled).toBe(true);
     await user.click(screen.getByRole("checkbox"));
     expect((btn as HTMLButtonElement).disabled).toBe(false);
@@ -77,7 +90,7 @@ describe("InterviewBriefing", () => {
     const user = userEvent.setup();
     setup(null);
     await user.click(screen.getByRole("checkbox"));
-    const btn = screen.getByRole("button", { name: /continue to microphone check/i });
+    const btn = screen.getByRole("button", { name: /continue to equipment check/i });
     expect((btn as HTMLButtonElement).disabled).toBe(true);
     expect(screen.getByText(/choose an interview track/i)).toBeTruthy();
   });
@@ -104,18 +117,15 @@ describe("WaitingRoom", () => {
   });
 });
 
-describe("MicCheck", () => {
-  const stubAudio = () => {
+describe("DeviceCheck", () => {
+  const stubMedia = () => {
     const track = { stop: vi.fn() };
     const getUserMedia = vi.fn().mockResolvedValue({ getTracks: () => [track] });
     const enumerateDevices = vi.fn().mockResolvedValue([]);
     vi.stubGlobal("navigator", { mediaDevices: { getUserMedia, enumerateDevices } });
     class FakeCtx {
       createAnalyser() {
-        return {
-          fftSize: 0,
-          getByteTimeDomainData: (b: Uint8Array) => b.fill(128),
-        };
+        return { fftSize: 0, getByteTimeDomainData: (b: Uint8Array) => b.fill(128) };
       }
       createMediaStreamSource() {
         return { connect: vi.fn() };
@@ -128,36 +138,75 @@ describe("MicCheck", () => {
     return { getUserMedia, track };
   };
 
-  it("enables Join once the microphone is granted, then releases it on unmount", async () => {
-    const { getUserMedia, track } = stubAudio();
+  it("requests camera and microphone, enables Join, and releases devices on unmount", async () => {
+    const { getUserMedia, track } = stubMedia();
     const onJoin = vi.fn();
-    const { unmount } = render(<MicCheck domain="ai_ml" onBack={vi.fn()} onJoin={onJoin} />);
+    const { unmount } = render(<DeviceCheck domain="ai_ml" onBack={vi.fn()} onJoin={onJoin} />);
     const join = screen.getByRole("button", { name: /join interview/i }) as HTMLButtonElement;
     expect(join.disabled).toBe(true);
     await waitFor(() => expect(join.disabled).toBe(false));
-    expect(getUserMedia).toHaveBeenCalled();
-    expect(screen.getByText("Say a few words and watch the meter move")).toBeTruthy();
+    expect(getUserMedia).toHaveBeenCalledWith({ audio: true, video: true });
+    expect(screen.getByLabelText("Camera preview")).toBeTruthy();
+    expect(screen.getByText("Keep your face centered and well lit")).toBeTruthy();
     await userEvent.setup().click(join);
-    expect(onJoin).toHaveBeenCalledOnce();
+    expect(onJoin).toHaveBeenCalledWith({ micId: undefined, camId: undefined });
     unmount();
     expect(track.stop).toHaveBeenCalled();
   });
 
-  it("explains a blocked microphone and keeps Join disabled", async () => {
+  it("keeps the camera preview muted so the mic is never played back", async () => {
+    stubMedia();
+    render(<DeviceCheck domain="ai_ml" onBack={vi.fn()} onJoin={vi.fn()} />);
+    const video = screen.getByLabelText("Camera preview") as HTMLVideoElement;
+    expect(video.muted).toBe(true);
+    await screen.findByText("Permission granted");
+  });
+
+  it("explains blocked permissions and keeps Join disabled", async () => {
     const getUserMedia = vi.fn().mockRejectedValue(new DOMException("no", "NotAllowedError"));
     vi.stubGlobal("navigator", { mediaDevices: { getUserMedia, enumerateDevices: vi.fn() } });
-    render(<MicCheck domain="ai_ml" onBack={vi.fn()} onJoin={vi.fn()} />);
-    await screen.findByText(/blocked\. allow the microphone/i);
+    render(<DeviceCheck domain="ai_ml" onBack={vi.fn()} onJoin={vi.fn()} />);
+    await screen.findByText(/blocked\. allow the camera and microphone/i);
     expect(
       (screen.getByRole("button", { name: /join interview/i }) as HTMLButtonElement).disabled,
     ).toBe(true);
+    expect(screen.getByText("Camera unavailable")).toBeTruthy();
   });
 
-  it("reports a missing microphone", async () => {
+  it("reports missing hardware", async () => {
     const getUserMedia = vi.fn().mockRejectedValue(new DOMException("none", "NotFoundError"));
     vi.stubGlobal("navigator", { mediaDevices: { getUserMedia, enumerateDevices: vi.fn() } });
-    render(<MicCheck domain="ai_ml" onBack={vi.fn()} onJoin={vi.fn()} />);
-    await screen.findByText(/no microphone found/i);
+    render(<DeviceCheck domain="ai_ml" onBack={vi.fn()} onJoin={vi.fn()} />);
+    await screen.findByText(/no camera or microphone found/i);
+  });
+});
+
+describe("useIntegrityMonitor", () => {
+  it("counts one tab switch per departure and clears the warning on return", () => {
+    const { result } = renderHook(() => useIntegrityMonitor(true));
+    expect(result.current).toEqual({ tabSwitches: 0, away: false });
+    act(() => {
+      window.dispatchEvent(new Event("blur"));
+      window.dispatchEvent(new Event("blur")); // duplicate event must not double count
+    });
+    expect(result.current).toEqual({ tabSwitches: 1, away: true });
+    vi.spyOn(document, "hasFocus").mockReturnValue(true);
+    act(() => {
+      window.dispatchEvent(new Event("focus"));
+    });
+    expect(result.current.away).toBe(false);
+    act(() => {
+      window.dispatchEvent(new Event("blur"));
+    });
+    expect(result.current.tabSwitches).toBe(2);
+  });
+
+  it("ignores events while inactive", () => {
+    const { result } = renderHook(() => useIntegrityMonitor(false));
+    act(() => {
+      window.dispatchEvent(new Event("blur"));
+    });
+    expect(result.current).toEqual({ tabSwitches: 0, away: false });
   });
 });
 
@@ -204,6 +253,41 @@ describe("MeetingRoom", () => {
     expect(room.toggleMute).toHaveBeenCalledOnce();
     await user.click(screen.getByRole("button", { name: /enable audio/i }));
     expect(room.unlockAudio).toHaveBeenCalledOnce();
+  });
+
+  it("shows the supervised, camera-on status and the self view", () => {
+    render(<MeetingRoom room={makeRoom()} domain="ai_ml" />);
+    expect(screen.getByText(/camera on · supervised/i)).toBeTruthy();
+    expect(screen.getByLabelText("Your camera")).toBeTruthy();
+  });
+
+  it("attaches the published camera track to the self view and detaches it", () => {
+    const selfVideo = { attach: vi.fn(), detach: vi.fn() };
+    const { unmount } = render(
+      <MeetingRoom room={makeRoom({ selfVideo } as Partial<RoomProp>)} domain="ai_ml" />,
+    );
+    const el = screen.getByLabelText("Your camera");
+    expect(selfVideo.attach).toHaveBeenCalledWith(el);
+    unmount();
+    expect(selfVideo.detach).toHaveBeenCalledWith(el);
+  });
+
+  it("flags leaving the tab and keeps a running count", () => {
+    render(<MeetingRoom room={makeRoom()} domain="ai_ml" />);
+    expect(screen.queryByRole("alert")).toBeNull();
+    act(() => {
+      fireEvent(window, new Event("blur"));
+    });
+    expect(screen.getByRole("alert").textContent).toMatch(/left the interview tab/i);
+    expect(screen.getByText("Tab switches flagged: 1")).toBeTruthy();
+  });
+
+  it("warns when the camera stops and lets the candidate restore it", async () => {
+    const room = makeRoom({ cameraLost: true });
+    render(<MeetingRoom room={room} domain="ai_ml" />);
+    expect(screen.getByRole("alert").textContent).toMatch(/camera stopped/i);
+    await userEvent.setup().click(screen.getByRole("button", { name: /restore camera/i }));
+    expect(room.retryCamera).toHaveBeenCalledOnce();
   });
 
   it("only ends the call after confirmation", async () => {
