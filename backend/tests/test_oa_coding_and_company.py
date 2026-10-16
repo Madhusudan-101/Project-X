@@ -234,6 +234,30 @@ a = db.store["oa_attempts"][0]
 check("integrity counters", (a["tab_switches"], a["fullscreen_exits"], a["paste_events"]) == (4, 1, 2), a)
 check("unknown event type rejected", client.post("/candidate/oa/app-1/events", json={"type": "nope"}).status_code == 422)
 
+# ── 4b. timestamped event log ───────────────────────────────────────
+n0 = len(db.store["oa_events"])
+check("every event above was logged with a server timestamp", n0 == 7 and all(e.get("occurred_at") for e in db.store["oa_events"]), db.store.get("oa_events"))
+BIG = "x = 1\n" * 1000
+client.post("/candidate/oa/app-1/events", json={"type": "paste", "question_id": QID,
+            "detail": {"text": BIG, "length": len(BIG), "target": "editor", "evil": "<script>", "away_ms": "no"}})
+client.post("/candidate/oa/app-1/events", json={"type": "tab_return", "question_id": "not-a-question", "detail": {"away_ms": 4200}})
+client.post("/candidate/oa/app-1/events", json={"type": "copy", "question_id": QID, "detail": {"text": "Given an array of integers", "target": "other"}})
+ev = db.store["oa_events"][n0:]
+p_ev, ret_ev, copy_ev = ev
+check("paste keeps its question, capped text, full length and target", p_ev["question_id"] == QID and len(p_ev["meta"]["text"]) == 4000
+      and p_ev["meta"]["length"] == len(BIG) and p_ev["meta"]["truncated"] is True and p_ev["meta"]["target"] == "editor", p_ev["meta"].keys())
+check("unknown detail keys and bad types are dropped", set(p_ev["meta"]) == {"text", "length", "truncated", "target"}, p_ev["meta"].keys())
+check("a question outside the current section is not recorded", ret_ev["question_id"] is None and ret_ev["meta"] == {"away_ms": 4200}, ret_ev)
+check("copy is logged but is not a counter", copy_ev["meta"]["text"].startswith("Given an array") and db.store["oa_attempts"][0]["paste_events"] == 3
+      and db.store["oa_attempts"][0]["tab_switches"] == 4, db.store["oa_attempts"][0])
+import app.routers.candidate.assessment as _oa_mod
+_oa_mod.MAX_EVENTS_PER_ATTEMPT = len(db.store["oa_events"])
+client.post("/candidate/oa/app-1/events", json={"type": "tab_switch"})
+check("past the cap: counters still count, the log stops", len(db.store["oa_events"]) == _oa_mod.MAX_EVENTS_PER_ATTEMPT
+      and db.store["oa_attempts"][0]["tab_switches"] == 5)
+db.store["oa_attempts"][0]["tab_switches"] = 4   # restore for the later assertions
+_oa_mod.MAX_EVENTS_PER_ATTEMPT = 2000
+
 # ── 5. locking ──────────────────────────────────────────────────────
 as_company()
 check("assessment locked once someone started", put(GOOD).status_code == 409 and client.delete(URL).status_code == 409)
@@ -257,13 +281,19 @@ check("no running code after submission", client.post(RUN, json={"language": "py
 as_company()
 res = client.get(URL + "/results").json()
 row = res["rows"][0]
-check("results row", row["state"] == "submitted" and row["percent"] == 100.0 and row["tab_switches"] == 4 and row["flagged"] is True and row["paste_events"] == 2, row)
+check("results row", row["state"] == "submitted" and row["percent"] == 100.0 and row["tab_switches"] == 4 and row["flagged"] is True and row["paste_events"] == 3, row)
 check("results stats", res["stats"] == {"invited": 1, "started": 1, "submitted": 1, "average_percent": 100.0, "flagged": 1}, res["stats"])
 d = client.get(URL + "/results/app-1").json()
 cq = next(x for x in d["questions"] if x["qtype"] == "coding")
 check("detail: every submission with its code", len(cq["submissions"]) == 4 and "def two_sum" in cq["submissions"][0]["source"] and cq["best_score"] == 100.0, cq["best_score"])
 mqd = next(x for x in d["questions"] if x["qtype"] == "mcq")
 check("detail: mcq shows chosen vs correct", mqd["chosen_option"] == 1 and mqd["correct_option"] == 1)
+tl = d["events"]
+check("detail: timeline is ordered, placed on the clock and on a question",
+      [e["type"] for e in tl["items"]][:2] == ["tab_switch", "tab_switch"] and all(e["offset_seconds"] is not None for e in tl["items"]), tl["items"][:2])
+big = next(e for e in tl["items"] if e["type"] == "paste" and e["detail"].get("length") == len(BIG))
+check("detail: paste shows where and what", big["question"]["title"] and big["detail"]["text"].startswith("x = 1"), big)
+check("detail: summary counts", tl["counts"]["tab_switch"] == 4 and tl["counts"]["paste"] == 3 and tl["largest_paste"] == len(BIG) and tl["capped"] is False, tl["counts"])
 check("no attempt → 404 detail", client.get(URL + "/results/app-2").status_code == 404)
 
 # ── 8. expiry enforced on the server for code endpoints ─────────────

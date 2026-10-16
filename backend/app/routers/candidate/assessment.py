@@ -139,8 +139,19 @@ class AnswerIn(BaseModel):
     language: Optional[str] = Field(default=None, max_length=32)
 
 
+EVENT_TYPES = ("tab_switch", "tab_return", "window_blur", "window_focus",
+               "fullscreen_exit", "fullscreen_enter", "paste", "copy", "cut")
+# Only these three keep a running counter on oa_attempts (the rest are timeline-only).
+EVENT_COUNTERS = {"tab_switch": "tab_switches", "fullscreen_exit": "fullscreen_exits", "paste": "paste_events"}
+MAX_EVENTS_PER_ATTEMPT = 2000
+MAX_EVENT_TEXT = 4000
+
+
 class OAEventIn(BaseModel):
-    type: str = Field(pattern="^(tab_switch|fullscreen_exit|paste)$")
+    type: str = Field(pattern="^(" + "|".join(EVENT_TYPES) + ")$")
+    question_id: Optional[str] = Field(default=None, max_length=64)
+    # paste/copy/cut: {text, length, target}; *_return / window_focus: {away_ms}
+    detail: Optional[Dict[str, Any]] = None
 
 
 # ── Helpers ─────────────────────────────────────────────────────────
@@ -774,16 +785,53 @@ def submit_section_route(
 
 # ── POST /candidate/oa/{application_id}/events ──────────────────────
 
+def _clean_detail(detail: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+    """Whitelist + cap what the browser sends; it is untrusted input shown to recruiters."""
+    out: Dict[str, Any] = {}
+    d = detail or {}
+    text = d.get("text")
+    if isinstance(text, str):
+        out["text"] = text[:MAX_EVENT_TEXT]
+        out["length"] = max(len(text), int(d["length"])) if isinstance(d.get("length"), int) else len(text)
+        out["truncated"] = out["length"] > MAX_EVENT_TEXT
+    elif isinstance(d.get("length"), int) and not isinstance(d["length"], bool):
+        out["length"] = max(0, min(d["length"], 10_000_000))
+    away = d.get("away_ms")
+    if isinstance(away, (int, float)) and not isinstance(away, bool):
+        out["away_ms"] = int(max(0, min(away, 24 * 3600 * 1000)))
+    if d.get("target") in ("editor", "other"):
+        out["target"] = d["target"]
+    return out
+
+
 @router.post("/{application_id}/events")
 def event_route(
     application_id: str,
     body: OAEventIn,
     current_user: dict = Depends(require_candidate_role),
 ) -> Dict[str, Any]:
-    attempt, _ = _active_attempt(application_id, current_user)
-    column = {"tab_switch": "tab_switches", "fullscreen_exit": "fullscreen_exits", "paste": "paste_events"}[body.type]
-    if attempt["status"] == "in_progress":
-        db_client.table("oa_attempts").update(
-            {column: int(attempt.get(column) or 0) + 1}
-        ).eq("id", attempt["id"]).execute()
+    attempt, sections = _active_attempt(application_id, current_user)
+    if attempt["status"] != "in_progress":
+        return {"ok": True}
+    logged = int(attempt.get("events_logged") or 0)
+    update: Dict[str, Any] = {}
+    counter = EVENT_COUNTERS.get(body.type)
+    if counter:   # counters keep counting past the log cap: they are what flags a candidate
+        update[counter] = int(attempt.get(counter) or 0) + 1
+    if logged < MAX_EVENTS_PER_ATTEMPT:
+        question_id = None
+        idx = int(attempt["current_section"]) - 1
+        if body.question_id and 0 <= idx < len(sections):   # only questions of the section being taken
+            current = _questions_for([sections[idx]["id"]]).get(sections[idx]["id"], [])
+            question_id = body.question_id if any(q["id"] == body.question_id for q in current) else None
+        db_client.table("oa_events").insert({
+            "attempt_id": attempt["id"],
+            "question_id": question_id,
+            "type": body.type,
+            "occurred_at": _now().isoformat(),
+            "meta": _clean_detail(body.detail),
+        }).execute()
+        update["events_logged"] = logged + 1
+    if update:
+        db_client.table("oa_attempts").update(update).eq("id", attempt["id"]).execute()
     return {"ok": True}

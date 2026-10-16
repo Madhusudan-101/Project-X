@@ -117,4 +117,24 @@ export interface OASubmitResult extends OARunResult {
   submissionsLeft: number;
 }
 
-export type OAEventType = "tab_switch" | "fullscreen_exit" | "paste";
+export type OAEventType =
+  | "tab_switch"
+  | "tab_return"
+  | "window_blur"
+  | "window_focus"
+  | "fullscreen_exit"
+  | "fullscreen_enter"
+  | "paste"
+  | "copy"
+  | "cut";
+
+/** What accompanies an event. Text is capped by the client and again by the server. */
+export interface OAEventExtra {
+  questionId?: string | null;
+  /** paste / copy / cut: the clipboard text */
+  text?: string;
+  /** where it happened: inside the code editor, or elsewhere on the page */
+  target?: "editor" | "other";
+  /** tab_return / window_focus: how long the candidate was away */
+  awayMs?: number;
+}
