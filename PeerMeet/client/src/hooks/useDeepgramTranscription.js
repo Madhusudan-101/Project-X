@@ -125,9 +125,13 @@ export function useDeepgramTranscription({
       };
 
       recorder.onstop = () => {
-        recorderRef.current = null;
-        recorderStreamRef.current = null;
-        setIsTranscribing(false);
+        // Stop and start can overlap on a reconnect: only clear the refs if they still point at THIS
+        // recorder, otherwise we would wipe a newer recorder that has already replaced it.
+        if (recorderRef.current === recorder) {
+          recorderRef.current = null;
+          recorderStreamRef.current = null;
+          setIsTranscribing(false);
+        }
       };
 
       socket.emit('transcription:start', { roomId, mimeType });

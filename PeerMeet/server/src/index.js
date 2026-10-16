@@ -73,6 +73,7 @@ const {
   isParticipantPrivate,
   getRoomIdForSocket,
   getPartner,
+  releaseParticipant,
 } = require('./roomManager');
 const { sanitizeReport } = require('./reportSanitizer');
 const {
@@ -1283,6 +1284,19 @@ io.on('connection', (socket) => {
     if (!interview?.roles?.interviewerId || interview.roles.interviewerId !== myParticipantId) return;
 
     await endInterviewForRoom(roomId, { reason: 'manual' });
+  });
+
+  /**
+   * LEAVE-ROOM
+   * The participant clicked Leave. Unlike a dropped connection (which keeps their slot so they can
+   * rejoin), this frees the slot at once and tells the partner they left.
+   */
+  socket.on('leave-room', ({ roomId } = {}) => {
+    if (!roomId || !socket.rooms.has(roomId)) return;
+    transcriptionManager.stop(socket.id);
+    const { partnerId } = releaseParticipant(socket.id);
+    socket.leave(roomId);
+    if (partnerId) io.to(partnerId).emit('user-left', { socketId: socket.id });
   });
 
   /**

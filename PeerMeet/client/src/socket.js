@@ -21,8 +21,10 @@ const socket = io(SERVER_URL, {
   transports: ['websocket', 'polling'],
   autoConnect: true,
   reconnection: true,
-  reconnectionAttempts: 5,
+  // Never give up silently: a long outage used to end the meeting for good after 5 tries with no sign.
+  reconnectionAttempts: Infinity,
   reconnectionDelay: 1000,
+  reconnectionDelayMax: 8000,
 });
 
 socket.on('connect', () => {

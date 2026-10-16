@@ -116,6 +116,18 @@ Both `.env.example` files use the same local-development defaults shown below �
 | `METERED_DOMAIN` | No | Your Metered subdomain, if different from the default |
 | `TURN_URLS` / `TURN_USERNAME` / `TURN_CREDENTIAL` | No | Legacy static TURN fallback, only used if `METERED_API_KEY` is unset or the Metered API call fails |
 
+### Dashboard integration (server)
+
+| Variable | Purpose |
+|---|---|
+| `PEERMEET_SHARED_SECRET` | Signs the dashboard identity token and authenticates the report webhook. Must equal the backend's value |
+| `PEERMEET_TOKEN_SECRET` / `PEERMEET_WEBHOOK_SECRET` | Optional split of the above into two secrets (each falls back to the shared one) |
+| `PEERMEET_REQUIRE_TOKEN=1` | Every room needs a valid token for that room. Recommended when PeerMeet is used only through the dashboard |
+| `MIRRACLE_WEBHOOK_URL` | Backend base URL for saving reports. Reports are signed (HMAC + timestamp) and retried with backoff |
+
+Tokens are issued by the backend for **one room** (`room` claim, audience `peermeet`, 10-minute expiry). A room
+created with a token is restricted: anonymous guests and tokens for other rooms are refused (`auth-error`).
+
 ### Client (`client/.env`)
 
 | Variable | Required? | Purpose |
@@ -177,7 +189,10 @@ Being upfront about what this is (and isn't):
 - WebRTC DTLS-SRTP encrypts all media in transit; no media data touches the signaling server.
 - TURN/Deepgram/Gemini credentials live only in server environment variables — never shipped to the client bundle.
 - The AI panel is emitted **only** to the currently-active interviewer's socket, resolved server-side by role — the candidate's client is never a target of that data.
-- Room IDs are randomly generated 12-character hex strings.
+- Room IDs from the dashboard are random 12-character hex strings issued by the backend, and a token is only issued to someone allowed in that room. Room and participant ids are validated server-side (letters, digits, `-`, `_`).
+- Signals are relayed only between the two members of the sender's room.
+- Only the room host (first person in) can set up or start an interview.
+- Reports are sanitised (types, ranges, lengths) and the printable report escapes every field.
 
 ---
 

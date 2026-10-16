@@ -264,6 +264,49 @@ async function testOnlyTheHostConfiguresTheInterview() {
   await sleep(80);
 }
 
+// ── leaving ──────────────────────────────────────────────────────────────────
+async function testLeavingFreesTheSlotButDroppingDoesNot() {
+  const roomId = `leave-${uid()}`;
+  const A = await newRoom(roomId, 'p-lv-a', null);
+  const B = connect();
+  await waitConnect(B);
+  const ready = waitEvent(B, 'ready');
+  B.emit('join-room', { roomId, participantId: 'p-lv-b' });
+  await ready;
+
+  // B drops (no leave-room): the slot stays reserved, a stranger gets "room full".
+  B.disconnect();
+  await sleep(200);
+  const C = connect();
+  await waitConnect(C);
+  const full = waitEvent(C, 'room-full');
+  C.emit('join-room', { roomId, participantId: 'p-lv-c' });
+  await full;
+  record('A dropped connection keeps the slot (so a rejoin works)', roomManager.getRoomSize(roomId) === 2);
+
+  // B comes back and then deliberately LEAVES: the partner is told and the slot is freed.
+  const B2 = connect();
+  await waitConnect(B2);
+  const ready2 = waitEvent(B2, 'ready');
+  B2.emit('join-room', { roomId, participantId: 'p-lv-b' });
+  await ready2;
+  const left = waitEvent(A, 'user-left');
+  B2.emit('leave-room', { roomId });
+  await left;
+  record('The partner is told when someone leaves on purpose', true);
+  await sleep(100);
+  record('Leaving frees the slot', roomManager.getRoomSize(roomId) === 1);
+
+  const D = connect();
+  await waitConnect(D);
+  const readyD = waitEvent(D, 'ready');
+  D.emit('join-room', { roomId, participantId: 'p-lv-d' });
+  record('A new person can take the freed slot', Boolean((await readyD).initiatorId));
+
+  [A, B2, C, D].forEach((x) => x.disconnect());
+  await sleep(80);
+}
+
 // ── the report webhook ───────────────────────────────────────────────────────
 async function runInterview({ roomId, tokenA, tokenB, aPrivate, bPrivate }) {
   const A = connect();
@@ -357,6 +400,7 @@ async function testSwitchRolesReportIsNotFinalAndOnlyOnce() {
     await testIdsAreValidated();
     await testSignalRelayStaysInsideTheRoom();
     await testOnlyTheHostConfiguresTheInterview();
+    await testLeavingFreesTheSlotButDroppingDoesNot();
     await testWebhookIsSignedAndRetried();
     await testSwitchRolesReportIsNotFinalAndOnlyOnce();
     const passed = results.filter((r) => r.ok).length;

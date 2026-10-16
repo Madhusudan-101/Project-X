@@ -412,7 +412,10 @@ export function useWebRTC({ localStream, roomId, isInitiator }) {
      * 'ready' fires immediately after joining, telling us who the initiator is.
      * We create a peer as the receiver (not initiator) — waits for an offer.
      */
-    const handleReady = ({ initiatorId }) => {
+    const handleReady = ({ initiatorId } = {}) => {
+      // The server sends `initiatorId: null` when our partner's slot exists but is disconnected;
+      // there is nobody to answer yet, so do not build a peer addressed to null.
+      if (!initiatorId) return;
       debugLog('[Socket] ready → creating peer as receiver');
       createPeerWhenStreamReady(initiatorId, false);
     };

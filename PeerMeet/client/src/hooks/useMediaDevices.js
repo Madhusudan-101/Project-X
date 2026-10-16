@@ -63,6 +63,11 @@ export function useMediaDevices() {
   // Keep a ref to the original camera stream so we can switch back from screen share
   const cameraStreamRef = useRef(null);
   const streamRef = useRef(null);
+  // Called when the browser's own "Stop sharing" button ends a screen share (see startScreenShare).
+  const screenShareEndedRef = useRef(null);
+  const setOnScreenShareEnded = useCallback((fn) => {
+    screenShareEndedRef.current = fn;
+  }, []);
 
   // ─── Acquire media ─────────────────────────────────────────────────────────
   const initializeMedia = useCallback(async (cancelled) => {
@@ -182,9 +187,11 @@ export function useMediaDevices() {
 
   // ─── Toggle Video (camera on/off) ──────────────────────────────────────────
   const toggleVideo = useCallback(() => {
-    if (!streamRef.current) return;
+    // Always the camera, never the screen-share track: while sharing, streamRef points at the display
+    // stream and flipping that would leave the camera state out of step with what the button shows.
+    if (!cameraStreamRef.current) return;
 
-    const videoTracks = streamRef.current.getVideoTracks();
+    const videoTracks = cameraStreamRef.current.getVideoTracks();
     videoTracks.forEach((track) => {
       track.enabled = !track.enabled;
     });
@@ -203,9 +210,14 @@ export function useMediaDevices() {
         audio: false,
       });
 
-      // When user stops sharing via browser UI
+      // When the user stops sharing with the browser's own "Stop sharing" button, switch back to the
+      // camera AND tell the call, otherwise the partner keeps receiving a dead track.
       displayStream.getVideoTracks()[0].addEventListener('ended', () => {
-        stopScreenShare();
+        if (streamRef.current !== displayStream) return; // already stopped from our own button
+        const cameraStream = stopScreenShare();
+        if (cameraStream && screenShareEndedRef.current) {
+          screenShareEndedRef.current(displayStream, cameraStream);
+        }
       });
 
       setStream(displayStream);
@@ -270,6 +282,7 @@ export function useMediaDevices() {
     toggleVideo,
     startScreenShare,
     stopScreenShare,
+    setOnScreenShareEnded,
     stopStream,
     retry: retryMedia,
   };

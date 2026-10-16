@@ -281,3 +281,48 @@ test('per-phase transcript buffer is independent of the full-call history', () =
   assert.equal(rm.getInterview(roomId).transcriptBuffer.length, 0);
   assert.equal(rm.getTranscriptHistory(roomId).length, 1);
 });
+
+test('the first person is the host, and a room made with an identity is restricted', () => {
+  const r = newRoom();
+  rm.createRoom(r, 'pA', 'sA', { studentId: 's1', studentName: 'Ann', room: r }, false);
+  assert.equal(rm.getHostParticipantId(r), 'pA');
+  assert.equal(rm.isRoomRestricted(r), true);
+  const open = newRoom();
+  rm.createRoom(open, 'pB', 'sB', null, false);
+  assert.equal(rm.isRoomRestricted(open), false);
+});
+
+test('releaseParticipant frees the slot (a dropped connection does not)', () => {
+  const r = newRoom();
+  rm.createRoom(r, 'pA', 'sA', null, false);
+  rm.joinRoom(r, 'pB', 'sB', () => true, null, false);
+  rm.leaveRoom('sB'); // dropped: slot stays
+  assert.equal(rm.getRoomSize(r), 2);
+  rm.joinRoom(r, 'pB', 'sB2', () => false, null, false); // rejoin reclaims it
+  const out = rm.releaseParticipant('sB2'); // deliberate leave
+  assert.equal(out.partnerId, 'sA');
+  assert.equal(rm.getRoomSize(r), 1);
+  assert.equal(rm.joinRoom(r, 'pC', 'sC', () => true, null, false).success, true);
+});
+
+test('when the host leaves on purpose the partner becomes host', () => {
+  const r = newRoom();
+  rm.createRoom(r, 'pA', 'sA', null, false);
+  rm.joinRoom(r, 'pB', 'sB', () => true, null, false);
+  rm.releaseParticipant('sA');
+  assert.equal(rm.getHostParticipantId(r), 'pB');
+});
+
+test('the last person leaving deletes the room', () => {
+  const r = newRoom();
+  rm.createRoom(r, 'pA', 'sA', null, false);
+  rm.releaseParticipant('sA');
+  assert.equal(rm.roomExists(r), false);
+});
+
+test('unknown participants count as private', () => {
+  const r = newRoom();
+  rm.createRoom(r, 'pA', 'sA', null, false);
+  assert.equal(rm.isParticipantPrivate(r, 'nobody'), true);
+  assert.equal(rm.isParticipantPrivate(r, 'pA'), false);
+});

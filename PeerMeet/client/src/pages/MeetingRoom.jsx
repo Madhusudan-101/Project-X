@@ -217,6 +217,7 @@ function MeetingRoom() {
     toggleVideo,
     startScreenShare,
     stopScreenShare,
+    setOnScreenShareEnded,
     stopStream,
     retry: retryMedia,
   } = useMediaDevices();
@@ -229,6 +230,30 @@ function MeetingRoom() {
     replaceVideoTrack,
     destroyPeer,
   } = useWebRTC({ localStream, roomId, isInitiator });
+
+  // When the browser's own "Stop sharing" button ends a share, swap the camera back into the call.
+  useEffect(() => {
+    setOnScreenShareEnded((screenStream, cameraStream) => {
+      replaceVideoTrack(screenStream, cameraStream);
+      addToast('Screen sharing stopped', 'info');
+    });
+    return () => setOnScreenShareEnded(null);
+  }, [setOnScreenShareEnded, replaceVideoTrack, addToast]);
+
+  // Is our connection to the meeting server up? Shown as a banner so a drop is never silent.
+  const [socketOnline, setSocketOnline] = useState(socket.connected);
+  useEffect(() => {
+    const up = () => setSocketOnline(true);
+    const down = (reason) => {
+      if (reason !== 'io client disconnect') setSocketOnline(false);
+    };
+    socket.on('connect', up);
+    socket.on('disconnect', down);
+    return () => {
+      socket.off('connect', up);
+      socket.off('disconnect', down);
+    };
+  }, []);
 
   // ── Meeting Timer ─────────────────────────────────────────────────────────
   // Starts only when BOTH participants are in the room (server's user-joined/
@@ -394,6 +419,13 @@ function MeetingRoom() {
       addToast('Meeting room not found.', 'error', 0);
     };
 
+    const handleAuthError = ({ reason } = {}) => {
+      // The server refused us entry: our token is for another room, missing, or invalid.
+      setRoomError(reason === 'token-required' ? 'auth-required' : 'auth');
+      setCanTranscribe(false);
+      addToast('You are not allowed in this meeting.', 'error', 0);
+    };
+
     const handleRoomExists = () => {
       // Lost a create-vs-join race (e.g. duplicate tab) — the room exists
       // now, so join it instead.
@@ -413,8 +445,10 @@ function MeetingRoom() {
     socket.on('room-full', handleRoomFull);
     socket.on('room-not-found', handleRoomNotFound);
     socket.on('room-exists', handleRoomExists);
+    socket.on('auth-error', handleAuthError);
 
     return () => {
+      socket.off('auth-error', handleAuthError);
       socket.off('room-created', handleRoomCreated);
       socket.off('ready', handleReady);
       socket.off('user-joined', handleUserJoined);
@@ -477,11 +511,13 @@ function MeetingRoom() {
     destroyPeer();
     // 2. Stop all local media tracks
     stopStream();
-    // 3. Disconnect socket (triggers server-side cleanup + user-left for partner)
+    // 3. Tell the server we are LEAVING (frees our slot at once and tells the partner), then
+    //    disconnect. A bare disconnect is treated as a dropped connection and keeps the slot reserved.
+    socket.emit('leave-room', { roomId });
     socket.disconnect();
     // 4. Navigate home
     navigate('/');
-  }, [destroyPeer, stopStream, navigate]);
+  }, [destroyPeer, stopStream, navigate, roomId]);
 
   // Reconnect socket on next visit (in case we disconnected)
   useEffect(() => {
@@ -546,6 +582,8 @@ function MeetingRoom() {
         ? 'This room is full. A maximum of 2 participants are allowed per meeting.'
         : roomError === 'duplicate'
         ? 'This meeting is already open in another tab of this browser. Switch to that tab, or use a different browser or a private window to join as the second participant.'
+        : roomError === 'auth' || roomError === 'auth-required'
+        ? 'You are not allowed in this meeting. Open it again from your Mirracle dashboard so your invitation is checked.'
         : 'Meeting room not found. The ID may be incorrect or the room may have expired.';
 
     return (
@@ -555,7 +593,7 @@ function MeetingRoom() {
           <div className="glass-strong rounded-3xl p-8 md:p-12 max-w-md w-full">
             <ErrorMessage
               message={msg}
-              type={roomError === 'full' || roomError === 'duplicate' ? 'warning' : 'error'}
+              type={roomError === 'full' || roomError === 'duplicate' || roomError === 'auth' || roomError === 'auth-required' ? 'warning' : 'error'}
             />
           </div>
         </div>
@@ -596,6 +634,12 @@ function MeetingRoom() {
             </span>
           )}
         </div>
+
+        {!socketOnline && (
+          <div role="status" aria-live="polite" className="mx-4 mb-2 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-center text-sm text-amber-200">
+            Connection to the meeting server lost. Reconnecting… your call will resume when it is back.
+          </div>
+        )}
 
         {/* ── AI disclosure banner (both participants) ───────────────────── */}
         {aiAssisted && <DisclosureBanner role={role} phase={phase} />}

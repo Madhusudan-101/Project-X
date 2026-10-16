@@ -602,6 +602,26 @@ function joinRoom(roomId, participantId, socketId, isSocketAlive, identity = nul
  * @param {string} socketId
  * @returns {{ roomId?: string, partnerId?: string|null }}
  */
+/**
+ * A participant deliberately LEFT (as opposed to a dropped connection, which keeps their slot for a
+ * rejoin). Frees the slot immediately so the room is not "full" for the rest of its life.
+ * @returns {{ roomId?: string, partnerId?: string|null }} partnerId is the remaining person's live socket
+ */
+function releaseParticipant(socketId) {
+  for (const [roomId, room] of rooms.entries()) {
+    const idx = room.participants.findIndex((p) => p.socketId === socketId);
+    if (idx === -1) continue;
+    const [gone] = room.participants.splice(idx, 1);
+    const partner = room.participants[0] || null;
+    if (room.hostParticipantId === gone.participantId && partner) {
+      room.hostParticipantId = partner.participantId; // someone must still be able to run the interview
+    }
+    if (room.participants.every((p) => p.socketId === null)) rooms.delete(roomId);
+    return { roomId, partnerId: partner?.socketId || null };
+  }
+  return {};
+}
+
 function leaveRoom(socketId) {
   for (const [roomId, room] of rooms.entries()) {
     const participant = room.participants.find((p) => p.socketId === socketId);
@@ -656,6 +676,7 @@ module.exports = {
   createRoom,
   joinRoom,
   leaveRoom,
+  releaseParticipant,
   getPartner,
   roomExists,
   getRoomSize,

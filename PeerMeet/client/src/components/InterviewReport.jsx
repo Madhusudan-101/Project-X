@@ -10,6 +10,7 @@
 
 import React, { useCallback } from 'react';
 import { HiXMark, HiArrowDownTray } from 'react-icons/hi2';
+import { printReport } from '../utils/printReport.js';
 
 function recommendationTone(rec) {
   const r = (rec || '').toLowerCase();
@@ -17,42 +18,6 @@ function recommendationTone(rec) {
   if (r.includes('maybe')) return 'text-amber-300 border-amber-500/40 bg-amber-500/10';
   if (r.includes('reject')) return 'text-red-300 border-red-500/40 bg-red-500/10';
   return 'text-slate-300 border-white/20 bg-white/5';
-}
-
-function buildPrintableHtml(report) {
-  const list = (arr) => (arr || []).map((x) => `<li>${x}</li>`).join('');
-  const timeline = (report.question_timeline || [])
-    .map((t) => `<tr><td>${t.question || ''}</td><td>${t.assessment || ''}</td></tr>`)
-    .join('');
-  return `<!doctype html><html><head><meta charset="utf-8"><title>Interview Report</title>
-    <style>
-      body{font-family:Inter,Arial,sans-serif;color:#111;padding:32px;max-width:800px;margin:auto}
-      h1{font-size:22px;margin-bottom:4px}
-      h2{font-size:15px;margin-top:24px;border-bottom:1px solid #ddd;padding-bottom:4px}
-      .scores{display:flex;flex-wrap:wrap;gap:12px;margin-top:12px}
-      .score{border:1px solid #ddd;border-radius:8px;padding:10px 14px;min-width:120px}
-      .score .v{font-size:20px;font-weight:700}
-      .rec{display:inline-block;margin-top:12px;padding:6px 14px;border-radius:999px;border:1px solid #999;font-weight:600}
-      table{width:100%;border-collapse:collapse;margin-top:8px}
-      td,th{border:1px solid #ddd;padding:6px 8px;text-align:left;font-size:13px}
-      ul{margin:6px 0}
-    </style></head><body>
-    <h1>Mock Interview Report</h1>
-    <div class="rec">Recommendation: ${report.final_recommendation || '—'}</div>
-    <div class="scores">
-      <div class="score"><div>Overall</div><div class="v">${report.overall_score ?? '—'}</div></div>
-      <div class="score"><div>Technical</div><div class="v">${report.technical_score ?? '—'}</div></div>
-      <div class="score"><div>Communication</div><div class="v">${report.communication_score ?? '—'}</div></div>
-      <div class="score"><div>Confidence</div><div class="v">${report.confidence_score ?? '—'}</div></div>
-      <div class="score"><div>Problem Solving</div><div class="v">${report.problem_solving_score ?? '—'}</div></div>
-    </div>
-    <h2>Topics Covered</h2><ul>${list(report.topics_covered)}</ul>
-    <h2>Strengths</h2><ul>${list(report.strengths)}</ul>
-    <h2>Weaknesses</h2><ul>${list(report.weaknesses)}</ul>
-    <h2>Question Timeline</h2>
-    <table><thead><tr><th>Question</th><th>Assessment</th></tr></thead><tbody>${timeline}</tbody></table>
-    <h2>Suggestions</h2><ul>${list(report.suggestions)}</ul>
-    </body></html>`;
 }
 
 function StatCard({ label, value }) {
@@ -66,12 +31,7 @@ function StatCard({ label, value }) {
 
 function InterviewReport({ report, isFinal, onClose }) {
   const handleDownloadPdf = useCallback(() => {
-    const win = window.open('', '_blank');
-    if (!win) return;
-    win.document.write(buildPrintableHtml(report));
-    win.document.close();
-    win.focus();
-    setTimeout(() => win.print(), 300);
+    printReport(report);
   }, [report]);
 
   if (!report) return null;
