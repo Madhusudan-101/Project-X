@@ -114,30 +114,125 @@ No new env vars. Make sure the frontend points at the backend and is served over
 
 - [ ] Frontend deployed over https
 
-## 8. Manual test plan (do this once, with two real accounts)
+## 8. Manual test plan (the whole workflow, end to end)
 
-Use a company account and a candidate account with a real email you can read.
+Do this once after setup, before real candidates. Tick each line; write down anything that fails
+(what you clicked, what you saw, any red error text, and the time) so it can be fixed.
 
-**Practice**
-- [ ] Candidate: AI Interview tab → pick a track → accept three consents → equipment check → join. The AI speaks first and answers back.
-- [ ] End the call. A report appears within seconds.
-- [ ] Use all 3 daily practice interviews; the 4th is refused. Company interviews do not count toward this.
+### 8.0 What you need before you start
+- Two browsers or one normal + one incognito window (so two accounts stay logged in).
+- **Company account** (owner of a company, ideally with one posted job that has an applicant).
+- **Candidate account** whose email is an inbox you can read. A second candidate account is useful for the edge cases.
+- Laptop or desktop with a working camera and microphone, headphones (avoids echo), Chrome or Edge.
+- The frontend on **https** (or `localhost`), the backend, and the agent all running. Keep the agent's log window open: it prints when it joins a room and when it posts the report.
 
-**Company side**
-- [ ] Company: Interviews tab → New interview → "Draft with AI" (or a preset) → edit rubric → Activate.
-- [ ] Invite the candidate's email. The candidate receives the email; the link opens their briefing, **including after logging in**.
-- [ ] Candidate takes it. They see "Interview submitted" and **no report**. The confirmation email arrives.
-- [ ] Company gets the "report ready" email, opens results, sees score per competency, transcript, integrity flags.
-- [ ] Dismiss/confirm an integrity flag; set a decision with "email the candidate"; the linked job application status changes and the candidate email arrives.
-- [ ] Sort, filter and export CSV.
+### 8.1 Smoke test (5 minutes: does anything work at all?)
+- [ ] Backend health: opening the backend URL `/docs` loads.
+- [ ] Agent log says it is registered with LiveKit and waiting for jobs.
+- [ ] Candidate: AI Interview tab loads with no red error, shows "N of 3 interviews left today".
+- [ ] Company: Interviews tab loads (empty list is fine).
+If any of these fail, stop and fix them before going further (usual causes: wrong env var, SQL not run, backend URL not reachable).
 
-**Failure paths**
-- [ ] Block the camera in the browser at the equipment check: Join is refused with a clear message.
-- [ ] During a live interview, turn wifi off for ~10 s, then on: "Reconnecting…" then back to normal.
-- [ ] Turn wifi off for 30 s+: "Connection lost" screen; Rejoin continues the same interview.
-- [ ] Stop the agent, start an interview: after ~25 s it cancels, says the attempt was not used, and the practice quota / invite is given back.
-- [ ] Start a company interview, close the tab, wait past the time limit + 10 min and the next scheduler run: the invite shows "No report"; "Allow retake" gives a new attempt and emails the candidate.
-- [ ] Candidate "Ask for an accommodation" on an assignment: company sees the badge and message; "Extend" works.
+### 8.2 Practice interview (candidate only)
+1. [ ] Open AI Interview, pick a track. The Continue button stays disabled until you tick **all three** boxes (rules, audio, camera).
+2. [ ] Click "Test my camera and microphone": you see yourself, the mic bar moves when you talk, and "Everything works" returns you to the briefing without using an interview.
+3. [ ] Continue to equipment check. Click **Block** on the camera prompt: Join stays disabled and a clear message explains how to fix it. Allow it, and repeat for the microphone.
+4. [ ] Join. Waiting room appears, then the meeting room. **The AI speaks first** within ~15 s and responds to what you say.
+5. [ ] Timer counts down, captions appear, your own camera tile shows.
+6. [ ] Click End. You land on "Generating your report", then a report appears (scores, strengths, weaknesses, integrity section).
+7. [ ] "Past interviews" now lists it. Counter shows 2 of 3 left.
+8. [ ] Do two more. The 4th attempt is refused with "used all 3 for today".
+
+### 8.3 Integrity monitoring (during a live interview)
+Run one interview and deliberately do each of these; the on-screen banner should react and the event should appear in the report's integrity section afterwards.
+- [ ] Switch to another tab for a few seconds, then come back: warning on return; "tab switch" logged.
+- [ ] Click into another window (window blur): logged.
+- [ ] Cover the camera with your hand for ~30 s: "camera blocked" banner (needs consent; takes a couple of 15 s checks).
+- [ ] Step out of frame for ~30 s: "no face" banner; it clears when you return.
+- [ ] Have a second person in frame: "multiple faces" banner.
+- [ ] Unplug or disable the camera (or toggle it in OS settings): "camera lost" banner; a **Retry camera** button restores it.
+- [ ] Mute or unplug the mic: "mic lost" banner; **Retry microphone** restores it.
+- [ ] Press End normally: **no** false "camera lost" at the end.
+- [ ] Untick camera consent (use a fresh interview, leave the camera box unticked): Continue stays disabled. Camera consent is mandatory.
+
+### 8.4 Dropped connection and rejoin
+- [ ] Turn wifi off for ~10 s, then back on: banner "Connection lost. Reconnecting…" then it recovers by itself and the interview continues.
+- [ ] Turn wifi off for 30-60 s (longer than the browser can retry): "Connection lost" screen with **Rejoin interview** and **End interview**. After wifi is back, Rejoin puts you in the same interview with the remaining time; the AI carries on.
+- [ ] Repeat the long drop but do not rejoin for longer than `RECONNECT_GRACE_SECONDS` (default 90 s): the agent closes and grades what was answered. Rejoin now fails with a clear message and the interview shows as ended.
+- [ ] Rejoin after the time limit has passed: refused, shown as ended.
+- [ ] Close the tab mid-interview: the browser asks for confirmation first.
+
+### 8.5 Interviewer never joins
+- [ ] Stop the agent. As a candidate, start a practice interview. After about 25 s you get "We couldn't start your interview", saying it did not count toward your daily limit.
+- [ ] Check the counter on the briefing: unchanged (attempt refunded).
+- [ ] Start the agent again and confirm the next interview works.
+- [ ] Repeat with a **company** interview (section 8.7): the invitation is usable again afterwards.
+
+### 8.6 Company: create an interview
+1. [ ] Interviews tab, New AI interview.
+2. [ ] Start from a preset OR type a role and click **Draft with AI**. A rubric appears; you can edit names, weights and seed questions. (Needs `GEMINI_API_KEY` on the backend; without it you should see a clear message, not a crash.)
+3. [ ] Weights show percentages that always add up to 100.
+4. [ ] Try to save with a blank title, duplicate competency names, weight 0, or duration 5: each is refused with a plain message.
+5. [ ] Click **Preview candidate experience**: shows role, duration, topics by weight, and "candidates never see this rubric".
+6. [ ] Link it to your job (optional). Save as draft, then **Activate**.
+7. [ ] While it is a draft, the invite box is disabled.
+
+### 8.7 Company: invite and the candidate's side
+1. [ ] Invite by typing the candidate email (also try an invalid one and a duplicate: they are reported, not sent).
+2. [ ] If the interview is linked to a job: the **Applicants** list shows applicants; tick one and send. Someone already invited is not listed again.
+3. [ ] The invite appears in the list as "Invited", email "Sent".
+4. [ ] Candidate inbox: invitation email arrives with the company, role, duration and a working link.
+5. [ ] **Logged-out test:** open the link in a browser where the candidate is signed out. Log in. After login you land on that interview's briefing (not on the generic dashboard).
+6. [ ] Candidate sees "Interviews from companies" above the practice section. Practice still works beside it.
+7. [ ] The assignment briefing shows the company, role, instructions, "sent to {company}", and the note that a person makes the hiring decision.
+8. [ ] Candidate: **Ask for an accommodation**, send a message. Company sees an "Accommodation requested" badge in the invite list and the message in the report sheet; the company also receives an email. Requesting twice is handled gracefully.
+9. [ ] Company clicks **Extend** on that invite: candidate gets an updated email, deadline moves out.
+10. [ ] Candidate takes the interview (same flow as 8.2). It does **not** use up the 3 practice interviews.
+11. [ ] On finish the candidate sees **"Interview submitted"**, and **no report**. Their dashboard also shows no scores for it.
+12. [ ] Candidate receives the submission confirmation email.
+13. [ ] The same invite cannot be started a second time (shows as completed / not available).
+14. [ ] Open the link as a **different** candidate account: it is refused (invites are tied to the invited account).
+
+### 8.8 Company: results and decisions
+1. [ ] Results tab: the candidate appears with status, score, AI recommendation, integrity count. The company owner got a "report ready" email.
+2. [ ] Open the candidate: overall score, per-competency scores with evidence, strengths, weaknesses, red flags, transcript, question-by-question, consent record, integrity events with timestamps.
+3. [ ] The overall score matches the weights (spot-check: weighted average of competency scores).
+4. [ ] Edit the template rubric afterwards, then re-open the earlier candidate: they are still scored against the **original** rubric.
+5. [ ] **Integrity review:** dismiss one candidate's flags with a note: the "with integrity flags" counter drops; confirm on another: stays flagged. Clear review works.
+6. [ ] **Decision:** choose Advance, add an internal note, tick "Email the candidate", edit the message, Save. Check: toast confirms; the candidate receives that email; the linked job application moved to **shortlisted**.
+7. [ ] Choose Reject with email: application becomes **rejected** (a candidate already marked hired is not changed). Choose **Hold**: no email option appears.
+8. [ ] Sort by highest score, most flags, name, most recent; filter to flagged, no decision, incomplete.
+9. [ ] **Export CSV:** opens in a spreadsheet; one row per candidate; a name starting with `=` shows as plain text, not a formula.
+
+### 8.9 Retakes, stuck sessions, reminders (needs the scheduler)
+- [ ] Start a company interview as a candidate, then kill the browser tab and never come back. After (time limit + 10 min) and the next scheduler run, the result shows **"No report"** (incomplete).
+- [ ] Company clicks **Allow retake** on that row: the invite goes back to "Invited" with a "Retake 1" badge; the candidate gets a "new attempt" email; the old attempt is listed under "Earlier attempts" in the report sheet.
+- [ ] Set an invite to expire within 24 h (create it with expiry 1 day): after a scheduler run the candidate gets **one** reminder email (run the scheduler again: no second email).
+- [ ] An expired invite shows "Expired" to the company; **Extend** revives it. The candidate no longer sees an expired invite unless it was extended.
+- [ ] Withdraw an invitation: the candidate can no longer start it.
+
+### 8.10 Browser and device checks
+- [ ] Safari and Firefox: open the briefing. Unsupported features show a clear blocking message rather than a broken page.
+- [ ] A phone: shows the "laptop or desktop recommended" warning but is not blocked.
+- [ ] http (non-https, non-localhost) page: Continue is blocked with the https message.
+- [ ] A second monitor or Bluetooth headset: pick it in the equipment check dropdown and confirm the interview uses it.
+
+### 8.11 Security and permission checks (quick, but important)
+- [ ] A **candidate** account calling company URLs (for example open `/company/ai-interviews` API in the browser console) is refused.
+- [ ] A **company** account cannot read another company's templates, invites or results (try the other company's ids).
+- [ ] A candidate cannot read a company interview's report via the candidate reports list (company interviews never appear there).
+- [ ] The maintenance and report endpoints reject a missing or wrong shared secret (curl without the header: 401).
+- [ ] Send more than `AI_INTERVIEW_COMPANY_DAILY_INVITES` invitations in a day: refused with a clear message (set the limit to 2 to test).
+
+### 8.12 Pass criteria
+You can call the feature working when:
+- Sections 8.1 to 8.8 pass fully on real accounts.
+- In 8.3 at least tab switch, camera lost and mic lost are detected and logged.
+- 8.4 and 8.5 behave as described (these depend on LiveKit and are the most likely to need a tweak).
+- Emails arrive in a real inbox (not spam) for invite, confirmation, report ready and decision.
+
+If something fails, send back: the section number, what you expected vs saw, the browser console
+error, the agent log lines around that time, and the backend log line if any.
 
 ## 9. Things I could not verify (watch these on your first real run)
 
