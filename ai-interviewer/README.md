@@ -47,3 +47,31 @@ Optional company Q&A: `COMPANY_PDF_PATH=./company.pdf uv run python ingest.py`. 
 
 - Interview state is in memory per job: a worker restart mid-interview ends it (a partial report is still produced on a clean disconnect).
 - Domains are fixed to AI/ML, Web Dev, DSA (`domains.py`, mirrored in `backend/app/routers/candidate/ai_interview.py` and the SQL CHECK constraints).
+
+
+## Database (Supabase SQL editor), in this order
+
+Run each file once; they are safe to run again.
+
+1. `backend/db/ai_voice_interview_migration.sql` — practice interviews and reports
+2. `backend/db/ai_interview_integrity_migration.sql` — consent columns and integrity events
+3. `backend/db/ai_interview_hiring_migration.sql` — company interviews, invites, rubric snapshots
+4. `backend/db/ai_interview_lifecycle_migration.sql` — reminders, retakes, accommodations, flag review
+
+## Scheduled upkeep
+
+Call this every 15 minutes from any scheduler (Render cron, GitHub Actions, cron-job.org):
+
+    curl -X POST "$BACKEND_URL/internal/ai-interview/maintenance" \
+         -H "Authorization: Bearer $AI_INTERVIEW_SHARED_SECRET"
+
+It sends expiry reminders (once, 24h before), closes interviews stuck without a report, and
+applies the optional transcript retention. Invitation, report-ready and outcome emails need
+`RESEND_API_KEY`, `OA_EMAIL_FROM` and `APP_BASE_URL` on the backend; without them the app still
+works and tells the hiring team that nothing was emailed. AI rubric drafting needs `GEMINI_API_KEY`.
+
+## Connection drops
+
+If the candidate's connection drops, the agent waits `RECONNECT_GRACE_SECONDS` (default 90)
+before ending the interview, and the candidate can rejoin from the "Connection lost" screen
+while time remains.
