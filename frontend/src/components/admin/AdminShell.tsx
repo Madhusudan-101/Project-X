@@ -83,6 +83,7 @@ const NAV: { label?: string; items: NavItem[] }[] = [
       { to: "/admin/activity", label: "Live Activity", icon: Activity, anyOf: ["audit.view"] },
       { to: "/admin/audit-log", label: "Audit Log", icon: ClipboardList, anyOf: ["audit.view"] },
       { to: "/admin/alerts", label: "Alerts", icon: AlertTriangle, anyOf: ["alerts.view"] },
+      { to: "/admin/peer-safety", label: "Peer safety", icon: ShieldCheck, anyOf: ["peer_safety.view"] },
       { to: "/admin/system-health", label: "System Health", icon: HeartPulse, anyOf: ["system.view"] },
     ],
   },

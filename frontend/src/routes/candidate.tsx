@@ -73,6 +73,9 @@ import type { PracticeRecommendations } from "@/types/candidate/practice";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { candidateJobsService } from "@/services/api/candidate/jobs";
 import { ProfileSettingsDialog } from "@/components/candidate/ProfileSettingsDialog";
+import { PeerReportDialog } from "@/components/candidate/peer/PeerReportDialog";
+import { BlockedPeopleDialog } from "@/components/candidate/peer/BlockedPeopleDialog";
+import { PeerSuspensionNotice } from "@/components/candidate/peer/PeerSuspensionNotice";
 import { PrepPlanDialog } from "@/components/candidate/PrepPlanDialog";
 import { ApplicationFormModal } from "@/components/candidate/ApplicationFormModal";
 import { OnlineAssessmentsPanel } from "@/components/candidate/OnlineAssessmentsPanel";
@@ -463,6 +466,9 @@ function OverviewTab({ onOpenAiInterview }: { onOpenAiInterview: () => void }) {
       <div className="grid gap-6 lg:grid-cols-3">
         <div className="lg:col-span-2">
           <SectionHeader title="Your workspace" hint="Small tools, one job each." />
+          <div className="mb-3">
+            <PeerSuspensionNotice />
+          </div>
           <div className="grid gap-3 sm:grid-cols-2">
             <ModuleCard
               icon={Brain}
@@ -1122,6 +1128,8 @@ function LearningCurveCard({ data }: { data: { week: string; score: number }[] }
 }
 
 function RecentPeerInterviewsCard({ reports }: { reports: PeerReport[] | null }) {
+  const [reportRoom, setReportRoom] = useState<string | null>(null);
+  const [blockedOpen, setBlockedOpen] = useState(false);
   if (reports === null) {
     return (
       <Card className="p-5">
@@ -1151,8 +1159,15 @@ function RecentPeerInterviewsCard({ reports }: { reports: PeerReport[] | null })
     <Card className="p-5">
       <div className="mb-3 flex items-center justify-between">
         <h3 className="font-display font-semibold">Recent peer interviews</h3>
-        <Badge variant="outline">{reports.length}</Badge>
+        <div className="flex items-center gap-2">
+          <Button variant="ghost" size="sm" onClick={() => setBlockedOpen(true)}>
+            Blocked people
+          </Button>
+          <Badge variant="outline">{reports.length}</Badge>
+        </div>
       </div>
+      <PeerReportDialog roomId={reportRoom} onClose={() => setReportRoom(null)} />
+      <BlockedPeopleDialog open={blockedOpen} onOpenChange={setBlockedOpen} />
       <ul className="space-y-2">
         {shown.map((r) => {
           const when = new Date(r.created_at);
@@ -1175,9 +1190,20 @@ function RecentPeerInterviewsCard({ reports }: { reports: PeerReport[] | null })
                     {r.role === "candidate" ? "as candidate" : "as interviewer"}
                   </div>
                 </div>
-                <Badge variant="outline" className="shrink-0 font-mono text-[11px]">
-                  {scoreLabel}
-                </Badge>
+                <div className="flex shrink-0 items-center gap-2">
+                  <Badge variant="outline" className="font-mono text-[11px]">
+                    {scoreLabel}
+                  </Badge>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 px-2 text-xs text-muted-foreground"
+                    onClick={() => setReportRoom(r.room_id)}
+                    aria-label={`Report ${r.partner_display_name || "this peer"}`}
+                  >
+                    Report
+                  </Button>
+                </div>
               </div>
             </li>
           );
