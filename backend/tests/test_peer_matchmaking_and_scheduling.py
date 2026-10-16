@@ -167,6 +167,14 @@ class _FakeTable:
     def insert(self, payload):
         return _FakeQuery(self, "insert", payload)
 
+    def upsert(self, payload, on_conflict=None):
+        keys = (on_conflict or "id").split(",")
+        for r in self.rows:
+            if all(r.get(k) == payload.get(k) for k in keys):
+                r.update(payload)
+                return SimpleNamespace(execute=lambda r=r: _FakeResponse([dict(r)]))
+        return _FakeQuery(self, "insert", payload)
+
     def update(self, payload):
         return _FakeQuery(self, "update", payload)
 
@@ -730,7 +738,7 @@ def test_join_within_window_is_ready():
     # stored -- and the minted JWT must carry Alice's real student id, so
     # any downstream report is attributed correctly.
     import jwt as _jwt
-    decoded = _jwt.decode(join["token"], os.environ["PEERMEET_SHARED_SECRET"], algorithms=["HS256"])
+    decoded = _jwt.decode(join["token"], os.environ["PEERMEET_SHARED_SECRET"], algorithms=["HS256"], audience="peermeet")
     record(
         "Join returns the EXACT stored room_id (no new room minted on join)",
         join["room_id"] == m["room_id"],
@@ -823,7 +831,7 @@ def test_public_upcoming_visible_to_all_students():
     got = next((r for r in rows if r["id"] == m["id"]), None)
     ok = (
         got is not None
-        and got["room_id"] == m["room_id"]
+        and "room_id" not in got  # room ids are only handed out by /join, never listed publicly
         and got["title"] == "Distributed systems review"
         and got["status"] == "scheduled"
         and got["host_display_name"] == "Alice A"
@@ -1115,8 +1123,8 @@ def test_two_users_invited_to_same_scheduled_meeting_share_room_id():
     # And of course each side's token must carry that user's own id -- no
     # identity leakage across a shared room.
     import jwt as _jwt
-    a_dec = _jwt.decode(alice_join["token"], os.environ["PEERMEET_SHARED_SECRET"], algorithms=["HS256"])
-    b_dec = _jwt.decode(bob_join["token"], os.environ["PEERMEET_SHARED_SECRET"], algorithms=["HS256"])
+    a_dec = _jwt.decode(alice_join["token"], os.environ["PEERMEET_SHARED_SECRET"], algorithms=["HS256"], audience="peermeet")
+    b_dec = _jwt.decode(bob_join["token"], os.environ["PEERMEET_SHARED_SECRET"], algorithms=["HS256"], audience="peermeet")
     record(
         "Alice's join JWT carries Alice's student_id; Bob's carries Bob's",
         a_dec["student_id"] == ALICE and b_dec["student_id"] == BOB,
@@ -1148,12 +1156,16 @@ def test_non_creator_cannot_cancel():
 def test_session_token_mints_real_identity():
     _reset_tables()
     c = as_user(ALICE, "alice@example.com")
-    resp = c.post("/candidate/peer-session-token")
+    # A token is only issued for a room the caller belongs in: use a meeting Alice created.
+    sched = c.post("/candidate/peer-meetings", json={
+        "scheduled_at": (datetime.now(timezone.utc) + timedelta(minutes=2)).isoformat(),
+        "duration_minutes": 30, "keep_private": False}).json()
+    resp = c.post("/candidate/peer-session-token", json={"room_id": sched["room_id"]})
     body = resp.json()
     record("Session token returns 200", resp.status_code == 200)
 
     import jwt as _jwt
-    decoded = _jwt.decode(body["token"], os.environ["PEERMEET_SHARED_SECRET"], algorithms=["HS256"])
+    decoded = _jwt.decode(body["token"], os.environ["PEERMEET_SHARED_SECRET"], algorithms=["HS256"], audience="peermeet")
     record(
         "Session token carries the AUTHENTICATED student's id (privacy applies at PeerMeet's socket layer, not here)",
         decoded["student_id"] == ALICE and decoded["name"] == "Alice A",
@@ -1184,6 +1196,7 @@ def test_peer_reports_returns_own_only_newest_first():
             "room_id": "room-1",
             "student_id": ALICE,
             "partner_student_id": BOB,
+            "partner_private": False,
             "role": "candidate",
             "overall_score": 7.5,
             "technical_score": 8.0,
@@ -1202,6 +1215,7 @@ def test_peer_reports_returns_own_only_newest_first():
             "room_id": "room-2",
             "student_id": ALICE,
             "partner_student_id": CAROL,
+            "partner_private": False,
             "role": "interviewer",
             "overall_score": 9.0,
             "technical_score": None,
@@ -1220,6 +1234,7 @@ def test_peer_reports_returns_own_only_newest_first():
             "room_id": "room-3",
             "student_id": BOB,  # someone else's report
             "partner_student_id": ALICE,
+            "partner_private": False,
             "role": "candidate",
             "overall_score": 5.0,
             "technical_score": None,
@@ -1303,6 +1318,13 @@ TESTS = [
     ("Peer reports: caller sees own rows only",     test_peer_reports_returns_own_only_newest_first),
     ("Peer reports: unauthenticated -> 401",        test_peer_reports_requires_authentication),
 ]
+
+def test_zz_every_recorded_check_passed():
+    """The tests above report through record() instead of asserting, so pytest alone cannot see a
+    failed check. This makes pytest fail when any recorded check failed."""
+    failed = [f"{name}: {detail}" for name, ok, detail in _results if not ok]
+    assert not failed, "failed checks:\n" + "\n".join(failed)
+
 
 if __name__ == "__main__":
     print("=== FastAPI matchmaking + scheduling tests ===\n")

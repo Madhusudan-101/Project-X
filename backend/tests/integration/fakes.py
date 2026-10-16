@@ -31,6 +31,12 @@ UNIQUE: Dict[str, List[tuple]] = {
     "profiles": [("id",)],
 }
 
+# table -> [(columns, predicate)] : unique only among rows where predicate(row) is true (partial index)
+PARTIAL_UNIQUE: Dict[str, List[tuple]] = {
+    "peer_matchmaking_tickets": [(("student_id",), lambda r: r.get("status") in ("waiting", "matched"))],
+    "peer_interview_reports": [(("room_id", "student_id", "role", "phase"), lambda r: True)],
+}
+
 # table -> {embedded resource: foreign key column on this table}
 RELATIONS: Dict[str, Dict[str, str]] = {"job_skills": {"skills": "skill_id"}}
 
@@ -42,6 +48,9 @@ DEFAULTS: Dict[str, Callable[[], dict]] = {
     "application_analyses": lambda: {"generated_at": now_iso()},
     "ai_voice_interview_sessions": lambda: {"started_at": now_iso()},
     "oa_attempts": lambda: {"status": "in_progress", "tab_switches": 0},
+    "peer_matchmaking_tickets": lambda: {"status": "waiting", "last_seen_at": now_iso(), "keep_private": False},
+    "peer_scheduled_meetings": lambda: {"status": "scheduled"},
+    "peer_interview_reports": lambda: {"phase": 1, "unavailable": False},
     "oa_invites": lambda: {"status": "invited"},
     "oa_assessments": lambda: {"invite_mode": "invited"},
     "job_roles": lambda: {"status": "draft"},
@@ -156,6 +165,16 @@ class Query:
                 if all(r.get(c) == new.get(c) for c in cols):
                     raise _err(f'duplicate key value violates unique constraint on {self.table}({",".join(cols)})', "23505")
 
+    def _check_partial_unique(self, rows, new, ignore=None):
+        for cols, pred in PARTIAL_UNIQUE.get(self.table, []):
+            if not pred(new) or any(new.get(c) is None for c in cols):
+                continue
+            for r in rows:
+                if r is ignore or not pred(r):
+                    continue
+                if all(r.get(c) == new.get(c) for c in cols):
+                    raise _err(f'duplicate key value violates unique index on {self.table}({",".join(cols)})', "23505")
+
     def _embed(self, row: dict) -> dict:
         """PostgREST resource embedding, e.g. select("skills(name)") on job_skills."""
         for rel, fk in RELATIONS.get(self.table, {}).items():
@@ -182,6 +201,7 @@ class Query:
                 row = {"id": str(uuid.uuid4()), "created_at": now_iso(), "updated_at": now_iso(),
                        **DEFAULTS.get(self.table, lambda: {})(), **it}
                 self._check_unique(rows, row)
+                self._check_partial_unique(rows, row)
                 rows.append(row); out.append(dict(row))
             return Res(data=out, count=None)
 
@@ -204,6 +224,7 @@ class Query:
             hit = [r for r in rows if self._match(r)]
             for r in hit:
                 self._check_unique([x for x in rows if x is not r], {**r, **self.payload})
+                self._check_partial_unique([x for x in rows if x is not r], {**r, **self.payload})
                 r.update(self.payload)
                 r["updated_at"] = now_iso()
             return Res(data=[dict(r) for r in hit], count=None)
