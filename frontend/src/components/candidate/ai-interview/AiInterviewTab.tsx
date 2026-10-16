@@ -1,8 +1,9 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { ApiClientError } from "@/services/api/client";
+import { clearPendingInvite, readPendingInvite } from "@/lib/pendingInvite";
 import { aiInterviewService } from "@/services/api/candidate/aiInterview";
 import type {
   AiInterviewAssignment,
@@ -15,6 +16,7 @@ import { AssignedInterviews } from "./AssignedInterviews";
 import { DOMAINS } from "./domains";
 import { DeviceCheck } from "./DeviceCheck";
 import { InterviewBriefing } from "./InterviewBriefing";
+import { detectBrowserSupport } from "./supportCheck";
 import { MeetingRoom } from "./MeetingRoom";
 import { ReportView } from "./ReportView";
 import { useInterviewRoom } from "./useInterviewRoom";
@@ -28,7 +30,8 @@ export function AiInterviewTab() {
   const [domain, setDomain] = useState<AiInterviewDomain | null>(null);
   const [config, setConfig] = useState<AiInterviewConfig | null>(null);
   const [configError, setConfigError] = useState<string | null>(null);
-  const [stage, setStage] = useState<"briefing" | "check">("briefing");
+  const [stage, setStage] = useState<"briefing" | "check" | "test">("briefing");
+  const support = useMemo(() => detectBrowserSupport(), []);
   // Company interviews: the ones I have been sent, and the one I am about to take (if any).
   const [assignments, setAssignments] = useState<AiInterviewAssignment[]>([]);
   const [assignment, setAssignment] = useState<AiInterviewAssignment | null>(null);
@@ -83,10 +86,11 @@ export function AiInterviewTab() {
     deepLinkDone.current = true;
     try {
       const url = new URL(window.location.href);
-      const id = url.searchParams.get("ai_interview_invite");
+      const id = url.searchParams.get("ai_interview_invite") ?? readPendingInvite();
       if (!id) return;
       const match = assignments.find((a) => a.id === id && a.status === "invited");
       if (match) setAssignment(match);
+      clearPendingInvite();
       url.searchParams.delete("ai_interview_invite");
       window.history.replaceState(null, "", url.toString());
     } catch {
@@ -109,7 +113,7 @@ export function AiInterviewTab() {
   useEffect(loadHistory, [loadHistory]);
 
   // Warn before closing the tab mid-interview.
-  const live = room.phase === "live" || room.phase === "connecting";
+  const live = room.phase === "live" || room.phase === "connecting" || room.phase === "interrupted";
   useEffect(() => {
     if (!live) return;
     const handler = (e: BeforeUnloadEvent) => {
@@ -205,6 +209,20 @@ export function AiInterviewTab() {
           config={config}
           configError={configError}
           onRetryConfig={() => loadConfig()}
+          support={support}
+          onTestSetup={() => setStage("test")}
+          onRequestAccommodation={
+            assignment
+              ? async (message) => {
+                  await aiInterviewService.requestAccommodation(assignment.id, message);
+                  setAssignments((all) =>
+                    all.map((a) =>
+                      a.id === assignment.id ? { ...a, accommodation_requested: true } : a,
+                    ),
+                  );
+                }
+              : undefined
+          }
         />
       )}
 
@@ -221,6 +239,10 @@ export function AiInterviewTab() {
         />
       )}
 
+      {room.phase === "setup" && stage === "test" && (
+        <DeviceCheck testOnly onBack={() => setStage("briefing")} onJoin={() => undefined} />
+      )}
+
       {room.phase === "connecting" && (assignment || domain) && (
         <WaitingRoom domain={domain ?? undefined} roleTitle={assignment?.role_title} />
       )}
@@ -232,6 +254,39 @@ export function AiInterviewTab() {
           roleTitle={assignment?.role_title}
           company={assignment?.company_name}
         />
+      )}
+
+      {room.phase === "interrupted" && (
+        <Card className="space-y-3 p-8 text-center" role="alert">
+          <h2 className="font-display text-xl font-semibold">Connection lost</h2>
+          <p className="mx-auto max-w-md text-sm text-muted-foreground">
+            Your interview is still open and the clock is still running. Rejoin to carry on where
+            you left off, or end it now.
+          </p>
+          {room.error && <p className="text-sm text-destructive">{room.error}</p>}
+          <div className="flex justify-center gap-3">
+            <Button onClick={() => void room.rejoin()}>Rejoin interview</Button>
+            <Button variant="outline" onClick={() => void room.end()}>
+              End interview
+            </Button>
+          </div>
+        </Card>
+      )}
+
+      {room.phase === "unavailable" && (
+        <Card className="space-y-3 p-8 text-center" role="alert">
+          <h2 className="font-display text-xl font-semibold">
+            We couldn&apos;t start your interview
+          </h2>
+          <p className="mx-auto max-w-md text-sm text-muted-foreground">
+            The AI interviewer did not join, so nothing was recorded.{" "}
+            {assignment
+              ? "This attempt has not been used. Your invitation is still valid."
+              : "This did not count towards your daily limit."}{" "}
+            Please try again in a moment.
+          </p>
+          <Button onClick={startAgain}>Try again</Button>
+        </Card>
       )}
 
       {room.phase === "ended" && assignment && (

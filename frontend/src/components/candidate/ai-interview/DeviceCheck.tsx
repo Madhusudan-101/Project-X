@@ -12,6 +12,8 @@ interface Props {
   roleTitle?: string;
   onBack: () => void;
   onJoin: (devices: DevicePick) => void;
+  /** Practice run of the equipment check: nothing is started and no attempt is used. */
+  testOnly?: boolean;
 }
 
 type DeviceState = "asking" | "ready" | "denied" | "missing";
@@ -29,7 +31,7 @@ const stateFromError = (e: unknown): DeviceState => {
  * granted to join. The devices are opened only for the preview and meter, then
  * released so the LiveKit room can take over on join.
  */
-export function DeviceCheck({ domain, roleTitle, onBack, onJoin }: Props) {
+export function DeviceCheck({ domain, roleTitle, onBack, onJoin, testOnly }: Props) {
   const [micState, setMicState] = useState<DeviceState>("asking");
   const [camState, setCamState] = useState<DeviceState>("asking");
   const [mics, setMics] = useState<MediaDeviceInfo[]>([]);
@@ -292,9 +294,9 @@ export function DeviceCheck({ domain, roleTitle, onBack, onJoin }: Props) {
         <Button
           className="bg-gradient-brand text-primary-foreground"
           disabled={!ready}
-          onClick={() => onJoin({ micId, camId })}
+          onClick={() => (testOnly ? onBack() : onJoin({ micId, camId }))}
         >
-          Join interview
+          {testOnly ? "Everything works" : "Join interview"}
         </Button>
       </div>
     </Card>

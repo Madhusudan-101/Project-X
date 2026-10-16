@@ -9,6 +9,7 @@ import type {
   AiInterviewDomain,
 } from "@/types/candidate/aiInterview";
 import { DOMAINS, domainInfo } from "./domains";
+import type { BrowserSupport } from "./supportCheck";
 
 interface Props {
   domain: AiInterviewDomain | null;
@@ -21,6 +22,12 @@ interface Props {
   onRetryConfig: () => void;
   /** Set when the candidate is taking an interview a company sent them (not practice). */
   assignment?: AiInterviewAssignment | null;
+  /** Browser capability check; problems block Continue. Defaults to "fine". */
+  support?: BrowserSupport;
+  /** Open the no-attempt-used equipment test. */
+  onTestSetup?: () => void;
+  /** Ask the company for an accommodation (assignments only). */
+  onRequestAccommodation?: (message: string) => Promise<void>;
 }
 
 const RULES_DO = [
@@ -76,7 +83,13 @@ export function InterviewBriefing({
   configError,
   onRetryConfig,
   assignment,
+  support = { problems: [], warnings: [] },
+  onTestSetup,
+  onRequestAccommodation,
 }: Props) {
+  const [accOpen, setAccOpen] = useState(false);
+  const [accText, setAccText] = useState("");
+  const [accState, setAccState] = useState<"idle" | "sending" | "sent" | "error">("idle");
   const [agreed, setAgreed] = useState(false);
   const [audioAgreed, setAudioAgreed] = useState(false);
   const [videoAgreed, setVideoAgreed] = useState(false);
@@ -278,6 +291,16 @@ export function InterviewBriefing({
                 : `You have used all ${config.dailyLimit} interviews for today. Try again tomorrow.`}
             </p>
           )}
+          {support.problems.map((p) => (
+            <p key={p} className="text-sm text-destructive" role="alert">
+              {p}
+            </p>
+          ))}
+          {support.warnings.map((w) => (
+            <p key={w} className="text-sm text-muted-foreground">
+              {w}
+            </p>
+          ))}
           {configError && (
             <p className="text-sm text-destructive" role="alert">
               {configError}{" "}
@@ -290,6 +313,7 @@ export function InterviewBriefing({
           <Button
             className="w-full bg-gradient-brand text-primary-foreground"
             disabled={
+              support.problems.length > 0 ||
               !agreed ||
               !audioAgreed ||
               !videoAgreed ||
@@ -303,6 +327,61 @@ export function InterviewBriefing({
           </Button>
           {!domain && !assignment && (
             <p className="text-xs text-muted-foreground">Choose an interview track to continue.</p>
+          )}
+          {onTestSetup && (
+            <Button variant="outline" className="w-full" onClick={onTestSetup}>
+              Test my camera and microphone
+            </Button>
+          )}
+          {assignment && (
+            <p className="text-xs text-muted-foreground">
+              A person at {company} makes the hiring decision. The AI interviewer only gathers and
+              scores your answers.
+            </p>
+          )}
+          {assignment && onRequestAccommodation && (
+            <div className="space-y-2 border-t pt-3 text-sm">
+              {assignment.accommodation_requested || accState === "sent" ? (
+                <p className="text-muted-foreground">
+                  Accommodation requested. {company} has been told.
+                </p>
+              ) : !accOpen ? (
+                <button type="button" className="underline" onClick={() => setAccOpen(true)}>
+                  Need extra time or another format? Ask {company}
+                </button>
+              ) : (
+                <>
+                  <label htmlFor="ai-accommodation" className="font-medium">
+                    What do you need?
+                  </label>
+                  <textarea
+                    id="ai-accommodation"
+                    className="min-h-20 w-full rounded-md border bg-background p-2"
+                    maxLength={1000}
+                    value={accText}
+                    onChange={(e) => setAccText(e.target.value)}
+                  />
+                  {accState === "error" && (
+                    <p className="text-destructive" role="alert">
+                      Could not send. Try again.
+                    </p>
+                  )}
+                  <Button
+                    size="sm"
+                    disabled={accText.trim().length < 5 || accState === "sending"}
+                    onClick={() => {
+                      setAccState("sending");
+                      onRequestAccommodation(accText.trim()).then(
+                        () => setAccState("sent"),
+                        () => setAccState("error"),
+                      );
+                    }}
+                  >
+                    Send request
+                  </Button>
+                </>
+              )}
+            </div>
           )}
         </Card>
       </aside>

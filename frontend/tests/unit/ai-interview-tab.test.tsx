@@ -38,6 +38,11 @@ vi.mock("@/components/candidate/ai-interview/DeviceCheck", () => ({
   ),
 }));
 
+// jsdom has no camera, WebRTC or audio APIs; pretend the browser is capable.
+vi.mock("@/components/candidate/ai-interview/supportCheck", () => ({
+  detectBrowserSupport: () => ({ problems: [], warnings: [] }),
+}));
+
 const ASSIGNMENT: AiInterviewAssignment = {
   id: "inv-1",
   company_name: "Acme",

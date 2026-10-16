@@ -75,6 +75,7 @@ import { candidateJobsService } from "@/services/api/candidate/jobs";
 import { ProfileSettingsDialog } from "@/components/candidate/ProfileSettingsDialog";
 import { PrepPlanDialog } from "@/components/candidate/PrepPlanDialog";
 import { ApplicationFormModal } from "@/components/candidate/ApplicationFormModal";
+import { readPendingInvite } from "@/lib/pendingInvite";
 import { OnlineAssessmentsPanel } from "@/components/candidate/OnlineAssessmentsPanel";
 import {
   APPLICATION_STATUS_LABELS,
@@ -177,7 +178,10 @@ function CandidatePortal() {
   // An AI interview invitation email links to /candidate?ai_interview_invite=<id>.
   useEffect(() => {
     try {
-      if (new URLSearchParams(window.location.search).has("ai_interview_invite")) {
+      if (
+        new URLSearchParams(window.location.search).has("ai_interview_invite") ||
+        readPendingInvite()
+      ) {
         setTab("ai-interview");
       }
     } catch {

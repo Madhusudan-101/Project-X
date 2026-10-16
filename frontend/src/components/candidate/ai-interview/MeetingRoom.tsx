@@ -100,6 +100,16 @@ export function MeetingRoom({
         </div>
       </header>
 
+      {room.reconnecting && (
+        <div
+          role="status"
+          className="flex items-center gap-3 border-b border-amber-500/60 bg-amber-500/20 px-5 py-2.5 text-sm"
+        >
+          <TriangleAlert className="h-4 w-4 shrink-0" aria-hidden />
+          <span>Connection lost. Reconnecting… your interview is still running.</span>
+        </div>
+      )}
+
       {room.videoFlag && (
         <div
           role="alert"
