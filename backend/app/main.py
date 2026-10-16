@@ -24,6 +24,8 @@ from .routers.company import applicants as company_applicants
 from .routers.company import drives as company_drives
 from .routers.company import assessment as company_assessment
 from .routers.admin import overview as admin_overview
+from .routers.admin import peer_safety as admin_peer_safety
+from .routers.candidate import peer_safety as candidate_peer_safety
 from .routers.admin import colleges as admin_colleges
 from .routers.admin import companies as admin_companies
 from .routers.admin import candidates as admin_candidates
@@ -105,6 +107,8 @@ app.include_router(candidate_assessment_code.router)
 app.include_router(candidate_resume_tailor.router)
 # Admin Portal — every router carries the require_admin_role dependency.
 app.include_router(admin_overview.router)
+app.include_router(admin_peer_safety.router)
+app.include_router(candidate_peer_safety.router)
 app.include_router(admin_colleges.router)
 app.include_router(admin_companies.router)
 app.include_router(admin_candidates.router)

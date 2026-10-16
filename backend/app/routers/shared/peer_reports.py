@@ -183,6 +183,43 @@ async def ingest_peer_report(
     return {"ok": True, "id": inserted.get("id")}
 
 
+class MeetingReportIn(BaseModel):
+    room_id: str
+    reporter_student_id: str
+    reason: str
+    details: str = Field(default="", max_length=1000)
+    block: bool = False
+    # Captured by the PeerMeet server (not the browser) so it cannot be forged by the reporter.
+    evidence: Optional[dict] = None
+
+
+@router.post("/peer-safety/report", status_code=201)
+async def ingest_meeting_report(
+    request: Request,
+    authorization: Optional[str] = Header(None),
+    x_peer_timestamp: Optional[str] = Header(None),
+    x_peer_signature: Optional[str] = Header(None),
+) -> dict:
+    """A report raised from inside a PeerMeet room. Same auth as the report webhook."""
+    _verify_secret(authorization)
+    raw = await request.body()
+    _verify_signature(raw, x_peer_timestamp, x_peer_signature)
+    try:
+        body = MeetingReportIn.model_validate_json(raw)
+    except ValidationError as e:
+        raise HTTPException(status_code=422, detail=f"Invalid report: {e.errors()[0].get('msg', 'bad payload')}")
+    from ...services import peer_safety
+    evidence = body.evidence
+    if evidence is not None:
+        # Bound what we store: a few hundred short lines at most.
+        lines = [str(x)[:400] for x in (evidence.get("transcript") or [])][-200:]
+        evidence = {"transcript": lines, "captured_at": evidence.get("captured_at")}
+    return peer_safety.file_report(
+        reporter_id=body.reporter_student_id, room_id=body.room_id, reason=body.reason,
+        details=body.details, block=body.block, evidence=evidence, source="meeting",
+    )
+
+
 @router.post("/peer/maintenance")
 def peer_maintenance(authorization: Optional[str] = Header(None)) -> dict:
     """Scheduled upkeep: expire stale matches and scheduled meetings nobody finished.

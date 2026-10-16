@@ -48,6 +48,7 @@ ALL_PERMISSIONS = frozenset({
     "system.view",
     "reports.view", "reports.export",
     "billing.view",
+    "peer_safety.view", "peer_safety.resolve",
 })
 
 # Which scope types a permission can be narrowed to, beyond 'global' — only
@@ -70,6 +71,7 @@ MODULE_LABELS = {
     "candidates": "Candidates", "drives": "Drives", "partnerships": "Partnerships",
     "users": "Users & Access", "audit": "Audit & Activity", "alerts": "Alerts",
     "system": "System Health", "reports": "Reports", "billing": "Billing / Revenue",
+    "peer_safety": "Peer safety",
 }
 
 _SCOPE_TABLE = {"college": "colleges", "company": "companies"}

@@ -36,6 +36,7 @@ create index if not exists idx_peer_interview_reports_room
 alter table public.peer_interview_reports enable row level security;
 
 -- Service-role (backend webhook) can do everything.
+drop policy if exists "service_role_all_peer_interview_reports" on public.peer_interview_reports;
 create policy "service_role_all_peer_interview_reports"
   on public.peer_interview_reports
   for all
@@ -44,6 +45,7 @@ create policy "service_role_all_peer_interview_reports"
 
 -- Authenticated students can read only their OWN reports. No INSERT/UPDATE/
 -- DELETE policy — writes must come from the service-role webhook.
+drop policy if exists "student_select_own_peer_interview_reports" on public.peer_interview_reports;
 create policy "student_select_own_peer_interview_reports"
   on public.peer_interview_reports
   for select

@@ -22,6 +22,8 @@ def now_iso() -> str:
 
 # table -> tuple of columns that must be unique together (besides id)
 UNIQUE: Dict[str, List[tuple]] = {
+    "peer_user_reports": [("reporter_id", "reported_id", "room_id")],
+    "peer_blocks": [("blocker_id", "blocked_id")],
     "applications": [("student_id", "job_id")],
     "companies": [("owner_id",)],
     "job_drives": [("job_id", "college_id")],
@@ -51,6 +53,7 @@ DEFAULTS: Dict[str, Callable[[], dict]] = {
     "peer_matchmaking_tickets": lambda: {"status": "waiting", "last_seen_at": now_iso(), "keep_private": False},
     "peer_scheduled_meetings": lambda: {"status": "scheduled"},
     "peer_interview_reports": lambda: {"phase": 1, "unavailable": False},
+    "peer_user_reports": lambda: {"status": "open", "source": "dashboard"},
     "oa_invites": lambda: {"status": "invited"},
     "oa_assessments": lambda: {"invite_mode": "invited"},
     "job_roles": lambda: {"status": "draft"},

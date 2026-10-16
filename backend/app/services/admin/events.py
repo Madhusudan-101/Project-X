@@ -33,6 +33,7 @@ EVENT_TYPES = frozenset({
     "report_generated",
     "permission_granted",
     "permission_revoked",
+    "peer_report_resolved",
 })
 
 

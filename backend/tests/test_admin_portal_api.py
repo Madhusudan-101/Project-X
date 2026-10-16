@@ -389,7 +389,12 @@ def main() -> int:
     check("no profile row was minted for the metadata-claimed admin",
           not any(r["id"] == "u-ghost" for r in db.tables["profiles"]))
     admin_ok = [(m, p, call(m, p, "tok-admin").status_code) for m, p in routes if m == "GET"]
-    check("real admin token -> 200 on every GET route", all(s == 200 for _, _, s in admin_ok), [x for x in admin_ok if x[2] != 200])
+    # A detail route given a placeholder id correctly answers 404 (the report does not exist); it must
+    # still get past the auth/permission gate, which is what this sweep proves.
+    NOT_FOUND_OK = {"/admin/peer-safety/reports/{report_id}"}
+    check("real admin token -> 200 on every GET route",
+          all(s == 200 or (p in NOT_FOUND_OK and s == 404) for _, p, s in admin_ok),
+          [x for x in admin_ok if x[2] != 200 and not (x[1] in NOT_FOUND_OK and x[2] == 404)])
 
     print("\n== Public signup can no longer create Admin / College ==")
     seed_profiles()

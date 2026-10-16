@@ -38,6 +38,7 @@ from fastapi import APIRouter, Depends, HTTPException, Path
 from pydantic import BaseModel, Field, field_validator
 
 from ...deps import get_current_user, db_client
+from ...services import peer_safety
 from postgrest.exceptions import APIError
 
 logger = logging.getLogger(__name__)
@@ -212,6 +213,7 @@ def _may_enter_room(user_id: str, room_id: str) -> bool:
 def mint_peer_session_token(body: SessionTokenIn, current_user: dict = Depends(get_current_user)) -> dict:
     """Return a short-lived signed token for ONE room PeerMeet can verify offline. The caller must
     belong in that room (matched into it, or allowed into that scheduled meeting)."""
+    peer_safety.require_not_suspended(current_user["id"])
     if not _may_enter_room(current_user["id"], body.room_id):
         raise HTTPException(status_code=403, detail="You are not allowed in that room.")
     name = _resolve_display_name(current_user["id"])
@@ -300,6 +302,7 @@ def request_matchmaking(
     """
     user_id = current_user["id"]
     email = current_user.get("email")
+    peer_safety.require_not_suspended(user_id)
 
     # ── 1. Existing matched ticket → hand back immediately.
     try:
@@ -612,7 +615,8 @@ def list_public_upcoming_meetings(
         raise HTTPException(status_code=500, detail=f"Upcoming list failed: {e.message}")
 
     now = datetime.now(timezone.utc)
-    rows = res.data or []
+    blocked = peer_safety.blocked_with(user_id)
+    rows = [r for r in (res.data or []) if r["creator_id"] not in blocked and r.get("invitee_id") not in blocked]
     # Batch-resolve host display names for every non-private host in one query
     # so we don't issue M+1 profile fetches per public-list poll.
     name_map = _resolve_display_names(
@@ -662,6 +666,7 @@ def create_scheduled_meeting(
     current_user: dict = Depends(get_current_user),
 ) -> ScheduledMeetingOut:
     user_id = current_user["id"]
+    peer_safety.require_not_suspended(user_id)
 
     invitee_id: Optional[str] = None
     if body.invitee_email:
@@ -686,6 +691,9 @@ def create_scheduled_meeting(
         invitee_id = inv_row["id"]
         if invitee_id == user_id:
             raise HTTPException(status_code=422, detail="Cannot invite yourself")
+        if invitee_id in peer_safety.blocked_with(user_id):
+            # Deliberately vague: a blocked person is never told they were blocked.
+            raise HTTPException(status_code=422, detail="You can't invite that person.")
 
     row_in = {
         "room_id": _generate_room_id(),
@@ -747,6 +755,7 @@ def join_scheduled_meeting(
     current_user: dict = Depends(get_current_user),
 ) -> JoinScheduledOut:
     user_id = current_user["id"]
+    peer_safety.require_not_suspended(user_id)
     try:
         res = (
             db_client.table("peer_scheduled_meetings")
@@ -760,6 +769,11 @@ def join_scheduled_meeting(
     row = getattr(res, "data", None) if res is not None else None
     if not row:
         raise HTTPException(status_code=404, detail="Meeting not found")
+
+    # A block works both ways and is never explained to the blocked person.
+    others = {row["creator_id"], row.get("invitee_id")} - {None, user_id}
+    if others & peer_safety.blocked_with(user_id):
+        raise HTTPException(status_code=403, detail="You are not able to join this meeting.")
 
     # Meeting must still be live for this feature (waiting / live / scheduled).
     # Completed & cancelled short-circuit with a clear reason.
@@ -803,6 +817,8 @@ def join_scheduled_meeting(
                 db_client.table("peer_scheduled_meetings").update({
                     "status": "live",
                     "live_at": datetime.now(timezone.utc).isoformat(),
+                    # Remember who actually joined an open meeting, so a report about it can be resolved.
+                    "second_joiner_id": user_id,
                 }).eq("id", meeting_id).eq("status", "waiting").execute()
             except APIError:
                 pass

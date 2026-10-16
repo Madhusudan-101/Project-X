@@ -8,48 +8,13 @@ from datetime import datetime, timedelta, timezone
 import jwt
 import pytest
 
+from peer_support import install_matcher as _install_matcher, iso as _iso, now as _now
+
 from app.routers.candidate import peer as peer_mod
 from app.routers.shared import peer_reports as reports_mod
 
 SECRET = "test-shared-secret"
 ALICE, BOB, CAROL = "alice", "bob", "carol"
-
-
-def _iso(dt):
-    return dt.astimezone(timezone.utc).isoformat()
-
-
-def _now():
-    return datetime.now(timezone.utc)
-
-
-# ── matcher stand-in: mirrors claim_peer_matchmaking_ticket in peer_phase1_hardening_migration.sql ──
-def _install_matcher(env):
-    def claim(params):
-        rows = env.db.tables.setdefault("peer_matchmaking_tickets", [])
-        now = _now()
-        for r in rows:
-            if r["status"] == "waiting":
-                exp = r.get("expires_at")
-                seen = datetime.fromisoformat(r["last_seen_at"]) if r.get("last_seen_at") else now
-                if (exp and datetime.fromisoformat(exp) < now) or seen < now - timedelta(seconds=30):
-                    r["status"] = "expired"
-            if r["status"] == "matched":
-                at = datetime.fromisoformat(r.get("matched_at") or r["created_at"])
-                if at < now - timedelta(minutes=30):
-                    r["status"] = "expired"
-        waiting = sorted(
-            (r for r in rows if r["status"] == "waiting" and r["student_id"] != params["p_student_id"]),
-            key=lambda r: r["created_at"],
-        )
-        if not waiting:
-            return []
-        t = waiting[0]
-        t.update(status="matched", room_id=params["p_room_id"], matched_with=params["p_student_id"],
-                 matched_at=_iso(now))
-        return [{"ticket_id": t["id"], "peer_id": t["student_id"], "peer_private": bool(t.get("keep_private"))}]
-
-    env.db.rpc_handlers["claim_peer_matchmaking_ticket"] = claim
 
 
 @pytest.fixture
