@@ -53,3 +53,11 @@ def install_matcher(env):
         return [{"ticket_id": t["id"], "peer_id": t["student_id"], "peer_private": bool(t.get("keep_private"))}]
 
     env.db.rpc_handlers["claim_peer_matchmaking_ticket"] = claim
+
+
+def consent(env, *user_ids):
+    """Record that these people accepted the CURRENT peer guidelines (the API refuses everything until then)."""
+    from app.services.peer_safety import GUIDELINES_VERSION
+    for uid in user_ids:
+        env.db.add("peer_consents", id=uid, student_id=uid, version=GUIDELINES_VERSION,
+                   accepted_rules=True, accepted_media=True, accepted_ai=True)

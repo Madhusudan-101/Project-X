@@ -111,7 +111,7 @@ function mint(studentId, name, room, over = {}) {
 async function newRoom(roomId, hostPid, hostToken) {
   const A = connect();
   await waitConnect(A);
-  A.emit('create-room', { roomId, participantId: hostPid, token: hostToken, keepPrivate: false });
+  A.emit('create-room', { roomId, participantId: hostPid, token: hostToken, keepPrivate: false, transcriptionConsent: true });
   await waitEvent(A, 'room-created');
   return A;
 }
@@ -180,6 +180,51 @@ async function testDashboardRoomRefusesAnonymousGuests() {
   await sleep(80);
 }
 
+async function testReturningParticipantsAreNotLockedOut() {
+  const roomId = `back-${uid()}`;
+  const A = await newRoom(roomId, 'p-back-a', mint('s-a', 'Ann', roomId));
+  const B = connect();
+  await waitConnect(B);
+  const ready = waitEvent(B, 'ready');
+  B.emit('join-room', { roomId, participantId: 'p-back-b', token: mint('s-b', 'Bob', roomId) });
+  await ready;
+
+  // B drops, then returns with an EXPIRED token (their 10 minutes ran out during the call)
+  B.disconnect();
+  await sleep(200);
+  const expired = mint('s-b', 'Bob', roomId, { iat: Math.floor(Date.now() / 1000) - 3600, exp: Math.floor(Date.now() / 1000) - 1800 });
+  const B2 = connect();
+  await waitConnect(B2);
+  const ready2 = waitEvent(B2, 'ready');
+  B2.emit('join-room', { roomId, participantId: 'p-back-b', token: expired });
+  record('A returning participant with an expired token gets back in', Boolean((await ready2).initiatorId));
+  record('...and keeps the identity they verified earlier', roomManager.getIdentityForParticipant(roomId, 'p-back-b')?.studentId === 's-b');
+
+  // and with no token at all (page refresh lost it)
+  B2.disconnect();
+  await sleep(200);
+  const B3 = connect();
+  await waitConnect(B3);
+  const ready3 = waitEvent(B3, 'ready');
+  B3.emit('join-room', { roomId, participantId: 'p-back-b' });
+  record('...also after a refresh that lost the token', Boolean((await ready3).initiatorId));
+
+  // but a stranger using the same expired token and a different participant id is still refused
+  const stranger = connect();
+  await waitConnect(stranger);
+  const d = waitEvent(stranger, 'auth-error');
+  stranger.emit('join-room', { roomId, participantId: 'p-stranger', token: expired });
+  record('A stranger with an expired token is still refused', (await d).reason === 'invalid-token');
+  const wrongRoom = connect();
+  await waitConnect(wrongRoom);
+  const d2 = waitEvent(wrongRoom, 'auth-error');
+  wrongRoom.emit('join-room', { roomId, participantId: 'p-back-b', token: mint('s-b', 'Bob', 'other-room-1') });
+  record('Even a returning participant cannot present a token for another room', (await d2).reason === 'wrong-room');
+
+  [A, B3, stranger, wrongRoom].forEach((x) => x.disconnect());
+  await sleep(80);
+}
+
 async function testIdsAreValidated() {
   const A = connect();
   await waitConnect(A);
@@ -237,7 +282,7 @@ async function testOnlyTheHostConfiguresTheInterview() {
   const B = connect();
   await waitConnect(B);
   const ready = waitEvent(B, 'ready');
-  B.emit('join-room', { roomId, participantId: 'p-host-b' });
+  B.emit('join-room', { roomId, participantId: 'p-host-b', transcriptionConsent: true });
   await ready;
 
   const hijack = never(A, 'interview:role', 500);
@@ -261,6 +306,47 @@ async function testOnlyTheHostConfiguresTheInterview() {
   record('Starting twice does not reset the interview', roomManager.getInterview(roomId).deadline === deadline1);
 
   [A, B].forEach((s) => s.disconnect());
+  await sleep(80);
+}
+
+// ── consent ──────────────────────────────────────────────────────────────────
+async function testNothingStartsWithoutConsent() {
+  const roomId = `cons-${uid()}`;
+  const A = connect();
+  await waitConnect(A);
+  A.emit('create-room', { roomId, participantId: 'p-con-a', transcriptionConsent: true });
+  await waitEvent(A, 'room-created');
+  const B = connect();
+  await waitConnect(B);
+  const ready = waitEvent(B, 'ready');
+  B.emit('join-room', { roomId, participantId: 'p-con-b' }); // B did NOT consent
+  await ready;
+  record('Consent is recorded per person', roomManager.hasTranscriptionConsent(roomId, 'p-con-a') === true && roomManager.hasTranscriptionConsent(roomId, 'p-con-b') === false);
+
+  const refused = waitEvent(B, 'transcription:error');
+  B.emit('transcription:start', { roomId, mimeType: 'audio/webm' });
+  const err = await refused;
+  record('Transcription does not start for someone who did not agree', /not agreed/.test(err.message));
+
+  const blocked = waitEvent(A, 'interview:error');
+  A.emit('interview:configure', { roomId, config: { domain: 'SQL', whoStarts: 'interviewer' } });
+  record('The AI interview needs BOTH people to have agreed', (await blocked).reason === 'consent-required');
+  record('No interview was set up without consent', !roomManager.getInterview(roomId)?.configured);
+
+  // B reconnects with consent: now it can proceed
+  B.disconnect();
+  await sleep(200);
+  const B2 = connect();
+  await waitConnect(B2);
+  const ready2 = waitEvent(B2, 'ready');
+  B2.emit('join-room', { roomId, participantId: 'p-con-b', transcriptionConsent: true });
+  await ready2;
+  await sleep(1100); // the earlier refused attempt still counts toward the per-event rate limit
+  const role = waitEvent(A, 'interview:role');
+  A.emit('interview:configure', { roomId, config: { domain: 'SQL', whoStarts: 'interviewer' } });
+  record('Once both agreed the interview can be set up', (await role).role === 'interviewer');
+
+  [A, B2].forEach((x) => x.disconnect());
   await sleep(80);
 }
 
@@ -378,10 +464,10 @@ async function runInterview({ roomId, tokenA, tokenB, aPrivate, bPrivate }) {
   const B = connect();
   await waitConnect(A);
   await waitConnect(B);
-  A.emit('create-room', { roomId, participantId: 'p-wh-a', token: tokenA, keepPrivate: aPrivate });
+  A.emit('create-room', { roomId, participantId: 'p-wh-a', token: tokenA, keepPrivate: aPrivate, transcriptionConsent: true });
   await waitEvent(A, 'room-created');
   const ready = waitEvent(B, 'ready');
-  B.emit('join-room', { roomId, participantId: 'p-wh-b', token: tokenB, keepPrivate: bPrivate });
+  B.emit('join-room', { roomId, participantId: 'p-wh-b', token: tokenB, keepPrivate: bPrivate, transcriptionConsent: true });
   await ready;
   const roleA = waitEvent(A, 'interview:role');
   A.emit('interview:configure', { roomId, config: { domain: 'SQL', whoStarts: 'interviewer', durationMinutes: 10 } });
@@ -462,10 +548,12 @@ async function testSwitchRolesReportIsNotFinalAndOnlyOnce() {
     console.log(`\n=== PeerMeet security tests — server on port ${port} ===\n`);
     await testTokenForAnotherRoomIsRefused();
     await testDashboardRoomRefusesAnonymousGuests();
+    await testReturningParticipantsAreNotLockedOut();
     await testIdsAreValidated();
     await testSignalRelayStaysInsideTheRoom();
     await testOnlyTheHostConfiguresTheInterview();
     await testLeavingFreesTheSlotButDroppingDoesNot();
+    await testNothingStartsWithoutConsent();
     await testInMeetingReport();
     await testWebhookIsSignedAndRetried();
     await testSwitchRolesReportIsNotFinalAndOnlyOnce();

@@ -4,7 +4,7 @@ from datetime import timedelta
 
 import pytest
 
-from peer_support import install_matcher, iso, now
+from peer_support import consent, install_matcher, iso, now
 
 ALICE, BOB, CAROL, DAN, EVE = "alice", "bob", "carol", "dan", "eve"
 SECRET = "test-shared-secret"
@@ -21,6 +21,7 @@ def peer(env):
         EVE: env.user(EVE, "candidate", profile={"name": "Eve E"}),
     }
     env.h["admin"] = env.user("admin", "admin", profile={"is_super_admin": True})
+    consent(env, ALICE, BOB, CAROL, DAN, EVE)
     return env
 
 

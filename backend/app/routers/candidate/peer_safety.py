@@ -31,6 +31,13 @@ class ReportIn(BaseModel):
     block: bool = False
 
 
+class AcceptIn(BaseModel):
+    version: str = Field(min_length=3, max_length=40)
+    rules: bool = False
+    media: bool = False
+    ai: bool = False
+
+
 class BlockIn(BaseModel):
     room_id: str = Field(min_length=3, max_length=64)
 
@@ -82,6 +89,19 @@ def block_from_room(body: BlockIn, current_user: dict = Depends(get_current_user
 def unblock(block_id: str = Path(..., min_length=8), current_user: dict = Depends(get_current_user)) -> None:
     # Scoped to the caller: you can only remove your own blocks.
     db_client.table("peer_blocks").delete().eq("id", block_id).eq("blocker_id", current_user["id"]).execute()
+
+
+@router.get("/guidelines")
+def guidelines_state(current_user: dict = Depends(get_current_user)) -> dict:
+    """The current guidelines version and whether this person has accepted it."""
+    return safety.consent_state(current_user["id"])
+
+
+@router.post("/guidelines/accept")
+def accept_guidelines(body: AcceptIn, current_user: dict = Depends(get_current_user)) -> dict:
+    return safety.accept_guidelines(
+        current_user["id"], body.version, rules=body.rules, media=body.media, ai=body.ai
+    )
 
 
 @router.get("/status")

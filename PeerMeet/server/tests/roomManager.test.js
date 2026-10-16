@@ -326,3 +326,17 @@ test('unknown participants count as private', () => {
   assert.equal(rm.isParticipantPrivate(r, 'nobody'), true);
   assert.equal(rm.isParticipantPrivate(r, 'pA'), false);
 });
+
+test('transcription consent is per person and everyone must agree for the AI interview', () => {
+  const r = newRoom();
+  rm.createRoom(r, 'pA', 'sA', null, false, true);
+  rm.joinRoom(r, 'pB', 'sB', () => true, null, false); // joined without agreeing
+  assert.equal(rm.hasTranscriptionConsent(r, 'pA'), true);
+  assert.equal(rm.hasTranscriptionConsent(r, 'pB'), false);
+  assert.equal(rm.everyoneConsentedToTranscription(r), false);
+  rm.leaveRoom('sB');
+  rm.joinRoom(r, 'pB', 'sB2', () => false, null, false, true); // rejoin, now agreeing
+  assert.equal(rm.everyoneConsentedToTranscription(r), true);
+  assert.equal(rm.hasTranscriptionConsent(r, 'nobody'), false);
+  assert.equal(rm.everyoneConsentedToTranscription('no-such-room'), false);
+});

@@ -261,6 +261,12 @@ def as_user(user_id: str, email: str) -> TestClient:
 def seed_profile(user_id: str, email: str, name: str):
     profiles = _STORE.tables.setdefault("profiles", [])
     profiles.append({"id": user_id, "email": email, "name": name})
+    # Everyone in these scenarios has accepted the current peer guidelines (the API refuses until then).
+    from app.services.peer_safety import GUIDELINES_VERSION
+    _STORE.tables.setdefault("peer_consents", []).append({
+        "student_id": user_id, "version": GUIDELINES_VERSION,
+        "accepted_rules": True, "accepted_media": True, "accepted_ai": True,
+    })
 
 
 ALICE = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"

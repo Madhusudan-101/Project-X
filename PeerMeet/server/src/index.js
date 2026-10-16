@@ -69,6 +69,9 @@ const {
   getIdentityForParticipant,
   getPublicDisplayName,
   getHostParticipantId,
+  holdsSlotWithIdentity,
+  hasTranscriptionConsent,
+  everyoneConsentedToTranscription,
   isRoomRestricted,
   isParticipantPrivate,
   getRoomIdForSocket,
@@ -825,7 +828,7 @@ io.on('connection', (socket) => {
    * who expects to be the initiator (e.g. their room was fully abandoned
    * and needs recreating) — see the 'join-room'-driven client fallback.
    */
-  socket.on('create-room', ({ roomId, participantId, token, keepPrivate } = {}) => {
+  socket.on('create-room', ({ roomId, participantId, token, keepPrivate, transcriptionConsent } = {}) => {
     console.log(`[Room] create-room | room=${short(roomId)} | socket=${short(socket.id)}`);
 
     if (!ID_PATTERN.test(String(roomId || '')) || !ID_PATTERN.test(String(participantId || ''))) {
@@ -847,7 +850,7 @@ io.on('connection', (socket) => {
       socket.emit('auth-error', { reason: denied });
       return;
     }
-    createRoom(roomId, participantId, socket.id, identity, !!keepPrivate);
+    createRoom(roomId, participantId, socket.id, identity, !!keepPrivate, transcriptionConsent === true);
     socket.join(roomId);
     socket.emit('room-created', { roomId });
 
@@ -866,7 +869,7 @@ io.on('connection', (socket) => {
    *   - On success → notify both participants; on reconnect, also resync
    *     the reconnecting participant's interview state.
    */
-  socket.on('join-room', ({ roomId, participantId, token, keepPrivate } = {}) => {
+  socket.on('join-room', ({ roomId, participantId, token, keepPrivate, transcriptionConsent } = {}) => {
     console.log(`[Room] join-room | room=${short(roomId)} | socket=${short(socket.id)}`);
 
     if (!ID_PATTERN.test(String(roomId || '')) || !ID_PATTERN.test(String(participantId || ''))) {
@@ -875,7 +878,13 @@ io.on('connection', (socket) => {
     }
 
     const identity = verifyPeerToken(token);
-    const denied = checkRoomAccess(roomId, token, identity);
+    let denied = checkRoomAccess(roomId, token, identity);
+    // Someone who is ALREADY in this room (they verified when they first joined) is coming back after a
+    // refresh or a network blip: their 10-minute token may have expired or been lost. Let them back into
+    // their own slot. A token for a different room is still refused.
+    if ((denied === 'invalid-token' || denied === 'token-required') && holdsSlotWithIdentity(roomId, participantId)) {
+      denied = null;
+    }
     if (denied && roomExists(roomId)) {
       socket.emit('auth-error', { reason: denied });
       return;
@@ -890,7 +899,8 @@ io.on('connection', (socket) => {
       socket.id,
       (id) => io.sockets.sockets.has(id),
       identity,
-      !!keepPrivate
+      !!keepPrivate,
+      transcriptionConsent === true
     );
 
     if (result.notFound) {
@@ -1001,6 +1011,14 @@ io.on('connection', (socket) => {
       return;
     }
 
+    // Audio goes to a third-party transcription service, so it only starts for someone who agreed to it.
+    if (!hasTranscriptionConsent(roomId, getParticipantIdForSocket(roomId, socket.id))) {
+      socket.emit('transcription:error', {
+        message: 'Live captions are off because transcription was not agreed to for this meeting.',
+      });
+      return;
+    }
+
     // 1s floor: a real client starts this once per mic-enable/reconnect —
     // guards against a client opening a flood of Deepgram connections.
     if (isRateLimited(socket, 'transcription:start', 1000)) return;
@@ -1049,6 +1067,12 @@ io.on('connection', (socket) => {
     // Don't allow reconfiguring once the interview has started.
     const existing = getInterview(roomId);
     if (existing?.started && !existing?.ended) return;
+
+    // AI feedback processes BOTH people's speech, so it needs both of them to have agreed to it.
+    if (!everyoneConsentedToTranscription(roomId)) {
+      socket.emit('interview:error', { reason: 'consent-required' });
+      return;
+    }
 
     // Only the room host (the first person in the room) may set the interview up. Without this the
     // second person to arrive could configure first, take the interviewer role and see the AI panel.

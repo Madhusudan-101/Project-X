@@ -8,7 +8,7 @@ from datetime import datetime, timedelta, timezone
 import jwt
 import pytest
 
-from peer_support import install_matcher as _install_matcher, iso as _iso, now as _now
+from peer_support import consent, install_matcher as _install_matcher, iso as _iso, now as _now
 
 from app.routers.candidate import peer as peer_mod
 from app.routers.shared import peer_reports as reports_mod
@@ -26,6 +26,7 @@ def peer(env):
         CAROL: env.user(CAROL, "candidate", profile={"name": "Carol C"}),
     }
     env.h = h
+    consent(env, ALICE, BOB, CAROL)
     return env
 
 
@@ -95,6 +96,7 @@ def test_private_waiter_is_anonymous_to_the_person_who_claims_them(peer):
 def test_email_is_never_used_as_a_display_name(peer):
     uid = "nm"
     peer.h[uid] = peer.user(uid, "candidate", email="private.address@mail.com")
+    consent(peer, uid)
     request_match(peer, ALICE)
     mine = request_match(peer, uid)
     assert "private.address" not in json.dumps(mine)

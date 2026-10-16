@@ -87,6 +87,53 @@ def active_suspension(user_id: str) -> Optional[dict]:
     return None
 
 
+# Bump this when the guidelines change: everyone is asked to accept again.
+GUIDELINES_VERSION = "2026-10-peer-v1"
+CONSENT_REQUIRED_STATUS = 428  # Precondition Required: the client opens the guidelines screen
+
+
+def consent_state(user_id: str) -> dict:
+    """Has this person accepted the CURRENT guidelines, and what exactly did they agree to?"""
+    try:
+        res = db_client.table("peer_consents").select("*").eq("student_id", user_id).maybe_single().execute()
+    except APIError:
+        logger.exception("consent lookup failed")
+        return {"version": GUIDELINES_VERSION, "accepted": False, "accepted_at": None}
+    row = getattr(res, "data", None)
+    ok = bool(
+        row and row.get("version") == GUIDELINES_VERSION
+        and row.get("accepted_rules") and row.get("accepted_media") and row.get("accepted_ai")
+    )
+    return {"version": GUIDELINES_VERSION, "accepted": ok, "accepted_at": row.get("accepted_at") if ok else None}
+
+
+def require_consent(user_id: str) -> None:
+    if not consent_state(user_id)["accepted"]:
+        raise HTTPException(
+            status_code=CONSENT_REQUIRED_STATUS,
+            detail="Please read and accept the peer interview guidelines first.",
+        )
+
+
+def require_peer_ready(user_id: str) -> None:
+    """Everything a person must satisfy before using peer interviews: not suspended, guidelines accepted."""
+    require_not_suspended(user_id)
+    require_consent(user_id)
+
+
+def accept_guidelines(user_id: str, version: str, *, rules: bool, media: bool, ai: bool) -> dict:
+    if version != GUIDELINES_VERSION:
+        raise HTTPException(status_code=409, detail="The guidelines were updated. Please read them again.")
+    if not (rules and media and ai):
+        raise HTTPException(status_code=422, detail="You need to agree to all three statements to continue.")
+    db_client.table("peer_consents").upsert({
+        "student_id": user_id, "version": version,
+        "accepted_rules": True, "accepted_media": True, "accepted_ai": True,
+        "accepted_at": now().isoformat(),
+    }, on_conflict="student_id").execute()
+    return consent_state(user_id)
+
+
 def require_not_suspended(user_id: str) -> None:
     s = active_suspension(user_id)
     if not s:

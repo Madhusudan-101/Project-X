@@ -213,7 +213,7 @@ def _may_enter_room(user_id: str, room_id: str) -> bool:
 def mint_peer_session_token(body: SessionTokenIn, current_user: dict = Depends(get_current_user)) -> dict:
     """Return a short-lived signed token for ONE room PeerMeet can verify offline. The caller must
     belong in that room (matched into it, or allowed into that scheduled meeting)."""
-    peer_safety.require_not_suspended(current_user["id"])
+    peer_safety.require_peer_ready(current_user["id"])
     if not _may_enter_room(current_user["id"], body.room_id):
         raise HTTPException(status_code=403, detail="You are not allowed in that room.")
     name = _resolve_display_name(current_user["id"])
@@ -302,7 +302,7 @@ def request_matchmaking(
     """
     user_id = current_user["id"]
     email = current_user.get("email")
-    peer_safety.require_not_suspended(user_id)
+    peer_safety.require_peer_ready(user_id)
 
     # ── 1. Existing matched ticket → hand back immediately.
     try:
@@ -666,7 +666,7 @@ def create_scheduled_meeting(
     current_user: dict = Depends(get_current_user),
 ) -> ScheduledMeetingOut:
     user_id = current_user["id"]
-    peer_safety.require_not_suspended(user_id)
+    peer_safety.require_peer_ready(user_id)
 
     invitee_id: Optional[str] = None
     if body.invitee_email:
@@ -755,7 +755,7 @@ def join_scheduled_meeting(
     current_user: dict = Depends(get_current_user),
 ) -> JoinScheduledOut:
     user_id = current_user["id"]
-    peer_safety.require_not_suspended(user_id)
+    peer_safety.require_peer_ready(user_id)
     try:
         res = (
             db_client.table("peer_scheduled_meetings")
