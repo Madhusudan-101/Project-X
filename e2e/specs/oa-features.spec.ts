@@ -267,6 +267,28 @@ test.describe("languages and integrity log", () => {
     await expect(page.getByText("All tests passed!")).toBeVisible({ timeout: 60_000 });
   });
 
+  test("clicking Start enters fullscreen; leaving it is recorded and a banner offers a way back", async ({ page, request }) => {
+    test.setTimeout(90_000);
+    const w = await started(page, request);             // "Start assessment" is the click that requests fullscreen
+    const inFs = () => page.evaluate(() => !!document.fullscreenElement);
+    await expect.poll(inFs, { timeout: 10_000 }).toBe(true);
+    await expect(page.getByRole("region", { name: "Fullscreen" })).toHaveCount(0);       // nothing nagging while in fullscreen
+
+    // leave fullscreen (Esc / F11): the banner appears and the server hears about it
+    const exited = page.waitForResponse((r) => r.url().endsWith("/events") && r.request().method() === "POST");
+    await page.evaluate(() => document.exitFullscreen());
+    await exited;
+    await expect(page.getByRole("region", { name: "Fullscreen" })).toBeVisible();
+    await expect(page.getByText(/hides your browser tabs and taskbar/)).toBeVisible();
+    const detail = await (await request.get(`${w.base}/results/${w.appId}`, { headers: bearer(w.hr.token) })).json();
+    expect(detail.events.counts.fullscreen_exit).toBe(1);
+
+    // the button gets the candidate back in; the banner goes away again
+    await page.getByRole("button", { name: "Enter fullscreen" }).click();
+    await expect.poll(inFs, { timeout: 10_000 }).toBe(true);
+    await expect(page.getByRole("region", { name: "Fullscreen" })).toHaveCount(0);
+  });
+
   test("tab switch, fullscreen exit, paste and copy land on the recruiter's timeline with what was pasted", async ({ page, request, browser }) => {
     test.setTimeout(120_000);
     const w = await started(page, request);

@@ -23,6 +23,15 @@ import { useCandidateGuard } from "@/hooks/candidate/use-candidate-guard";
 import { candidateAssessmentService } from "@/services/api/candidate/assessment";
 import type { OAOverview } from "@/types/candidate/assessment";
 
+/** Enter browser fullscreen (hides tabs, address bar and, on most systems, the taskbar).
+ *  Must be called straight from a click: browsers refuse it otherwise. Fullscreen survives the
+ *  in-app navigation to the test page. A refusal is fine: the test page offers a button too. */
+function goFullscreen() {
+  if (typeof document === "undefined" || !document.fullscreenEnabled || document.fullscreenElement)
+    return;
+  document.documentElement.requestFullscreen().catch(() => undefined);
+}
+
 export const Route = createFileRoute("/candidate-oa/$applicationId/")({
   head: () => ({ meta: [{ title: "Online Assessment — Mirracle" }] }),
   component: AssessmentInstructionsPage,
@@ -328,12 +337,13 @@ function AssessmentInstructionsPage() {
                         </p>
                       </div>
                       <Button
-                        onClick={() =>
+                        onClick={() => {
+                          goFullscreen();
                           navigate({
                             to: "/candidate-oa/$applicationId/test",
                             params: { applicationId },
-                          })
-                        }
+                          });
+                        }}
                         className="bg-gradient-brand text-primary-foreground shadow-soft"
                       >
                         Resume assessment
@@ -381,7 +391,10 @@ function AssessmentInstructionsPage() {
                       <div className="flex flex-wrap items-center gap-3">
                         <Button
                           disabled={!canStart || startMutation.isPending}
-                          onClick={() => startMutation.mutate()}
+                          onClick={() => {
+                            goFullscreen();
+                            startMutation.mutate();
+                          }}
                           className="bg-gradient-brand text-primary-foreground shadow-soft"
                         >
                           {startMutation.isPending && (

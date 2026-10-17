@@ -258,6 +258,9 @@ function AssessmentRunnerPage() {
 
   useEffect(() => {
     if (!inProgress) return;
+    // Fullscreen is often already on (entered by the Start click before this page mounted).
+    fullscreenRef.current = !!document.fullscreenElement;
+    setInFullscreen(fullscreenRef.current);
     let hiddenAt = 0;
     let blurredAt = 0;
     const onVisibility = () => {
@@ -531,12 +534,24 @@ function AssessmentRunnerPage() {
           </div>
         )}
         {!inFullscreen && typeof document !== "undefined" && document.fullscreenEnabled && (
-          <button
-            onClick={() => document.documentElement.requestFullscreen().catch(() => undefined)}
-            className="inline-flex w-fit items-center gap-1.5 rounded-md border border-border bg-surface px-3 py-1.5 text-xs hover:bg-muted"
+          <div
+            role="region"
+            aria-label="Fullscreen"
+            className="flex flex-wrap items-center gap-3 rounded-md border border-primary/30 bg-primary/5 px-4 py-3 text-sm"
           >
-            <Maximize className="h-3.5 w-3.5" /> Enter fullscreen (recommended)
-          </button>
+            <Maximize className="h-4 w-4 shrink-0 text-primary" />
+            <span>
+              <b>Use fullscreen.</b> It hides your browser tabs and taskbar so you can focus.
+              Leaving it is recorded.
+            </span>
+            <Button
+              size="sm"
+              onClick={() => document.documentElement.requestFullscreen().catch(() => undefined)}
+              className="ml-auto bg-gradient-brand text-primary-foreground shadow-soft"
+            >
+              Enter fullscreen
+            </Button>
+          </div>
         )}
 
         {q.qtype === "coding" && q.problem ? (
