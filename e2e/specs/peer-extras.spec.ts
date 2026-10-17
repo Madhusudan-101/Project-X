@@ -174,7 +174,7 @@ test.describe("peer interviews: feedback, history, report, admin", () => {
     await rate.getByRole("button", { name: "Send feedback" }).click();
     await expect(rate).toBeHidden({ timeout: 10_000 });
     // the feedback screen also has Report
-    await hist.getByRole("button", { name: /Rate|Rated|Edit/ }).first().click();
+    await hist.getByRole("button", { name: "Change rating" }).first().click();
     const rate2 = a.page.getByRole("dialog", { name: "How was your session?" });
     await rate2.getByRole("button", { name: "Report this person" }).click();
     const report = a.page.getByRole("dialog", { name: "Report this person" });
@@ -215,7 +215,7 @@ test.describe("peer interviews: feedback, history, report, admin", () => {
     await expect(admin.getByText("kept interrupting me")).toBeVisible({ timeout: 10_000 });   // what the reporter said
     await expect(admin.getByText("Reported person").first()).toBeVisible();
     await admin.getByRole("radio", { name: "Suspend" }).click();
-    await admin.getByLabel("Days").fill("3");
+    await admin.locator("#suspend-days").fill("3");
     await admin.getByLabel(/Note/).fill("repeat behaviour");
     await admin.getByRole("button", { name: "Save decision" }).click();
     await expect.poll(async () => (await state(request)).peer_sanctions, { timeout: 10_000 }).toBe(1);
@@ -311,7 +311,7 @@ test.describe("peer interviews: in the call", () => {
     await a.getByRole("button", { name: "Share your screen" }).click();
     await expect(a.getByText("Screen sharing started")).toBeVisible({ timeout: 15_000 });
     await expect(b.getByText("Connected").first()).toBeVisible();
-    await a.getByRole("button", { name: /Stop sharing|Share your screen/ }).first().click();
+    await a.getByRole("button", { name: "Stop screen sharing" }).click();
     await expect(a.getByText("Screen sharing stopped")).toBeVisible({ timeout: 15_000 });
     await ctxA.close(); await ctxB.close();
   });
