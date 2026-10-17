@@ -3,6 +3,8 @@ import os
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+from postgrest.exceptions import APIError
 from .routers.shared import auth, peer_reports, ai_interview_reports
 
 # Without this, every `logger.exception(...)`/`logger.warning(...)` call across
@@ -79,6 +81,26 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+_log = logging.getLogger(__name__)
+# PostgREST errors that mean "the database doesn't have what this code expects" (a migration wasn't run).
+_SCHEMA_CODES = {"PGRST204", "PGRST205", "42703", "42P01"}
+
+
+@app.exception_handler(APIError)
+async def _database_error(request, exc: APIError):
+    """An uncaught database error used to surface as a bare 500 with no CORS headers, which the browser
+    reports as an opaque "NetworkError". Answer with JSON instead (this handler runs inside the CORS
+    middleware), and name the likely cause when it is a missing column or table."""
+    code, message = getattr(exc, "code", None), getattr(exc, "message", None) or str(exc)
+    _log.error("Unhandled database error on %s %s: [%s] %s", request.method, request.url.path, code, message)
+    if code in _SCHEMA_CODES or "schema cache" in (message or ""):
+        return JSONResponse(status_code=503, content={"detail": (
+            "The database is missing a column or table this feature needs. Run the newest SQL files in "
+            "backend/db/ (for the online assessment: the online_assessment_*_migration.sql files, in order), "
+            f"then run: notify pgrst, 'reload schema';   [database said: {message}]")})
+    return JSONResponse(status_code=500, content={"detail": "A database error occurred. Check the backend log."})
+
 
 app.include_router(auth.router)
 app.include_router(students.router)
