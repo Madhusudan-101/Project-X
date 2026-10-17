@@ -160,6 +160,8 @@ A **Super Admin** sees **Peer safety** in the admin sidebar automatically. A del
 
 ## 9. Manual test plan: the whole workflow
 
+> For a click-by-click version with exact navigation and the SQL file list, see **`PEERMEET_MANUAL_TEST.md`**.
+
 Use **two candidate accounts** with real email inboxes (call them Ann and Ben), one **admin** account, a laptop with camera and
 microphone, headphones (avoids echo), Chrome or Edge. Two browser profiles (or one normal + one private window) so both stay
 signed in. Keep the PeerMeet server log open. Tick each line; if something fails note the section, what you clicked, what you
