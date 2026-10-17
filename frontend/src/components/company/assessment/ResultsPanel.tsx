@@ -59,7 +59,7 @@ export function ResultsPanel({ jobId, driveId }: { jobId: string; driveId: strin
 
   return (
     <div className="space-y-4">
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
         {tile("Invited", data.stats.invited)}
         {tile("Started", data.stats.started)}
         {tile("Submitted", data.stats.submitted)}
@@ -68,6 +68,12 @@ export function ResultsPanel({ jobId, driveId }: { jobId: string; driveId: strin
           data.stats.averagePercent == null ? "—" : `${data.stats.averagePercent}%`,
         )}
         {tile("Flagged", data.stats.flagged)}
+        {tile(
+          "Candidate rating",
+          data.stats.averageRating == null
+            ? "—"
+            : `${data.stats.averageRating} ★ (${data.stats.feedbackCount})`,
+        )}
       </div>
 
       <div className="flex flex-wrap items-center gap-2 text-xs">

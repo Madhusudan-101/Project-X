@@ -67,7 +67,7 @@ MIGRATIONS = [
     "db/job_drives_migration.sql",
     "db/online_assessment_migration.sql", "db/online_assessment_coding_migration.sql",
     "db/online_assessment_languages_migration.sql", "db/online_assessment_events_migration.sql",
-    "db/online_assessment_proctoring_migration.sql",
+    "db/online_assessment_proctoring_migration.sql", "db/online_assessment_feedback_migration.sql",
 ]
 
 fails = []
@@ -92,9 +92,9 @@ cur.execute(PRELUDE)
 for m in MIGRATIONS:
     cur.execute(open(os.path.join(BACKEND, m), encoding="utf-8").read())
 # idempotent: every OA file must be safely re-runnable
-for m in MIGRATIONS[-5:]:
+for m in MIGRATIONS[-6:]:
     cur.execute(open(os.path.join(BACKEND, m), encoding="utf-8").read())
-check("all migrations apply, the five OA ones twice", True)
+check("all migrations apply, the six OA ones twice", True)
 
 
 def rejected(sql, args=()):
@@ -210,6 +210,19 @@ for t in ("oa_events", "oa_snapshots"):
     cur.execute("rollback")
 check("students can neither read nor delete their own event trail or photos", all(v in (0, "denied") for v in mine_ev.values()), mine_ev)
 
+cur.execute("insert into oa_feedback(attempt_id,rating,comment) values (%s,5,'great')", (ATT,))
+check("one feedback row per attempt", rejected("insert into oa_feedback(attempt_id,rating) values (%s,4)", (ATT,)))
+check("rating must be 1-5", rejected("insert into oa_feedback(attempt_id,rating) values (gen_random_uuid(),6)") and rejected("insert into oa_feedback(attempt_id,rating) values (gen_random_uuid(),0)"))
+check("comment is capped at 2000 characters", rejected("update oa_feedback set comment=%s where attempt_id=%s", ("x" * 2001, ATT)))
+cur.execute("begin"); cur.execute("set local role authenticated"); cur.execute("select set_config('request.jwt.claim.sub', %s, true)", (S1,))
+cur.execute("savepoint sp")
+try:
+    cur.execute("select count(*) from oa_feedback"); fb_visible = cur.fetchone()[0]
+except psycopg2.Error:
+    fb_visible = "denied"; cur.execute("rollback to savepoint sp")
+cur.execute("rollback")
+check("students cannot read feedback rows directly", fb_visible in (0, "denied"), fb_visible)
+
 # ── cascades ────────────────────────────────────────────────────────
 cur.execute("delete from oa_assessments where id=%s", (ASM,))
 cur.execute("select (select count(*) from oa_sections),(select count(*) from oa_questions),(select count(*) from oa_attempts),"
@@ -217,6 +230,8 @@ cur.execute("select (select count(*) from oa_sections),(select count(*) from oa_
 check("deleting an assessment removes everything under it", cur.fetchone() == (0, 0, 0, 0, 0, 0))
 cur.execute("select (select count(*) from oa_events),(select count(*) from oa_snapshots)")
 check("...including its event log and snapshot rows", cur.fetchone() == (0, 0))
+cur.execute("select count(*) from oa_feedback")
+check("...and its feedback", cur.fetchone()[0] == 0)
 cur.execute("select count(*) from oa_problems")
 check("...but never the problem library", cur.fetchone()[0] == len(seed))
 

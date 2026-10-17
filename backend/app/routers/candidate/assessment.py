@@ -930,3 +930,43 @@ def snapshot_route(
         "last_snapshot_at": now.isoformat(),
     }).eq("id", attempt["id"]).execute()
     return {"ok": True, "stored": True}
+
+
+# ── GET / POST /candidate/oa/{application_id}/feedback ──────────────
+
+MAX_FEEDBACK_CHARS = 2000
+
+
+class FeedbackIn(BaseModel):
+    rating: int = Field(ge=1, le=5)
+    comment: Optional[str] = Field(default=None, max_length=MAX_FEEDBACK_CHARS)
+
+
+def _submitted_attempt(application_id: str, current_user: dict) -> dict:
+    attempt, sections = _active_attempt(application_id, current_user)
+    attempt = _settle(attempt, sections)   # a timed-out attempt counts as submitted
+    if attempt["status"] != "submitted":
+        raise HTTPException(status_code=409, detail="Feedback opens once you have submitted the assessment.")
+    return attempt
+
+
+@router.get("/{application_id}/feedback")
+def get_feedback_route(
+    application_id: str, current_user: dict = Depends(require_candidate_role)
+) -> Dict[str, Any]:
+    attempt = _submitted_attempt(application_id, current_user)
+    row = _first(db_client.table("oa_feedback").select("rating, comment").eq("attempt_id", attempt["id"]).limit(1).execute())
+    return {"submitted": bool(row), "rating": row["rating"] if row else None, "comment": row.get("comment") if row else None}
+
+
+@router.post("/{application_id}/feedback")
+def send_feedback_route(
+    application_id: str, body: FeedbackIn, current_user: dict = Depends(require_candidate_role)
+) -> Dict[str, Any]:
+    attempt = _submitted_attempt(application_id, current_user)
+    comment = (body.comment or "").strip() or None
+    db_client.table("oa_feedback").upsert(
+        {"attempt_id": attempt["id"], "rating": body.rating, "comment": comment, "updated_at": _now().isoformat()},
+        on_conflict="attempt_id",
+    ).execute()
+    return {"ok": True}

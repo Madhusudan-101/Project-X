@@ -30,6 +30,7 @@ import { CodeEditor } from "@/components/candidate/oa/CodeEditor";
 import { CodingWorkspace } from "@/components/candidate/oa/CodingWorkspace";
 import { PromptText } from "@/components/candidate/oa/PromptText";
 import { useCandidateGuard } from "@/hooks/candidate/use-candidate-guard";
+import { FeedbackCard } from "@/components/candidate/oa/FeedbackCard";
 import { CameraPreview } from "@/components/candidate/oa/CameraPreview";
 import { useProctorCamera } from "@/components/candidate/oa/useProctorCamera";
 import { candidateAssessmentService } from "@/services/api/candidate/assessment";
@@ -226,6 +227,12 @@ function AssessmentRunnerPage() {
 
   // ── Integrity: tab switches, fullscreen exits, pastes, second tabs ──
   const inProgress = data?.status === "in_progress";
+  // Once the test is over there is nothing left to guard: hand the screen back.
+  useEffect(() => {
+    if (data?.status === "submitted" && document.fullscreenElement) {
+      document.exitFullscreen().catch(() => undefined);
+    }
+  }, [data?.status]);
   // The question on screen, so every event is filed under it (set below, once `q` exists).
   const activeQuestionId = useRef<string | null>(null);
   const fullscreenRef = useRef(false);
@@ -371,14 +378,15 @@ function AssessmentRunnerPage() {
   if (data.status === "submitted" || !section) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-surface-2 p-4">
-        <Card className="max-w-md space-y-4 p-8 text-center">
+        <Card className="w-full max-w-md space-y-5 p-8 text-center">
           <CheckCircle2 className="mx-auto h-12 w-12 text-success" />
           <h1 className="font-display text-xl font-semibold">Assessment submitted</h1>
           <p className="text-sm text-muted-foreground">
             Your answers are recorded and can&apos;t be changed. The hiring team will review your
             attempt and update your application status.
           </p>
-          <Button asChild className="bg-gradient-brand text-primary-foreground">
+          <FeedbackCard applicationId={applicationId} />
+          <Button asChild variant="outline" className="w-full">
             <Link to="/candidate">Back to dashboard</Link>
           </Button>
         </Card>

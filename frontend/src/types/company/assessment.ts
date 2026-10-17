@@ -113,6 +113,8 @@ export interface ResultRow {
   snapshots: number;
   snapshotsNoFace: number;
   snapshotsMultiFace: number;
+  /** the candidate's 1-5 rating of the assessment, if they gave one */
+  rating: number | null;
   /** the camera policy this attempt started under */
   webcamMode: WebcamMode;
   webcamConsented: boolean;
@@ -127,6 +129,9 @@ export interface Results {
     submitted: number;
     averagePercent: number | null;
     flagged: number;
+    /** mean of the 1-5 star ratings candidates gave the assessment, and how many gave one */
+    averageRating: number | null;
+    feedbackCount: number;
   };
 }
 
@@ -191,7 +196,14 @@ export interface IntegrityTimeline {
   capped: boolean;
 }
 
+export interface CandidateFeedback {
+  rating: number;
+  comment: string | null;
+  at: string;
+}
+
 export interface ResultDetail {
+  feedback: CandidateFeedback | null;
   events: IntegrityTimeline;
   candidate: ResultRow;
   assessmentTitle: string;

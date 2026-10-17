@@ -258,6 +258,9 @@ check("past the cap: counters still count, the log stops", len(db.store["oa_even
 db.store["oa_attempts"][0]["tab_switches"] = 4   # restore for the later assertions
 _oa_mod.MAX_EVENTS_PER_ATTEMPT = 2000
 
+check("feedback is closed until the assessment is submitted", client.get("/candidate/oa/app-1/feedback").status_code == 409
+      and client.post("/candidate/oa/app-1/feedback", json={"rating": 5}).status_code == 409 and not db.store.get("oa_feedback"))
+
 # ── 5. locking ──────────────────────────────────────────────────────
 as_company()
 check("assessment locked once someone started", put(GOOD).status_code == 409 and client.delete(URL).status_code == 409)
@@ -282,7 +285,7 @@ as_company()
 res = client.get(URL + "/results").json()
 row = res["rows"][0]
 check("results row", row["state"] == "submitted" and row["percent"] == 100.0 and row["tab_switches"] == 4 and row["flagged"] is True and row["paste_events"] == 3, row)
-check("results stats", res["stats"] == {"invited": 1, "started": 1, "submitted": 1, "average_percent": 100.0, "flagged": 1}, res["stats"])
+check("results stats", res["stats"] == {"invited": 1, "started": 1, "submitted": 1, "average_percent": 100.0, "flagged": 1, "average_rating": None, "feedback_count": 0}, res["stats"])
 d = client.get(URL + "/results/app-1").json()
 cq = next(x for x in d["questions"] if x["qtype"] == "coding")
 check("detail: every submission with its code", len(cq["submissions"]) == 4 and "def two_sum" in cq["submissions"][0]["source"] and cq["best_score"] == 100.0, cq["best_score"])
@@ -295,6 +298,28 @@ big = next(e for e in tl["items"] if e["type"] == "paste" and e["detail"].get("l
 check("detail: paste shows where and what", big["question"]["title"] and big["detail"]["text"].startswith("x = 1"), big)
 check("detail: summary counts", tl["counts"]["tab_switch"] == 4 and tl["counts"]["paste"] == 3 and tl["largest_paste"] == len(BIG) and tl["capped"] is False, tl["counts"])
 check("no attempt → 404 detail", client.get(URL + "/results/app-2").status_code == 404)
+
+# ── 7a. candidate feedback ──────────────────────────────────────────
+as_candidate()
+check("no feedback yet", client.get("/candidate/oa/app-1/feedback").json() == {"submitted": False, "rating": None, "comment": None})
+for bad in ({"rating": 0}, {"rating": 6}, {"rating": "x"}, {"rating": 3, "comment": "x" * 2001}, {}):
+    check(f"feedback rejects {str(bad)[:30]}", client.post("/candidate/oa/app-1/feedback", json=bad).status_code == 422)
+check("a rating alone is enough", client.post("/candidate/oa/app-1/feedback", json={"rating": 4}).json() == {"ok": True})
+check("the comment is optional and blanks become null", db.store["oa_feedback"][0]["comment"] is None)
+check("a later submit updates, never duplicates", client.post("/candidate/oa/app-1/feedback", json={"rating": 5, "comment": "  Smooth test, fair questions.  "}).status_code == 200
+      and len(db.store["oa_feedback"]) == 1 and db.store["oa_feedback"][0]["comment"] == "Smooth test, fair questions.")
+check("the candidate sees what they sent", client.get("/candidate/oa/app-1/feedback").json() == {"submitted": True, "rating": 5, "comment": "Smooth test, fair questions."})
+as_candidate("stu-2")
+check("another student can't read or write it", client.get("/candidate/oa/app-1/feedback").status_code == 404 and client.post("/candidate/oa/app-1/feedback", json={"rating": 1}).status_code == 404)
+as_candidate()
+as_company()
+res = client.get(URL + "/results").json()
+check("results: average rating + count + per-candidate rating", res["stats"]["average_rating"] == 5.0 and res["stats"]["feedback_count"] == 1 and res["rows"][0]["rating"] == 5, res["stats"])
+fb = client.get(URL + "/results/app-1").json()["feedback"]
+check("detail: the candidate's words reach the recruiter", fb["rating"] == 5 and fb["comment"] == "Smooth test, fair questions.", fb)
+as_company("co-user-2")
+check("other company sees no feedback", client.get(URL + "/results/app-1").status_code == 404)
+as_company()
 
 # ── 7b. code similarity ─────────────────────────────────────────────
 att1 = db.store["oa_attempts"][0]

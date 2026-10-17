@@ -267,6 +267,47 @@ test.describe("languages and integrity log", () => {
     await expect(page.getByText("All tests passed!")).toBeVisible({ timeout: 60_000 });
   });
 
+  test("after submitting, a centered feedback card takes 1-5 stars and a comment; the recruiter reads it", async ({ page, request, browser }) => {
+    test.setTimeout(120_000);
+    const w = await started(page, request);
+    for (let i = 0; i < 3; i++)                                   // 3 timed sections: finish the test
+      await request.post(`${API}/candidate/oa/${w.appId}/sections/submit`, { headers: bearer(w.cand.token) });
+    await page.reload();
+    await anyHydrated(page);
+
+    await expect(page.getByRole("heading", { name: "Assessment submitted" })).toBeVisible();
+    await expect(page.getByText("How was your assessment experience?")).toBeVisible();
+    const send = page.getByRole("button", { name: "Submit feedback" });
+    await expect(send).toBeDisabled();                           // a rating is required, the comment is not
+    await expect(page.getByRole("radio")).toHaveCount(5);
+
+    await page.getByRole("radio", { name: "4 stars" }).click();
+    await expect(page.getByText("Very good")).toBeVisible();
+    await expect(page.getByRole("radio", { name: "4 stars" })).toHaveAttribute("aria-checked", "true");
+    await expect(send).toBeEnabled();
+    await page.getByLabel("Your feedback").fill("Clear questions. The editor lagged once on the second problem.");
+    await send.click();
+    await expect(page.getByText("Thanks for your feedback!")).toBeVisible();
+    await expect(page.getByRole("img", { name: "4 out of 5 stars" })).toBeVisible();
+
+    // asked once: a reload shows the thank-you, not the form
+    await page.reload();
+    await anyHydrated(page);
+    await expect(page.getByText("Thanks for your feedback!")).toBeVisible();
+    await expect(page.getByText("How was your assessment experience?")).toHaveCount(0);
+    await expect(page.getByRole("link", { name: "Back to dashboard" })).toBeVisible();
+
+    // the recruiter: average on the results tab, the words in the candidate's sheet
+    const hrPage = await open(await browser.newContext(), w.hr, `/company-jobs/${w.job.id}`);
+    await hrPage.getByRole("tab", { name: /Results/ }).click();
+    await expect(hrPage.getByText("Candidate rating")).toBeVisible({ timeout: 15_000 });
+    await expect(hrPage.getByText("4 ★ (1)")).toBeVisible();
+    await hrPage.getByText("Cara Candidate").first().click();
+    await expect(hrPage.getByText("Candidate feedback on the assessment")).toBeVisible({ timeout: 15_000 });
+    await expect(hrPage.getByText("Clear questions. The editor lagged once on the second problem.")).toBeVisible();
+    await expect(hrPage.getByRole("img", { name: "4 out of 5 stars" })).toBeVisible();
+  });
+
   test("clicking Start enters fullscreen; leaving it is recorded and a banner offers a way back", async ({ page, request }) => {
     test.setTimeout(90_000);
     const w = await started(page, request);             // "Start assessment" is the click that requests fullscreen

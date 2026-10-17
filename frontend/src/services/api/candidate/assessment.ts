@@ -166,6 +166,22 @@ export const candidateAssessmentService = {
       body: { webcam_consent: webcamConsent },
     }).then(normalizeSession),
 
+  getFeedback: (
+    applicationId: string,
+  ): Promise<{ submitted: boolean; rating: number | null; comment: string | null }> =>
+    request<{ submitted: boolean; rating: number | null; comment: string | null }>(
+      `/candidate/oa/${applicationId}/feedback`,
+    ),
+
+  sendFeedback: (
+    applicationId: string,
+    body: { rating: number; comment?: string },
+  ): Promise<void> =>
+    request<unknown>(`/candidate/oa/${applicationId}/feedback`, {
+      method: "POST",
+      body: { rating: body.rating, comment: body.comment?.trim() || null },
+    }).then(() => undefined),
+
   /** One camera frame (JPEG data URL). `faces` is what the browser counted, if it can. */
   sendSnapshot: (
     applicationId: string,

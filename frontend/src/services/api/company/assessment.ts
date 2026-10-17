@@ -110,6 +110,7 @@ function normalizeRow(r: Raw): ResultRow {
     snapshots: Number(r.snapshots ?? 0),
     snapshotsNoFace: Number(r.snapshots_no_face ?? 0),
     snapshotsMultiFace: Number(r.snapshots_multi_face ?? 0),
+    rating: r.rating == null ? null : Number(r.rating),
     webcamMode: (r.webcam_mode as ResultRow["webcamMode"]) ?? "off",
     webcamConsented: Boolean(r.webcam_consented),
     flagged: Boolean(r.flagged),
@@ -322,6 +323,8 @@ export const companyAssessmentService = {
           submitted: Number(s.submitted),
           averagePercent: s.average_percent == null ? null : Number(s.average_percent),
           flagged: Number(s.flagged),
+          averageRating: s.average_rating == null ? null : Number(s.average_rating),
+          feedbackCount: Number(s.feedback_count ?? 0),
         },
       };
     }),
@@ -350,6 +353,13 @@ export const companyAssessmentService = {
       candidate: normalizeRow(r.candidate as Raw),
       assessmentTitle: r.assessment_title as string,
       sectionTitles: (r.section_titles as Record<number, string>) ?? {},
+      feedback: r.feedback
+        ? {
+            rating: Number((r.feedback as Raw).rating),
+            comment: ((r.feedback as Raw).comment as string | null) ?? null,
+            at: (r.feedback as Raw).at as string,
+          }
+        : null,
       events: normalizeTimeline((r.events as Raw | undefined) ?? {}),
       questions: ((r.questions as Raw[]) ?? []).map((q) => ({
         section: (q.section as number | null) ?? null,

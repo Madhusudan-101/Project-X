@@ -490,6 +490,11 @@ def results(job_id: str, drive_id: str, current_user: dict = Depends(require_com
     apps = {a["id"]: a for a in list_applications_for_job(job_id) if a["id"] in ids}
     people = get_profiles_basic([a["student_id"] for a in apps.values()])
     rows = [_row(i, invites.get(i), attempts.get(i), people.get(apps[i]["student_id"], {})) for i in apps]
+    ratings = _ratings([a["id"] for a in attempts.values()])
+    for r in rows:
+        att = attempts.get(r["application_id"])
+        r["rating"] = ratings.get(att["id"]) if att else None
+    given = [r["rating"] for r in rows if r["rating"] is not None]
     scored = [r["percent"] for r in rows if r["percent"] is not None]
     return {
         "rows": rows,
@@ -499,6 +504,8 @@ def results(job_id: str, drive_id: str, current_user: dict = Depends(require_com
             "submitted": sum(1 for r in rows if r["state"] == "submitted"),
             "average_percent": round(sum(scored) / len(scored), 1) if scored else None,
             "flagged": sum(1 for r in rows if r["flagged"]),
+            "average_rating": round(sum(given) / len(given), 1) if given else None,
+            "feedback_count": len(given),
         },
     }
 
@@ -564,7 +571,25 @@ def result_detail(
         "questions": detail_qs,
         "section_titles": {s["position"]: s["title"] for s in definition["sections"]},
         "events": _timeline(attempt, questions, sec_pos),
+        "feedback": _feedback(attempt["id"]),
     }
+
+
+def _ratings(attempt_ids: List[str]) -> Dict[str, int]:
+    out: Dict[str, int] = {}
+    for chunk in _chunks(attempt_ids):
+        for r in db_client.table("oa_feedback").select("attempt_id, rating").in_("attempt_id", chunk).execute().data or []:
+            out[r["attempt_id"]] = int(r["rating"])
+    return out
+
+
+def _feedback(attempt_id: str) -> Optional[Dict[str, Any]]:
+    row = _first(db_client.table("oa_feedback").select("rating, comment, created_at, updated_at")
+                 .eq("attempt_id", attempt_id).limit(1).execute())
+    if not row:
+        return None
+    return {"rating": int(row["rating"]), "comment": row.get("comment"),
+            "at": str(row.get("updated_at") or row.get("created_at") or "")}
 
 
 MAX_TIMELINE_EVENTS = 2000

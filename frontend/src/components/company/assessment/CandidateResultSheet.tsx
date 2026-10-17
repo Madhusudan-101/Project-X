@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { Check, X } from "lucide-react";
+import { Check, Star, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -64,6 +64,36 @@ export function CandidateResultSheet({
                 value={`${data.candidate.pasteEvents} / ${data.candidate.fullscreenExits}`}
               />
             </dl>
+
+            {data.feedback && (
+              <section className="space-y-2 rounded-lg border border-border p-4">
+                <div className="flex flex-wrap items-center gap-2">
+                  <h3 className="font-medium">Candidate feedback on the assessment</h3>
+                  <span
+                    className="ml-auto flex gap-0.5"
+                    role="img"
+                    aria-label={`${data.feedback.rating} out of 5 stars`}
+                  >
+                    {[1, 2, 3, 4, 5].map((n) => (
+                      <Star
+                        key={n}
+                        className={
+                          "h-4 w-4 " +
+                          (n <= data.feedback!.rating
+                            ? "fill-amber-400 text-amber-400"
+                            : "text-muted-foreground/40")
+                        }
+                      />
+                    ))}
+                  </span>
+                </div>
+                {data.feedback.comment ? (
+                  <p className="whitespace-pre-wrap text-sm">{data.feedback.comment}</p>
+                ) : (
+                  <p className="text-xs text-muted-foreground">No written comment.</p>
+                )}
+              </section>
+            )}
 
             <CameraGallery
               jobId={jobId}
