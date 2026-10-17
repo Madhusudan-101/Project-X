@@ -85,3 +85,46 @@ export async function loginViaForm(page: Page, role: Role, email = EMAIL[role], 
 }
 
 export const bearer = (token: string) => ({ Authorization: `Bearer ${token}` });
+
+/** What the start screen needs that the seeded candidate's profile doesn't have. */
+export const MY_DETAILS = { phone: "9876543210", rollNumber: "2024101108" };
+
+/** A complete Start request body, for specs that begin an attempt through the API. */
+export const START_BODY = {
+  agreed: true,
+  details: {
+    full_name: "Cara Candidate", phone: MY_DETAILS.phone, college: "Alpha College", roll_number: MY_DETAILS.rollNumber,
+    branch: "CSE", graduation_year: 2026, cgpa: 8.8,
+  },
+};
+
+/**
+ * Walk the start screen as a candidate would: Instructions -> Your details -> Permissions -> Start test.
+ * Pass what the assessment asks for so the right permission items are completed (they open one at a time).
+ */
+export async function reachPermissions(page: Page) {
+  await page.getByRole("button", { name: "Continue" }).click();                                      // 1 -> 2
+  await expect(page.getByRole("heading", { name: "Please confirm your details" })).toBeVisible();
+  await page.locator("#oa-phone").fill(MY_DETAILS.phone);
+  await page.locator("#oa-rollNumber").fill(MY_DETAILS.rollNumber);
+  await page.getByRole("checkbox", { name: /I have read the instructions/ }).click();
+  await page.getByRole("checkbox", { name: /my activity during the test/ }).click();
+  await page.getByRole("button", { name: "Continue" }).click();                                      // 2 -> 3
+  await expect(page.getByRole("heading", { name: "Permissions" })).toBeVisible();
+}
+
+export async function beginAssessment(page: Page, opts: { camera?: boolean; monitors?: boolean } = {}) {
+  await reachPermissions(page);
+  if (opts.camera) {
+    await page.getByRole("button", { name: "Grant access" }).click();
+    await page.getByRole("dialog").getByRole("button", { name: "Continue" }).click();
+    await expect(page.getByRole("button", { name: /Allow webcam access\s*Done/ })).toBeVisible({ timeout: 15_000 });
+  }
+  if (opts.monitors) {
+    await page.getByRole("button", { name: "Check now" }).click();
+    await expect(page.getByRole("button", { name: /Check for multiple monitors\s*Done/ })).toBeVisible();
+  }
+  await page.getByRole("button", { name: "Enter fullscreen", exact: true }).click();
+  await expect(page.getByRole("button", { name: /Enter fullscreen mode\s*Done/ })).toBeVisible({ timeout: 10_000 });
+  await page.getByRole("button", { name: "Start test" }).click();
+}

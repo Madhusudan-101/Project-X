@@ -68,6 +68,7 @@ MIGRATIONS = [
     "db/online_assessment_migration.sql", "db/online_assessment_coding_migration.sql",
     "db/online_assessment_languages_migration.sql", "db/online_assessment_events_migration.sql",
     "db/online_assessment_proctoring_migration.sql", "db/online_assessment_feedback_migration.sql",
+    "db/online_assessment_precheck_migration.sql",
 ]
 
 fails = []
@@ -92,9 +93,9 @@ cur.execute(PRELUDE)
 for m in MIGRATIONS:
     cur.execute(open(os.path.join(BACKEND, m), encoding="utf-8").read())
 # idempotent: every OA file must be safely re-runnable
-for m in MIGRATIONS[-6:]:
+for m in MIGRATIONS[-7:]:
     cur.execute(open(os.path.join(BACKEND, m), encoding="utf-8").read())
-check("all migrations apply, the six OA ones twice", True)
+check("all migrations apply, the seven OA ones twice", True)
 
 
 def rejected(sql, args=()):
@@ -210,6 +211,15 @@ for t in ("oa_events", "oa_snapshots"):
     cur.execute("rollback")
 check("students can neither read nor delete their own event trail or photos", all(v in (0, "denied") for v in mine_ev.values()), mine_ev)
 
+cur.execute("select monitor_mode from oa_assessments where id=%s", (ASM,))
+check("assessments default to no display check", cur.fetchone()[0] == "off")
+check("bad monitor mode rejected", rejected("update oa_assessments set monitor_mode='always' where id=%s", (ASM,)))
+cur.execute("update oa_attempts set candidate_details=%s, details_confirmed_at=now(), precheck=%s where id=%s",
+            (json.dumps({"full_name": "A"}), json.dumps({"monitors": {"status": "single"}}), ATT))
+cur.execute("select candidate_details->>'full_name', precheck->'monitors'->>'status' from oa_attempts where id=%s", (ATT,))
+check("an attempt keeps the confirmed details and the pre-test checks", cur.fetchone() == ("A", "single"))
+cur.execute("insert into oa_events(attempt_id,type,meta) values (%s,'multi_monitor','{\"count\":2}')", (ATT,))
+check("multi_monitor is a valid event type, and the camera ones still are", True)
 cur.execute("insert into oa_feedback(attempt_id,rating,comment) values (%s,5,'great')", (ATT,))
 check("one feedback row per attempt", rejected("insert into oa_feedback(attempt_id,rating) values (%s,4)", (ATT,)))
 check("rating must be 1-5", rejected("insert into oa_feedback(attempt_id,rating) values (gen_random_uuid(),6)") and rejected("insert into oa_feedback(attempt_id,rating) values (gen_random_uuid(),0)"))

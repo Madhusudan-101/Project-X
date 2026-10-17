@@ -6,6 +6,7 @@ import {
   EyeOff,
   Maximize,
   Minimize,
+  MonitorUp,
   Scissors,
   Video,
   VideoOff,
@@ -35,6 +36,7 @@ const LABEL: Record<IntegrityEventType, string> = {
   camera_denied: "Camera blocked",
   camera_lost: "Camera turned off",
   camera_restored: "Camera back on",
+  multi_monitor: "Second display connected",
 };
 
 const ICON: Record<IntegrityEventType, typeof Eye> = {
@@ -50,6 +52,7 @@ const ICON: Record<IntegrityEventType, typeof Eye> = {
   camera_denied: VideoOff,
   camera_lost: VideoOff,
   camera_restored: Video,
+  multi_monitor: MonitorUp,
 };
 
 const CONCERNING: IntegrityEventType[] = [
@@ -59,6 +62,7 @@ const CONCERNING: IntegrityEventType[] = [
   "paste",
   "camera_denied",
   "camera_lost",
+  "multi_monitor",
 ];
 
 function clock(seconds: number | null): string {
@@ -123,7 +127,8 @@ export function IntegrityTimelineCard({ timeline }: { timeline: IntegrityTimelin
                 e.type === "tab_switch" ||
                 e.type === "fullscreen_exit" ||
                 e.type === "camera_denied" ||
-                e.type === "camera_lost";
+                e.type === "camera_lost" ||
+                e.type === "multi_monitor";
               return (
                 <li key={i} className="rounded px-2 py-1 text-xs hover:bg-muted/50">
                   <div className="flex flex-wrap items-center gap-2">

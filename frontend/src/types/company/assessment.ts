@@ -40,6 +40,7 @@ export interface Assessment {
   title: string;
   inviteMode: InviteMode;
   webcamMode: WebcamMode;
+  monitorMode: WebcamMode;
   locked: boolean;
   codingEnabled: boolean;
   stats: { invited: number; started: number; submitted: number };
@@ -74,6 +75,7 @@ export interface AssessmentDraft {
   title: string;
   inviteMode: InviteMode;
   webcamMode?: WebcamMode;
+  monitorMode?: WebcamMode;
   template?: AssessmentTemplate;
   sections?: SectionDraft[];
 }
@@ -172,7 +174,8 @@ export type IntegrityEventType =
   | "cut"
   | "camera_denied"
   | "camera_lost"
-  | "camera_restored";
+  | "camera_restored"
+  | "multi_monitor";
 
 export interface IntegrityEvent {
   type: IntegrityEventType;
@@ -202,7 +205,33 @@ export interface CandidateFeedback {
   at: string;
 }
 
+export interface CandidateDetails {
+  fullName: string;
+  phone: string;
+  college: string;
+  rollNumber: string;
+  branch: string;
+  graduationYear: number;
+  cgpa: number;
+}
+
+export interface Precheck {
+  webcam: "granted" | "denied" | "skipped" | "not_required";
+  monitors: {
+    status: "single" | "multiple" | "unknown";
+    count: number | null;
+    method: string | null;
+  } | null;
+  fullscreen: boolean;
+  browser: string | null;
+  screen: string | null;
+}
+
 export interface ResultDetail {
+  details: CandidateDetails | null;
+  detailsConfirmedAt: string | null;
+  precheck: Precheck | null;
+  monitorMode: WebcamMode;
   feedback: CandidateFeedback | null;
   events: IntegrityTimeline;
   candidate: ResultRow;

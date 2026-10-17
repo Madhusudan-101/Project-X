@@ -78,6 +78,8 @@ class AssessmentIn(BaseModel):
     invite_mode: str = Field(default="invited", pattern="^(all|invited)$")
     # Webcam snapshots during the test. 'required' blocks starting without agreeing to the camera.
     webcam_mode: str = Field(default="off", pattern="^(off|optional|required)$")
+    # Multiple-display check before the test. 'required' blocks a candidate whose browser reports more than one.
+    monitor_mode: str = Field(default="off", pattern="^(off|optional|required)$")
     template: Optional[str] = Field(default=None, pattern="^(coding|analytics|aptitude)$")
     sections: Optional[List[SectionIn]] = Field(default=None, max_length=MAX_SECTIONS)
 
@@ -146,6 +148,7 @@ def _definition(assessment: dict) -> Dict[str, Any]:
         "title": assessment["title"],
         "invite_mode": assessment.get("invite_mode", "invited"),
         "webcam_mode": assessment.get("webcam_mode") or "off",
+        "monitor_mode": assessment.get("monitor_mode") or "off",
         "locked": bool(attempts),
         "coding_enabled": oa_judge.judge_enabled(),
         "stats": {
@@ -278,14 +281,16 @@ def put_assessment(
     if existing:
         db_client.table("oa_sections").delete().eq("assessment_id", existing["id"]).execute()
         db_client.table("oa_assessments").update(
-            {"title": body.title, "invite_mode": body.invite_mode, "webcam_mode": body.webcam_mode}
+            {"title": body.title, "invite_mode": body.invite_mode, "webcam_mode": body.webcam_mode,
+             "monitor_mode": body.monitor_mode}
         ).eq("id", existing["id"]).execute()
-        assessment = {**existing, "title": body.title, "invite_mode": body.invite_mode, "webcam_mode": body.webcam_mode}
+        assessment = {**existing, "title": body.title, "invite_mode": body.invite_mode,
+                      "webcam_mode": body.webcam_mode, "monitor_mode": body.monitor_mode}
     else:
         assessment = _first(
             db_client.table("oa_assessments").insert({
                 "drive_id": drive["id"], "title": body.title, "invite_mode": body.invite_mode,
-                "webcam_mode": body.webcam_mode, "created_by": current_user["id"],
+                "webcam_mode": body.webcam_mode, "monitor_mode": body.monitor_mode, "created_by": current_user["id"],
             }).execute()
         )
     try:
@@ -572,6 +577,10 @@ def result_detail(
         "section_titles": {s["position"]: s["title"] for s in definition["sections"]},
         "events": _timeline(attempt, questions, sec_pos),
         "feedback": _feedback(attempt["id"]),
+        "details": attempt.get("candidate_details"),
+        "details_confirmed_at": str(attempt["details_confirmed_at"]) if attempt.get("details_confirmed_at") else None,
+        "precheck": attempt.get("precheck"),
+        "monitor_mode": assessment.get("monitor_mode") or "off",
     }
 
 

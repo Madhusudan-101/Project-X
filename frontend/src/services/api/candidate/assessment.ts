@@ -18,6 +18,7 @@ import { request } from "../client";
 import type {
   OACaseResult,
   OAEventExtra,
+  OAStartPayload,
   OAEventType,
   OAListItem,
   OAOverview,
@@ -69,6 +70,7 @@ function normalizeSession(raw: Raw): OASession {
     status: raw.status as OASession["status"],
     serverTime: raw.server_time as string,
     codingEnabled: Boolean(raw.coding_enabled),
+    monitorMode: (raw.monitor_mode as OASession["monitorMode"]) ?? "off",
     webcam: {
       mode: ((raw.webcam as Raw | undefined)?.mode as OASession["webcam"]["mode"]) ?? "off",
       active: Boolean((raw.webcam as Raw | undefined)?.active),
@@ -88,6 +90,20 @@ function normalizeSession(raw: Raw): OASession {
   };
 }
 
+function normalizePrefill(p: Raw): OAOverview["prefill"] {
+  const str = (v: unknown) => (v == null ? "" : String(v));
+  return {
+    fullName: str(p.full_name),
+    email: str(p.email),
+    phone: str(p.phone),
+    college: str(p.college),
+    rollNumber: str(p.roll_number),
+    branch: str(p.branch),
+    graduationYear: str(p.graduation_year),
+    cgpa: str(p.cgpa),
+  };
+}
+
 function normalizeOverview(raw: Raw): OAOverview {
   const a = raw.attempt as Raw | null;
   return {
@@ -103,6 +119,8 @@ function normalizeOverview(raw: Raw): OAOverview {
     totalQuestions: Number(raw.total_questions),
     codingEnabled: Boolean(raw.coding_enabled),
     webcamMode: (raw.webcam_mode as OAOverview["webcamMode"]) ?? "off",
+    monitorMode: (raw.monitor_mode as OAOverview["monitorMode"]) ?? "off",
+    prefill: normalizePrefill((raw.prefill as Raw | undefined) ?? {}),
     snapshotIntervalSeconds: Number(raw.snapshot_interval_seconds ?? 60),
     snapshotRetentionDays: Number(raw.snapshot_retention_days ?? 30),
     sections: ((raw.sections as Raw[]) ?? []).map((s) => ({
@@ -160,10 +178,23 @@ export const candidateAssessmentService = {
   getOverview: (applicationId: string): Promise<OAOverview> =>
     request<Raw>(`/candidate/oa/${applicationId}`).then(normalizeOverview),
 
-  start: (applicationId: string, webcamConsent = false): Promise<OASession> =>
+  start: (applicationId: string, p: OAStartPayload): Promise<OASession> =>
     request<Raw>(`/candidate/oa/${applicationId}/start`, {
       method: "POST",
-      body: { webcam_consent: webcamConsent },
+      body: {
+        webcam_consent: p.webcamConsent,
+        agreed: p.agreed,
+        details: {
+          full_name: p.details.fullName.trim(),
+          phone: p.details.phone.trim(),
+          college: p.details.college.trim(),
+          roll_number: p.details.rollNumber.trim(),
+          branch: p.details.branch.trim(),
+          graduation_year: Number(p.details.graduationYear),
+          cgpa: Number(p.details.cgpa),
+        },
+        precheck: p.precheck,
+      },
     }).then(normalizeSession),
 
   getFeedback: (
@@ -221,6 +252,7 @@ export const candidateAssessmentService = {
     }
     if (extra.target) detail.target = extra.target;
     if (extra.awayMs !== undefined) detail.away_ms = Math.round(extra.awayMs);
+    if (extra.count !== undefined) detail.count = extra.count;
     return request<unknown>(`/candidate/oa/${applicationId}/events`, {
       method: "POST",
       body: { type, question_id: extra.questionId ?? null, detail },

@@ -30,7 +30,7 @@ import threading
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from postgrest.exceptions import APIError
 from pydantic import BaseModel, Field
 
@@ -90,6 +90,8 @@ class OAOverviewOut(BaseModel):
     sections: List[OASectionOut]
     coding_enabled: bool = False
     webcam_mode: str = "off"          # shown before starting so the candidate can consent (or not)
+    monitor_mode: str = "off"         # off | optional | required: the multiple-display check
+    prefill: Dict[str, Any] = {}      # what we already know about the candidate, for the details form
     snapshot_interval_seconds: int = oa_snapshots.DEFAULT_INTERVAL_SECONDS
     snapshot_retention_days: int = 30
     attempt: Optional[OAAttemptOut] = None
@@ -140,6 +142,7 @@ class OASessionOut(BaseModel):
     server_time: str
     coding_enabled: bool = False
     webcam: OAWebcamOut = OAWebcamOut()
+    monitor_mode: str = "off"         # the display check this attempt started under (the page keeps watching)
     section: Optional[OACurrentSectionOut] = None
 
 
@@ -151,7 +154,7 @@ class AnswerIn(BaseModel):
 
 EVENT_TYPES = ("tab_switch", "tab_return", "window_blur", "window_focus",
                "fullscreen_exit", "fullscreen_enter", "paste", "copy", "cut",
-               "camera_denied", "camera_lost", "camera_restored")
+               "camera_denied", "camera_lost", "camera_restored", "multi_monitor")
 # Only these three keep a running counter on oa_attempts (the rest are timeline-only).
 EVENT_COUNTERS = {"tab_switch": "tab_switches", "fullscreen_exit": "fullscreen_exits", "paste": "paste_events"}
 MAX_EVENTS_PER_ATTEMPT = 2000
@@ -539,6 +542,8 @@ def overview_route(
         ],
         coding_enabled=oa_judge.judge_enabled(),
         webcam_mode=assessment.get("webcam_mode") or "off",
+        monitor_mode=assessment.get("monitor_mode") or "off",
+        prefill=_prefill(current_user["id"]),
         snapshot_interval_seconds=oa_snapshots.interval_seconds(),
         snapshot_retention_days=oa_snapshots.retention_days(),
         attempt=OAAttemptOut(
@@ -552,15 +557,45 @@ def overview_route(
 
 # ── POST /candidate/oa/{application_id}/start ───────────────────────
 
+class DetailsIn(BaseModel):
+    """What the candidate confirms on the start screen. Everything is required: the hiring team
+    uses it to match the attempt to the person."""
+    full_name: str = Field(min_length=2, max_length=120)
+    phone: str = Field(pattern=r"^[0-9+()\-\s]{7,20}$")
+    college: str = Field(min_length=2, max_length=200)
+    roll_number: str = Field(min_length=1, max_length=50)
+    branch: str = Field(min_length=2, max_length=100)
+    graduation_year: int = Field(ge=2000, le=2100)
+    cgpa: float = Field(ge=0, le=10)
+
+
+class MonitorsIn(BaseModel):
+    status: str = Field(pattern="^(single|multiple|unknown)$")   # unknown: the browser can't tell
+    count: Optional[int] = Field(default=None, ge=1, le=16)
+    method: Optional[str] = Field(default=None, pattern="^(is-extended|window-management|unsupported)$")
+
+
+class PrecheckIn(BaseModel):
+    webcam: str = Field(default="not_required", pattern="^(granted|denied|skipped|not_required)$")
+    monitors: Optional[MonitorsIn] = None
+    fullscreen: bool = False
+    browser: Optional[str] = Field(default=None, max_length=300)
+    screen: Optional[str] = Field(default=None, max_length=40)
+
+
 class StartIn(BaseModel):
-    # Agreement to camera monitoring, shown on the instructions page. Ignored when the
-    # assessment doesn't use the camera.
+    # Agreement to camera monitoring. Ignored when the assessment doesn't use the camera.
     webcam_consent: bool = False
+    # The start screen's declaration (honesty pledge + that activity is recorded).
+    agreed: bool = False
+    details: Optional[DetailsIn] = None
+    precheck: Optional[PrecheckIn] = None
 
 
 @router.post("/{application_id}/start", response_model=OASessionOut)
 def start_route(
     application_id: str,
+    request: Request,
     body: Optional[StartIn] = None,
     current_user: dict = Depends(require_candidate_role),
 ) -> OASessionOut:
@@ -580,6 +615,21 @@ def start_route(
             raise HTTPException(status_code=409, detail="The assessment window hasn't opened yet.")
         if state == "closed":
             raise HTTPException(status_code=409, detail="The assessment window has closed.")
+        if not body or not body.agreed or not body.details:
+            raise HTTPException(
+                status_code=422,
+                detail="Confirm your details and accept the declaration before starting.",
+            )
+        monitor_mode = assessment.get("monitor_mode") or "off"
+        monitors = body.precheck.monitors if body.precheck else None
+        if monitor_mode == "required":
+            if not monitors:
+                raise HTTPException(status_code=409, detail="Run the display check before starting.")
+            if monitors.status == "multiple":
+                raise HTTPException(
+                    status_code=409,
+                    detail="More than one display was detected. Disconnect or turn off the extra display(s), then check again.",
+                )
         mode = assessment.get("webcam_mode") or "off"
         consent = bool(body and body.webcam_consent) and mode != "off"
         if mode == "required" and not consent:
@@ -600,6 +650,13 @@ def start_route(
                     "section_started_at": now,
                     "webcam_mode": mode,
                     "webcam_consent_at": now if consent else None,
+                    "candidate_details": body.details.model_dump(),
+                    "details_confirmed_at": now,
+                    "precheck": {
+                        **(body.precheck.model_dump() if body.precheck else {}),
+                        "server_user_agent": (request.headers.get("user-agent") or "")[:300],
+                        "monitor_mode": monitor_mode,
+                    },
                 })
                 .execute()
             )
@@ -608,6 +665,17 @@ def start_route(
         if not attempt:
             raise HTTPException(status_code=500, detail="Could not start the assessment.")
     return _session(attempt, sections)
+
+
+def _prefill(user_id: str) -> Dict[str, Any]:
+    """Whatever the candidate's profile already says, so the details form starts filled in."""
+    row = _first(db_client.table("profiles").select("*").eq("id", user_id).limit(1).execute()) or {}
+    name = row.get("name") or " ".join(x for x in [row.get("first_name"), row.get("last_name")] if x)
+    return {
+        "full_name": name or "", "email": row.get("email") or "", "phone": row.get("phone") or "",
+        "college": row.get("college_name") or "", "roll_number": "",
+        "branch": row.get("branch") or "", "graduation_year": row.get("graduation_year"), "cgpa": row.get("cgpa"),
+    }
 
 
 # ── GET /candidate/oa/{application_id}/session ──────────────────────
@@ -713,6 +781,7 @@ def _session(attempt: dict, sections: List[dict]) -> OASessionOut:
         status="in_progress",
         server_time=now,
         coding_enabled=oa_judge.judge_enabled(),
+        monitor_mode=(attempt.get("precheck") or {}).get("monitor_mode") or "off",
         webcam=OAWebcamOut(
             mode=attempt.get("webcam_mode") or "off",
             active=bool(attempt.get("webcam_consent_at")) and (attempt.get("webcam_mode") or "off") != "off",
@@ -832,6 +901,9 @@ def _clean_detail(detail: Optional[Dict[str, Any]]) -> Dict[str, Any]:
         out["truncated"] = out["length"] > MAX_EVENT_TEXT
     elif isinstance(d.get("length"), int) and not isinstance(d["length"], bool):
         out["length"] = max(0, min(d["length"], 10_000_000))
+    count = d.get("count")
+    if isinstance(count, int) and not isinstance(count, bool):
+        out["count"] = max(1, min(count, 16))
     away = d.get("away_ms")
     if isinstance(away, (int, float)) and not isinstance(away, bool):
         out["away_ms"] = int(max(0, min(away, 24 * 3600 * 1000)))

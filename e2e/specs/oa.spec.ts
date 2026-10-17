@@ -1,4 +1,4 @@
-import { expect, test, signedIn, API, bearer, apiLogin, anyHydrated, type Page } from "./helpers";
+import { expect, test, signedIn, API, bearer, apiLogin, anyHydrated, beginAssessment, type Page } from "./helpers";
 import fs from "node:fs";
 import path from "node:path";
 
@@ -16,10 +16,7 @@ async function setup(request: any) {
 async function startTest(page: Page, request: any) {
   const { appId, ...rest } = await setup(request);
   await signedIn(page, request, "candidate", `/candidate-oa/${appId}`);
-  const start = page.getByRole("button", { name: "Start assessment" });
-  await expect(start).toBeDisabled();                       // consent is required first
-  await page.getByRole("checkbox").click();
-  await start.click();
+  await beginAssessment(page);                              // instructions -> details -> permissions -> Start test
   await expect(page.getByText("Section 1 of 3")).toBeVisible();
   await page.locator("select").first().selectOption("python");      // editor defaults to JavaScript
   return { appId, ...rest };
@@ -33,18 +30,47 @@ async function typeCode(page: Page, code: string) {
 }
 
 test.describe("online assessment (candidate)", () => {
-  test("overview describes the test, sections and rules before starting", async ({ page, request }) => {
+  test("the start screen walks through instructions, details and permissions before the test", async ({ page, request }) => {
     const { appId } = await setup(request);
     await signedIn(page, request, "candidate", `/candidate-oa/${appId}`);
-    await expect(page.getByText("Online assessment").first()).toBeVisible();
-    await expect(page.getByText("Backend Engineer — Online Assessment")).toBeVisible();
-    await expect(page.getByText(/closes in/)).toBeVisible();
-    await expect(page.getByText("This test contains 3 sections and 3 questions — 90 minutes in total.")).toBeVisible();
-    await expect(page.getByText("Once you've moved past a section you will NOT be able to revisit it.")).toBeVisible();
-    for (const t of ["Coding 1", "Coding 2", "Coding 3"]) await expect(page.getByText(t, { exact: true }).first()).toBeVisible();
-    await expect(page.getByRole("button", { name: "Start assessment" })).toBeDisabled();
-    await page.getByRole("checkbox").click();
-    await expect(page.getByRole("button", { name: "Start assessment" })).toBeEnabled();
+
+    // step 1: instructions, with the test facts alongside
+    await expect(page.getByRole("heading", { name: "Backend Engineer — Online Assessment" })).toBeVisible();
+    await expect(page.getByText("Test duration: 90 minutes")).toBeVisible();
+    await expect(page.getByText(/You may start any time between/)).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Instructions" })).toBeVisible();
+    await expect(page.getByText(/This test has 3 sections and 3 questions, 90 minutes in total/)).toBeVisible();
+    await expect(page.getByText(/you cannot return to it/)).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Assessment integrity" })).toBeVisible();
+    for (const t of ["Coding 1", "Coding 2", "Coding 3"]) await expect(page.getByRole("cell", { name: t, exact: true })).toBeVisible();
+    await expect(page.getByRole("progressbar", { name: "Step 1 of 3" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Start test" })).toHaveCount(0);       // not before the permissions step
+    await page.getByRole("button", { name: "Continue" }).click();
+
+    // step 2: details prefilled from the profile; the rest must be typed; both declarations ticked
+    await expect(page.getByRole("heading", { name: "Please confirm your details" })).toBeVisible();
+    await expect(page.locator("#oa-fullName")).toHaveValue("Cara Candidate");
+    await expect(page.locator("#oa-email")).toHaveValue("cand@e2e.dev");
+    await expect(page.locator("#oa-email")).toHaveAttribute("readonly", "");
+    await expect(page.locator("#oa-college")).toHaveValue("Alpha College");
+    const next = page.getByRole("button", { name: "Continue" });
+    await expect(next).toBeDisabled();                                                    // phone + roll number + declarations missing
+    await page.locator("#oa-phone").fill("12");
+    await page.locator("#oa-phone").blur();
+    await expect(page.getByText("Enter a valid contact number")).toBeVisible();
+    await page.locator("#oa-phone").fill("9876543210");
+    await page.locator("#oa-rollNumber").fill("2024101108");
+    await page.getByRole("checkbox", { name: /I have read the instructions/ }).click();
+    await expect(next).toBeDisabled();                                                    // the second declaration is still missing
+    await page.getByRole("checkbox", { name: /my activity during the test/ }).click();
+    await expect(next).toBeEnabled();
+    await next.click();
+
+    // step 3: permissions (nothing but fullscreen for this assessment); Start stays off until it is done
+    await expect(page.getByRole("heading", { name: "Permissions" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Start test" })).toBeDisabled();
+    await page.getByRole("button", { name: "Back" }).click();
+    await expect(page.locator("#oa-phone")).toHaveValue("9876543210");                    // going back keeps what was typed
   });
 
   test("starting shows section 1 with a countdown and the real problem statement", async ({ page, request }) => {
@@ -145,9 +171,9 @@ test.describe("online assessment (candidate)", () => {
     const later = new Date(Date.now() + 5 * 36e5).toISOString();
     await request.post(`${API}/__e2e/patch`, { data: { table: "job_drives", where: {}, set: { oa_window_start: soon, oa_window_end: later } } });
     await signedIn(page, request, "candidate", `/candidate-oa/${appId}`);
-    await expect(page.getByText(/opens in|starts in|upcoming|not open/i).first()).toBeVisible();
-    await expect(page.getByText("The assessment is open")).toHaveCount(0);
-    await expect(page.getByRole("button", { name: "Start assessment" })).toBeDisabled();
+    await expect(page.getByRole("heading", { name: /^Opens in/ })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Continue" })).toHaveCount(0);        // no wizard until the window opens
+    await expect(page.getByRole("button", { name: "Start test" })).toHaveCount(0);
   });
 
   test("after the window closes the assessment is closed", async ({ page, request }) => {
@@ -155,9 +181,9 @@ test.describe("online assessment (candidate)", () => {
     await request.post(`${API}/__e2e/patch`, {
       data: { table: "job_drives", where: {}, set: { oa_window_start: "2000-01-01T00:00:00+00:00", oa_window_end: "2000-01-02T00:00:00+00:00" } } });
     await signedIn(page, request, "candidate", `/candidate-oa/${appId}`);
-    await expect(page.getByText("The assessment is open")).toHaveCount(0);
-    await expect(page.getByText(/closed|ended/i).first()).toBeVisible();
-    await expect(page.getByRole("button", { name: "Start assessment" })).toBeDisabled();
+    await expect(page.getByRole("heading", { name: "The assessment window has closed" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Continue" })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Start test" })).toHaveCount(0);
   });
 
   test("another candidate cannot open someone else's assessment", async ({ page, request }) => {

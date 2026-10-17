@@ -13,6 +13,7 @@
 import { request } from "../client";
 import type {
   CameraSnapshot,
+  Precheck,
   CameraSnapshots,
   IntegrityEvent,
   SimilarityCompare,
@@ -44,6 +45,7 @@ function normalizeAssessment(raw: Raw): Assessment {
     title: raw.title as string,
     inviteMode: raw.invite_mode as Assessment["inviteMode"],
     webcamMode: (raw.webcam_mode as Assessment["webcamMode"]) ?? "off",
+    monitorMode: (raw.monitor_mode as Assessment["monitorMode"]) ?? "off",
     locked: Boolean(raw.locked),
     codingEnabled: Boolean(raw.coding_enabled),
     stats: {
@@ -122,6 +124,7 @@ function toPayload(d: AssessmentDraft): Raw {
     title: d.title,
     invite_mode: d.inviteMode,
     webcam_mode: d.webcamMode ?? "off",
+    monitor_mode: d.monitorMode ?? "off",
     template: d.template ?? null,
     sections: d.template
       ? null
@@ -353,6 +356,28 @@ export const companyAssessmentService = {
       candidate: normalizeRow(r.candidate as Raw),
       assessmentTitle: r.assessment_title as string,
       sectionTitles: (r.section_titles as Record<number, string>) ?? {},
+      details: r.details
+        ? {
+            fullName: String((r.details as Raw).full_name ?? ""),
+            phone: String((r.details as Raw).phone ?? ""),
+            college: String((r.details as Raw).college ?? ""),
+            rollNumber: String((r.details as Raw).roll_number ?? ""),
+            branch: String((r.details as Raw).branch ?? ""),
+            graduationYear: Number((r.details as Raw).graduation_year),
+            cgpa: Number((r.details as Raw).cgpa),
+          }
+        : null,
+      detailsConfirmedAt: (r.details_confirmed_at as string | null) ?? null,
+      precheck: r.precheck
+        ? {
+            webcam: (r.precheck as Raw).webcam as Precheck["webcam"],
+            monitors: ((r.precheck as Raw).monitors as Precheck["monitors"]) ?? null,
+            fullscreen: Boolean((r.precheck as Raw).fullscreen),
+            browser: ((r.precheck as Raw).browser as string | null) ?? null,
+            screen: ((r.precheck as Raw).screen as string | null) ?? null,
+          }
+        : null,
+      monitorMode: (r.monitor_mode as ResultDetail["monitorMode"]) ?? "off",
       feedback: r.feedback
         ? {
             rating: Number((r.feedback as Raw).rating),

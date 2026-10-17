@@ -87,6 +87,8 @@ oa.get_application = lambda aid: next((a for a in db.store["applications"] if a[
 oa.get_job = lambda jid: {"id": jid, "title": "Backend Engineer", "domain": "tech"}
 oa.get_drive_for_job_college = lambda jid, cid: st["drive"] if cid == COLLEGE else None
 oa.get_company_names = lambda ids: {i: "Acme" for i in ids}
+START = {"agreed": True, "details": {"full_name": "Asha Verma", "phone": "+91 98765 43210", "college": "Alpha College",
+         "roll_number": "2024101108", "branch": "CSE", "graduation_year": 2026, "cgpa": 8.7}}
 client = TestClient(main.app)
 
 fails = []
@@ -170,7 +172,7 @@ check("other student can't open someone else's application", client.get("/candid
 as_candidate("stu-1")
 
 # ── 4. take it ──────────────────────────────────────────────────────
-r = client.post("/candidate/oa/app-1/start").json()
+r = client.post("/candidate/oa/app-1/start", json=START).json()
 q = r["section"]["questions"][0]
 check("session carries the problem, html prompt, all four languages", q["prompt_format"] == "html" and q["problem"]["languages"] == ["javascript", "python", "java", "cpp"], q)
 check("java + c++ starters are typed from the examples", "public int[] twoSum(int[] nums, int target)" in q["starter_code"]["java"]
@@ -347,7 +349,7 @@ db.store["oa_submissions"] = [x for x in db.store["oa_submissions"] if x["id"] !
 # ── 8. expiry enforced on the server for code endpoints ─────────────
 seed(); put(GOOD); client.post(URL + "/invites", json={"all": True}); sent.clear()
 as_candidate()
-q = client.post("/candidate/oa/app-1/start").json()["section"]["questions"][0]
+q = client.post("/candidate/oa/app-1/start", json=START).json()["section"]["questions"][0]
 backdate(16)   # coding section is 15 min
 r = client.post(f"/candidate/oa/app-1/questions/{q['id']}/submit", json={"language": "python", "source": GOOD_PY})
 check("submit after the section expired is refused", r.status_code == 409, r.text)
@@ -371,11 +373,11 @@ client.post(URL + "/invites", json={"all": True})
 as_candidate()
 ov = client.get("/candidate/oa/app-1").json()
 check("instructions page learns the camera policy", ov["webcam_mode"] == "required" and ov["snapshot_retention_days"] == 30, ov)
-r = client.post("/candidate/oa/app-1/start")
+r = client.post("/candidate/oa/app-1/start", json=START)
 check("required camera: can't start without consenting", r.status_code == 409 and not db.store.get("oa_attempts"), r.text)
-r = client.post("/candidate/oa/app-1/start", json={"webcam_consent": False})
+r = client.post("/candidate/oa/app-1/start", json={**START, "webcam_consent": False})
 check("required camera: explicit 'no' is refused too", r.status_code == 409)
-r = client.post("/candidate/oa/app-1/start", json={"webcam_consent": True}).json()
+r = client.post("/candidate/oa/app-1/start", json={**START, "webcam_consent": True}).json()
 check("consent starts the attempt with the camera active", r["webcam"] == {"mode": "required", "active": True, "interval_seconds": 60}
       and db.store["oa_attempts"][0]["webcam_consent_at"], r.get("webcam"))
 q1 = r["section"]["questions"][0]["id"]
@@ -410,13 +412,68 @@ check("no attempt → 404 gallery", client.get(URL + "/results/app-2/snapshots")
 
 # optional: a candidate who declines is never photographed, even if their browser tries
 seed(); put({**GOOD, "webcam_mode": "optional"}); client.post(URL + "/invites", json={"all": True}); as_candidate()
-r = client.post("/candidate/oa/app-1/start").json()
+r = client.post("/candidate/oa/app-1/start", json=START).json()
 check("optional camera: can start without consenting, camera inactive", r["webcam"] == {"mode": "optional", "active": False, "interval_seconds": 60}, r["webcam"])
 check("no consent → snapshots refused", snap().status_code == 403 and not db.store.get("oa_snapshots"))
 # off: nothing to consent to
 seed(); put(GOOD); client.post(URL + "/invites", json={"all": True})
-r = client.post("/candidate/oa/app-1/start", json={"webcam_consent": True}).json()
+r = client.post("/candidate/oa/app-1/start", json={**START, "webcam_consent": True}).json()
 check("camera off: consent is ignored, no snapshots", r["webcam"]["active"] is False and db.store["oa_attempts"][0]["webcam_consent_at"] is None and snap().status_code == 403)
+
+# ── 9b. start screen: details, declaration, pre-test checks, multiple-monitor check ──
+PROFILE = {"id": "stu-1", "name": "Asha Verma", "email": "asha@x.edu", "college_name": "Alpha College", "branch": "CSE",
+           "graduation_year": 2026, "cgpa": 8.7}
+def fresh(monitor=None, webcam="off"):
+    seed(); db.store["profiles"] = [dict(PROFILE)]; put({**GOOD, "webcam_mode": webcam, **({"monitor_mode": monitor} if monitor else {})})
+    client.post(URL + "/invites", json={"all": True}); as_candidate()
+S = "/candidate/oa/app-1/start"
+as_company(); fresh()
+ov = client.get("/candidate/oa/app-1").json()
+check("the details form can be prefilled from the profile", ov["prefill"]["full_name"] == "Asha Verma" and ov["prefill"]["email"] == "asha@x.edu"
+      and ov["prefill"]["college"] == "Alpha College" and ov["prefill"]["cgpa"] == 8.7 and ov["prefill"]["roll_number"] == "", ov["prefill"])
+check("monitor_mode defaults to off and must be off|optional|required", ov["monitor_mode"] == "off"
+      and (as_company() or put({**GOOD, "monitor_mode": "always"}).status_code == 422))
+as_candidate()
+check("can't start without the declaration + details", client.post(S).status_code == 422 and client.post(S, json={}).status_code == 422
+      and client.post(S, json={"agreed": True}).status_code == 422 and client.post(S, json={"details": START["details"]}).status_code == 422
+      and not db.store.get("oa_attempts"))
+for field, bad in (("full_name", "A"), ("phone", "abc"), ("phone", "12"), ("college", ""), ("roll_number", ""), ("branch", "x"),
+                   ("graduation_year", 1980), ("cgpa", 11), ("cgpa", -1)):
+    r = client.post(S, json={**START, "details": {**START["details"], field: bad}})
+    check(f"details: {field}={bad!r} rejected", r.status_code == 422 and not db.store.get("oa_attempts"))
+check("details: a missing field is rejected", client.post(S, json={**START, "details": {k: v for k, v in START["details"].items() if k != "roll_number"}}).status_code == 422)
+r = client.post(S, json={**START, "precheck": {"webcam": "not_required", "fullscreen": True, "browser": "Mozilla/5.0 X" * 20, "screen": "1920x1080",
+                                              "monitors": {"status": "single", "count": 1, "method": "is-extended"}}})
+a = db.store["oa_attempts"][0]
+check("starting stores the confirmed details, the time and the pre-test checks", r.status_code == 200 and a["candidate_details"] == START["details"]
+      and a["details_confirmed_at"] and a["precheck"]["monitors"]["status"] == "single" and a["precheck"]["fullscreen"] is True
+      and "server_user_agent" in a["precheck"], (r.status_code, r.text[:200]))
+check("an oversized browser string is refused", client.post(S, json={**START, "precheck": {"browser": "x" * 301}}).status_code == 422)
+
+# required monitor check
+as_company(); fresh(monitor="required")
+check("required: starting without a display check is refused", client.post(S, json=START).status_code == 409 and not db.store.get("oa_attempts"))
+r = client.post(S, json={**START, "precheck": {"monitors": {"status": "multiple", "count": 2, "method": "window-management"}}})
+check("required: more than one display is refused with a clear reason", r.status_code == 409 and "display" in r.json()["detail"].lower() and not db.store.get("oa_attempts"), r.text)
+check("required: a bad status is a validation error", client.post(S, json={**START, "precheck": {"monitors": {"status": "maybe"}}}).status_code == 422)
+r = client.post(S, json={**START, "precheck": {"monitors": {"status": "unknown", "method": "unsupported"}}})
+check("required: a browser that can't tell is let in, and it is recorded as unverified",
+      r.status_code == 200 and db.store["oa_attempts"][0]["precheck"]["monitors"] == {"status": "unknown", "count": None, "method": "unsupported"}, r.text[:200])
+as_company(); fresh(monitor="required")
+check("required: a single display starts fine", client.post(S, json={**START, "precheck": {"monitors": {"status": "single", "count": 1, "method": "is-extended"}}}).status_code == 200)
+# optional monitor check only records
+as_company(); fresh(monitor="optional")
+r = client.post(S, json={**START, "precheck": {"monitors": {"status": "multiple", "method": "is-extended"}}})
+check("optional: several displays still start, and are recorded", r.status_code == 200 and db.store["oa_attempts"][0]["precheck"]["monitors"]["status"] == "multiple")
+client.post("/candidate/oa/app-1/events", json={"type": "multi_monitor", "detail": {"count": 3}})
+client.post("/candidate/oa/app-1/events", json={"type": "multi_monitor", "detail": {"count": 999}})
+check("a display appearing mid-test lands on the timeline (count bounded)", [e["meta"].get("count") for e in db.store["oa_events"] if e["type"] == "multi_monitor"] == [3, 16], db.store["oa_events"])
+as_company()
+d = client.get(URL + "/results/app-1").json()
+check("recruiter sees the confirmed details and the pre-test checks", d["details"]["roll_number"] == "2024101108" and d["details_confirmed_at"]
+      and d["precheck"]["monitors"]["status"] == "multiple" and d["monitor_mode"] == "optional" and d["events"]["counts"]["multi_monitor"] == 2, d["precheck"])
+check("monitor_mode is returned by the assessment definition", client.get(URL).json()["monitor_mode"] == "optional")
+as_candidate()
 
 # ── 10. retention purge ─────────────────────────────────────────────
 sys.path.insert(0, str(__import__("pathlib").Path(__file__).resolve().parents[1] / "scripts"))

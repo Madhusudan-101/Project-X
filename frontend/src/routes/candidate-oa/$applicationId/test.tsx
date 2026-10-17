@@ -8,6 +8,7 @@ import {
   Circle,
   Loader2,
   Maximize,
+  MonitorX,
   ShieldAlert,
   Timer,
   VideoOff,
@@ -32,6 +33,7 @@ import { PromptText } from "@/components/candidate/oa/PromptText";
 import { useCandidateGuard } from "@/hooks/candidate/use-candidate-guard";
 import { FeedbackCard } from "@/components/candidate/oa/FeedbackCard";
 import { CameraPreview } from "@/components/candidate/oa/CameraPreview";
+import { useDisplayWatch } from "@/components/candidate/oa/start/useDisplayWatch";
 import { useProctorCamera } from "@/components/candidate/oa/useProctorCamera";
 import { candidateAssessmentService } from "@/services/api/candidate/assessment";
 import type {
@@ -256,6 +258,15 @@ function AssessmentRunnerPage() {
         .catch(() => undefined);
     },
     onEvent: (type) => report(type),
+  });
+  // A second display plugged in mid-test is recorded; the banner stays until it is removed.
+  const monitorMode = data?.monitorMode ?? "off";
+  const extraDisplay = useDisplayWatch({
+    enabled: inProgress && monitorMode !== "off",
+    onExtended: () => {
+      report("multi_monitor");
+      toast.warning("A second display was detected. This has been recorded.");
+    },
   });
   const cameraBlocked =
     inProgress &&
@@ -519,6 +530,20 @@ function AssessmentRunnerPage() {
               </button>
             </div>
           )}
+        {extraDisplay && monitorMode !== "off" && (
+          <div
+            role="alert"
+            className={
+              "flex items-center gap-2 rounded-md border px-3 py-2 text-xs " +
+              (monitorMode === "required"
+                ? "border-destructive/40 bg-destructive/10 text-destructive"
+                : "border-amber-400/50 bg-amber-50 text-amber-800 dark:bg-amber-950/30 dark:text-amber-300")
+            }
+          >
+            <MonitorX className="h-3.5 w-3.5" />A second display is connected. Please disconnect it.
+            This has been recorded for the hiring team.
+          </div>
+        )}
         {cameraBlocked && (
           <div
             role="alertdialog"

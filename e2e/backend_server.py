@@ -39,7 +39,11 @@ class _Dim:
 class _Result:
     dimensions = SimpleNamespace(resume=_Dim(80), github=_Dim(60), leetcode=_Dim(50), interview=_Dim(None), assessment=_Dim(None))
     placement_probability = 72
-    def model_dump(self, mode="json"): return {"placement_probability": 72, "summary": "Solid backend profile."}
+    # The recruiter panel reads recruiter_verdict.label/.recommendation; a stub without it crashed the page
+    # whenever scoring finished before the recruiter opened the job (an intermittent E2E failure).
+    def model_dump(self, mode="json"): return {"placement_probability": 72, "summary": "Solid backend profile.",
+                                               "recruiter_verdict": {"label": "Strong fit", "recommendation": "advance",
+                                                                     "summary": "Solid backend profile."}}
 
 
 async def _score(**kw): return _Result()
