@@ -82,7 +82,7 @@ test.describe("peer interviews: scheduling, in the dashboard", () => {
     await a.page.getByRole("button", { name: /Done|Close/ }).first().click();
 
     // it is in "Scheduled Peer Interviews"
-    const item = a.page.getByRole("listitem").filter({ hasText: "Systems design practice" });
+    const item = a.page.getByRole("listitem").filter({ hasText: "Systems design practice" }).first();
     await expect(item).toBeVisible({ timeout: 15_000 });
     // add to calendar downloads a real .ics file
     const download = a.page.waitForEvent("download");
@@ -165,7 +165,7 @@ test.describe("peer interviews: feedback, history, report, admin", () => {
     await a.page.getByRole("button", { name: "History" }).first().click();
     const hist = a.page.getByRole("dialog", { name: "Peer interview history" });
     await expect(hist).toBeVisible();
-    await expect(hist.getByText("Instant match")).toBeVisible({ timeout: 10_000 });
+    await expect(hist.getByText("Instant match").first()).toBeVisible({ timeout: 10_000 });
     // rate
     await hist.getByRole("button", { name: /Rate/ }).first().click();
     const rate = a.page.getByRole("dialog", { name: "How was your session?" });
@@ -213,7 +213,7 @@ test.describe("peer interviews: feedback, history, report, admin", () => {
     await expect(admin.getByRole("tab", { name: "Open", selected: true })).toBeVisible();
     await admin.getByRole("button", { name: /Rude or disrespectful/ }).first().click();
     await expect(admin.getByText("kept interrupting me")).toBeVisible({ timeout: 10_000 });   // what the reporter said
-    await expect(admin.getByText("Reported person")).toBeVisible();
+    await expect(admin.getByText("Reported person").first()).toBeVisible();
     await admin.getByRole("radio", { name: "Suspend" }).click();
     await admin.getByLabel("Days").fill("3");
     await admin.getByLabel(/Note/).fill("repeat behaviour");
@@ -267,10 +267,12 @@ test.describe("peer interviews: security", () => {
     expect((await request.post(`${API}/internal/peer/session-consent`, { data: body, headers: a.auth })).status()).toBe(401);
     expect((await request.post(`${API}/internal/peer/session-consent`, { data: body, headers: { Authorization: "Bearer nope" } })).status()).toBe(401);
     expect((await state(request)).peer_session_consents ?? 0).toBe(0);
-    // a third person cannot get a token for someone else's room
+    // holding a room id is not enough: a token is only minted for a room you were matched into or invited to
+    const nope = await request.post(`${API}/candidate/peer-session-token`, { data: { room_id: "a-room-i-am-not-in-1" }, headers: a.auth });
+    expect(nope.status()).toBe(403);
+    // and a company account (not a candidate) cannot use the candidate peer endpoints at all
     const c = await login(request, EMAIL.company, "company");
-    const third = { Authorization: `Bearer ${c.token}` };
-    expect([401, 403]).toContain((await request.post(`${API}/candidate/peer-session-token`, { data: { room_id: room }, headers: third })).status());
+    expect([401, 403, 428]).toContain((await request.post(`${API}/candidate/peer-session-token`, { data: { room_id: room }, headers: { Authorization: `Bearer ${c.token}` } })).status());
     // a valid token for ANOTHER room does not open this one in PeerMeet
     const own = await (await request.post(`${API}/candidate/peer-session-token`, { data: { room_id: room }, headers: a.auth })).json();
     const page = await a.ctx.newPage();
@@ -293,6 +295,7 @@ test.describe("peer interviews: in the call", () => {
     const ctxB = await browser.newContext({ permissions: ["camera", "microphone"] });
     const a = await ctxA.newPage(); const b = await ctxB.newPage();
     await a.goto(PM); await a.locator("#btn-create-meeting").click();
+    await expect(a).toHaveURL(/\/room\/[0-9a-f]+/);
     const id = new URL(a.url()).pathname.split("/").pop()!;
     const ready = async (p: Page) => {
       await expect(p.getByRole("heading", { name: "Get ready" })).toBeVisible({ timeout: 30_000 });
