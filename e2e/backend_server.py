@@ -138,9 +138,27 @@ seed()
 from app.main import app  # noqa: E402
 
 
+# Supabase Storage stand-in for OA webcam snapshots: bytes live in memory, "signed" URLs point back here.
+from fastapi import Response  # noqa: E402
+from app.services.candidate import oa_snapshots as _snaps  # noqa: E402
+
+_SNAPSHOT_FILES: dict = {}
+_snaps.upload = lambda path, data: _SNAPSHOT_FILES.__setitem__(path, data)
+_snaps.signed_urls = lambda paths: {p: f"http://127.0.0.1:8000/__e2e/files/{p}" for p in paths if p in _SNAPSHOT_FILES}
+_snaps.delete = lambda paths: [_SNAPSHOT_FILES.pop(p, None) for p in paths] and None
+
+
+@app.get("/__e2e/files/{path:path}")
+def _file(path: str):
+    if path not in _SNAPSHOT_FILES:
+        return Response(status_code=404)
+    return Response(_SNAPSHOT_FILES[path], media_type="image/jpeg")
+
+
 @app.post("/__e2e/reset")
 def _reset():
     """Test-only: wipe and re-seed so every test starts from the same world."""
+    _SNAPSHOT_FILES.clear()
     db.reset()
     auth.reset()
     seed()
