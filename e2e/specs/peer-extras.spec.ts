@@ -233,7 +233,10 @@ test.describe("peer interviews: feedback, history, report, admin", () => {
     const fine = await request.get(`${API}/candidate/peer-safety/status`, { headers: a.auth });
     expect((await fine.json()).suspended).toBe(false);
 
-    // admin lifts it
+    // admin lifts it: the decision closed the panel, so open the report again from the Actioned tab
+    await admin.keyboard.press("Escape");
+    await admin.getByRole("tab", { name: "Actioned" }).click();
+    await admin.getByRole("button", { name: /Rude or disrespectful/ }).first().click();
     await admin.getByRole("radio", { name: "Lift suspension" }).click();
     await admin.getByLabel(/Note/).fill("reviewed, fine");
     await admin.getByRole("button", { name: "Save decision" }).click();
