@@ -35,7 +35,7 @@ Every test calls `POST /__e2e/reset` first, so the run is one worker, fully isol
 | `oa.spec.ts` | assessment overview, consent, timed sections, real Run/Submit grading (accepted / wrong / compile / runtime / TLE), throttle, autosave across reload, one-way sections, answer-key secrecy, window gating, ownership |
 | `company.spec.ts` | dashboard, job list filters, 4-step create-job wizard, applicants table, shortlisting |
 | `company-assessment.spec.ts` | template assessment, invite-only gating, candidate solves, results back to company, tenant isolation |
-| `oa-features.spec.ts` | Java/C++ in the editor (real judge), camera consent gate + fake-camera snapshots + recruiter gallery, camera denied, optional/off modes, the builder's camera setting, the integrity event timeline (paste text, tab leave/return), similarity flag + side-by-side |
+| `oa-features.spec.ts` | Java/C++ in the editor (real judge), camera consent gate + fake-camera snapshots + recruiter gallery, camera denied, optional/off modes, the builder's camera setting, fullscreen on Start, the post-submit feedback card (stars + comment, read by the recruiter), the integrity event timeline (paste text, tab leave/return), similarity flag + side-by-side |
 | `college.spec.ts` | all pages, roster, add student, CSV upload (good + bad), search, export, campus drive, analytics |
 | `admin.spec.ts` | KPIs, every sidebar page, date range, search, access control |
 | `ai-interview.spec.ts` | session start (real LiveKit JWT), graceful media failure, quota, agent report webhook (secret, idempotent, ownership) |
