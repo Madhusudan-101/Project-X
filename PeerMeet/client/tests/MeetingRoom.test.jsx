@@ -118,6 +118,17 @@ describe('MeetingRoom', () => {
     expect('transcriptionConsent' in join).toBe(false);
   });
 
+  it('does not get stuck "offline" when the connection came back before the page started listening', async () => {
+    // first read (the initial render) says disconnected; by the time the page listens, it is connected again
+    let reads = 0;
+    Object.defineProperty(sock, 'connected', { configurable: true, get: () => ++reads > 1 });
+    renderRoom({ live: false });
+    goLive();
+    await waitFor(() => expect(screen.queryByText(/Connection to the meeting server lost/)).toBeNull());
+    await waitFor(() => expect(sock.emit).toHaveBeenCalledWith('session:media-ready', { roomId: 'room-abc123' }));
+    Object.defineProperty(sock, 'connected', { configurable: true, writable: true, value: true });
+  });
+
   describe('before the call starts', () => {
     it('shows the Ready screen, not the call, until the server says the session is live', () => {
       renderRoom({ live: false });

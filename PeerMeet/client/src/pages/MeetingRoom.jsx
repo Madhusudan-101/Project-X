@@ -302,6 +302,9 @@ function MeetingRoom() {
   // Is our connection to the meeting server up? Shown as a banner so a drop is never silent.
   const [socketOnline, setSocketOnline] = useState(socket.connected);
   useEffect(() => {
+    // The connection may have come back between the first render and this effect, and that "connect" event
+    // is gone by now: read the real state once so the banner (and anything waiting on it) cannot stay stuck.
+    setSocketOnline(socket.connected);
     const up = () => setSocketOnline(true);
     const down = (reason) => {
       if (reason !== 'io client disconnect') setSocketOnline(false);
@@ -413,7 +416,7 @@ function MeetingRoom() {
   // Once the session is live and our camera and microphone are on, tell the server so the two of us can
   // be paired for video. Sent again after any new live state (for example after a reconnect).
   useEffect(() => {
-    if (live && localStream && socketOnline) socket.emit('session:media-ready', { roomId });
+    if (live && localStream && socket.connected) socket.emit('session:media-ready', { roomId });
   }, [live, localStream, roomId, mediaAnnounce, socketOnline]);
 
   // ── Socket event listeners for room state ─────────────────────────────────
