@@ -57,6 +57,7 @@ Tick as you go. If something fails, note the section, what you clicked, what you
 6. Ben: repeat steps 1 to 4 with his own account (he sees the guidelines once too).
 
 ### C2. Instant match, then the Ready screen
+Tip: instant match needs **two different accounts** clicking "Find a partner now" within about 30 seconds of each other (one normal window, one private window). The waiting person stays in the queue only while their dashboard tab is open (it can be in the background).
 1. Ann and Ben both click **Find a partner now** (try the **topic** picker too).
 2. [ ] Both get a **new PeerMeet tab**. If a pop-up was blocked, use **Open the room** in the dialog.
 3. [ ] Both tabs show **"Get ready"**. No video, no "Connected".

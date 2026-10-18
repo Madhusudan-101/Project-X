@@ -196,12 +196,12 @@ export function PeerInterviewMatchModal({ open, onOpenChange }: Props) {
     if (mode !== "find") return;
     cancelledRef.current = false;
     poll(true);
-    // Skip polls while the tab is hidden — matchmaking is a foreground
-    // action and there's no point paying for RPC calls that update nothing
-    // the user can see. On return-to-foreground we run one immediately.
+    // Keep polling even when this tab is in the background. Each poll is also the "I am still here"
+    // signal that keeps the waiting ticket alive on the server (it is dropped after about 30 seconds
+    // without one). The reserved PeerMeet tab is the one in front while you wait, so this dashboard tab
+    // is usually hidden: skipping polls here made the waiting person disappear from the queue.
     const tick = () => {
       if (status?.status === "matched") return;
-      if (typeof document !== "undefined" && document.visibilityState === "hidden") return;
       poll(false);
     };
     const t = setInterval(tick, POLL_INTERVAL_MS);
