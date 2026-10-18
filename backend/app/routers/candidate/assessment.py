@@ -30,13 +30,13 @@ import threading
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from postgrest.exceptions import APIError
 from pydantic import BaseModel, Field
 
 from ...crud import get_application, get_company_names, get_drive_for_job_college, get_job
 from ...deps import _parse_ts, db_client, require_candidate_role
-from ...services.candidate import oa_judge
+from ...services.candidate import oa_judge, oa_signature, oa_snapshots
 from ...services.candidate.oa_bank import pick_template, template_sections
 
 log = logging.getLogger(__name__)
@@ -89,6 +89,11 @@ class OAOverviewOut(BaseModel):
     total_questions: int
     sections: List[OASectionOut]
     coding_enabled: bool = False
+    webcam_mode: str = "off"          # shown before starting so the candidate can consent (or not)
+    monitor_mode: str = "off"         # off | optional | required: the multiple-display check
+    prefill: Dict[str, Any] = {}      # what we already know about the candidate, for the details form
+    snapshot_interval_seconds: int = oa_snapshots.DEFAULT_INTERVAL_SECONDS
+    snapshot_retention_days: int = 30
     attempt: Optional[OAAttemptOut] = None
 
 
@@ -126,10 +131,18 @@ class OACurrentSectionOut(BaseModel):
     questions: List[OAQuestionOut]
 
 
+class OAWebcamOut(BaseModel):
+    mode: str = "off"                 # off | optional | required (the policy this attempt started under)
+    active: bool = False              # the candidate consented: the browser should send snapshots
+    interval_seconds: int = oa_snapshots.DEFAULT_INTERVAL_SECONDS
+
+
 class OASessionOut(BaseModel):
     status: str  # in_progress | submitted
     server_time: str
     coding_enabled: bool = False
+    webcam: OAWebcamOut = OAWebcamOut()
+    monitor_mode: str = "off"         # the display check this attempt started under (the page keeps watching)
     section: Optional[OACurrentSectionOut] = None
 
 
@@ -139,8 +152,20 @@ class AnswerIn(BaseModel):
     language: Optional[str] = Field(default=None, max_length=32)
 
 
+EVENT_TYPES = ("tab_switch", "tab_return", "window_blur", "window_focus",
+               "fullscreen_exit", "fullscreen_enter", "paste", "copy", "cut",
+               "camera_denied", "camera_lost", "camera_restored", "multi_monitor")
+# Only these three keep a running counter on oa_attempts (the rest are timeline-only).
+EVENT_COUNTERS = {"tab_switch": "tab_switches", "fullscreen_exit": "fullscreen_exits", "paste": "paste_events"}
+MAX_EVENTS_PER_ATTEMPT = 2000
+MAX_EVENT_TEXT = 4000
+
+
 class OAEventIn(BaseModel):
-    type: str = Field(pattern="^(tab_switch|fullscreen_exit|paste)$")
+    type: str = Field(pattern="^(" + "|".join(EVENT_TYPES) + ")$")
+    question_id: Optional[str] = Field(default=None, max_length=64)
+    # paste/copy/cut: {text, length, target}; *_return / window_focus: {away_ms}
+    detail: Optional[Dict[str, Any]] = None
 
 
 # ── Helpers ─────────────────────────────────────────────────────────
@@ -516,6 +541,11 @@ def overview_route(
             for s in sections
         ],
         coding_enabled=oa_judge.judge_enabled(),
+        webcam_mode=assessment.get("webcam_mode") or "off",
+        monitor_mode=assessment.get("monitor_mode") or "off",
+        prefill=_prefill(current_user["id"]),
+        snapshot_interval_seconds=oa_snapshots.interval_seconds(),
+        snapshot_retention_days=oa_snapshots.retention_days(),
         attempt=OAAttemptOut(
             status=attempt["status"],
             current_section=int(attempt["current_section"]),
@@ -527,9 +557,47 @@ def overview_route(
 
 # ── POST /candidate/oa/{application_id}/start ───────────────────────
 
+class DetailsIn(BaseModel):
+    """What the candidate confirms on the start screen. Everything is required: the hiring team
+    uses it to match the attempt to the person."""
+    full_name: str = Field(min_length=2, max_length=120)
+    phone: str = Field(pattern=r"^[0-9+()\-\s]{7,20}$")
+    college: str = Field(min_length=2, max_length=200)
+    roll_number: str = Field(min_length=1, max_length=50)
+    branch: str = Field(min_length=2, max_length=100)
+    graduation_year: int = Field(ge=2000, le=2100)
+    cgpa: float = Field(ge=0, le=10)
+
+
+class MonitorsIn(BaseModel):
+    status: str = Field(pattern="^(single|multiple|unknown)$")   # unknown: the browser can't tell
+    count: Optional[int] = Field(default=None, ge=1, le=16)
+    method: Optional[str] = Field(default=None, pattern="^(is-extended|window-management|unsupported)$")
+
+
+class PrecheckIn(BaseModel):
+    webcam: str = Field(default="not_required", pattern="^(granted|denied|skipped|not_required)$")
+    monitors: Optional[MonitorsIn] = None
+    fullscreen: bool = False
+    browser: Optional[str] = Field(default=None, max_length=300)
+    screen: Optional[str] = Field(default=None, max_length=40)
+
+
+class StartIn(BaseModel):
+    # Agreement to camera monitoring. Ignored when the assessment doesn't use the camera.
+    webcam_consent: bool = False
+    # The start screen's declaration (honesty pledge + that activity is recorded).
+    agreed: bool = False
+    details: Optional[DetailsIn] = None
+    precheck: Optional[PrecheckIn] = None
+
+
 @router.post("/{application_id}/start", response_model=OASessionOut)
 def start_route(
-    application_id: str, current_user: dict = Depends(require_candidate_role)
+    application_id: str,
+    request: Request,
+    body: Optional[StartIn] = None,
+    current_user: dict = Depends(require_candidate_role),
 ) -> OASessionOut:
     _, job, drive = _load_context(application_id, current_user)
     assessment = _ensure_assessment(job, drive)
@@ -547,6 +615,28 @@ def start_route(
             raise HTTPException(status_code=409, detail="The assessment window hasn't opened yet.")
         if state == "closed":
             raise HTTPException(status_code=409, detail="The assessment window has closed.")
+        if not body or not body.agreed or not body.details:
+            raise HTTPException(
+                status_code=422,
+                detail="Confirm your details and accept the declaration before starting.",
+            )
+        monitor_mode = assessment.get("monitor_mode") or "off"
+        monitors = body.precheck.monitors if body.precheck else None
+        if monitor_mode == "required":
+            if not monitors:
+                raise HTTPException(status_code=409, detail="Run the display check before starting.")
+            if monitors.status == "multiple":
+                raise HTTPException(
+                    status_code=409,
+                    detail="More than one display was detected. Disconnect or turn off the extra display(s), then check again.",
+                )
+        mode = assessment.get("webcam_mode") or "off"
+        consent = bool(body and body.webcam_consent) and mode != "off"
+        if mode == "required" and not consent:
+            raise HTTPException(
+                status_code=409,
+                detail="This assessment requires camera monitoring. Agree to it on the instructions page to start.",
+            )
         now = _now().isoformat()
         try:
             attempt = _first(
@@ -558,6 +648,15 @@ def start_route(
                     "current_section": 1,
                     "started_at": now,
                     "section_started_at": now,
+                    "webcam_mode": mode,
+                    "webcam_consent_at": now if consent else None,
+                    "candidate_details": body.details.model_dump(),
+                    "details_confirmed_at": now,
+                    "precheck": {
+                        **(body.precheck.model_dump() if body.precheck else {}),
+                        "server_user_agent": (request.headers.get("user-agent") or "")[:300],
+                        "monitor_mode": monitor_mode,
+                    },
                 })
                 .execute()
             )
@@ -566,6 +665,17 @@ def start_route(
         if not attempt:
             raise HTTPException(status_code=500, detail="Could not start the assessment.")
     return _session(attempt, sections)
+
+
+def _prefill(user_id: str) -> Dict[str, Any]:
+    """Whatever the candidate's profile already says, so the details form starts filled in."""
+    row = _first(db_client.table("profiles").select("*").eq("id", user_id).limit(1).execute()) or {}
+    name = row.get("name") or " ".join(x for x in [row.get("first_name"), row.get("last_name")] if x)
+    return {
+        "full_name": name or "", "email": row.get("email") or "", "phone": row.get("phone") or "",
+        "college": row.get("college_name") or "", "roll_number": "",
+        "branch": row.get("branch") or "", "graduation_year": row.get("graduation_year"), "cgpa": row.get("cgpa"),
+    }
 
 
 # ── GET /candidate/oa/{application_id}/session ──────────────────────
@@ -599,6 +709,8 @@ def load_problems(problem_ids: List[str]) -> Dict[str, dict]:
 
 def allowed_languages(problem: dict) -> List[str]:
     langs = [l for l in (problem.get("languages") or []) if l in oa_judge.SUPPORTED_LANGUAGES]
+    if oa_signature.signature_for(problem) is None:   # Java / C++ need argument types
+        langs = [l for l in langs if l not in oa_judge.TYPED_LANGUAGES]
     return langs or ["javascript"]
 
 
@@ -609,8 +721,9 @@ def _question_out(q: dict, problem: Optional[dict], saved: dict) -> OAQuestionOu
     if problem:
         langs = allowed_languages(problem)
         stored = problem.get("starter_code") or {}
+        sig = oa_signature.signature_for(problem)
         starter = {
-            l: oa_judge.starter_for(l, problem["function_name"], problem.get("params") or [], stored)
+            l: oa_judge.starter_for(l, problem["function_name"], problem.get("params") or [], stored, sig)
             for l in langs
         }
         problem_out = OAProblemOut(
@@ -668,6 +781,12 @@ def _session(attempt: dict, sections: List[dict]) -> OASessionOut:
         status="in_progress",
         server_time=now,
         coding_enabled=oa_judge.judge_enabled(),
+        monitor_mode=(attempt.get("precheck") or {}).get("monitor_mode") or "off",
+        webcam=OAWebcamOut(
+            mode=attempt.get("webcam_mode") or "off",
+            active=bool(attempt.get("webcam_consent_at")) and (attempt.get("webcam_mode") or "off") != "off",
+            interval_seconds=oa_snapshots.interval_seconds(),
+        ),
         section=OACurrentSectionOut(
             position=section["position"],
             total_sections=len(sections),
@@ -771,16 +890,155 @@ def submit_section_route(
 
 # ── POST /candidate/oa/{application_id}/events ──────────────────────
 
+def _clean_detail(detail: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+    """Whitelist + cap what the browser sends; it is untrusted input shown to recruiters."""
+    out: Dict[str, Any] = {}
+    d = detail or {}
+    text = d.get("text")
+    if isinstance(text, str):
+        out["text"] = text[:MAX_EVENT_TEXT]
+        out["length"] = max(len(text), int(d["length"])) if isinstance(d.get("length"), int) else len(text)
+        out["truncated"] = out["length"] > MAX_EVENT_TEXT
+    elif isinstance(d.get("length"), int) and not isinstance(d["length"], bool):
+        out["length"] = max(0, min(d["length"], 10_000_000))
+    count = d.get("count")
+    if isinstance(count, int) and not isinstance(count, bool):
+        out["count"] = max(1, min(count, 16))
+    away = d.get("away_ms")
+    if isinstance(away, (int, float)) and not isinstance(away, bool):
+        out["away_ms"] = int(max(0, min(away, 24 * 3600 * 1000)))
+    if d.get("target") in ("editor", "other"):
+        out["target"] = d["target"]
+    return out
+
+
 @router.post("/{application_id}/events")
 def event_route(
     application_id: str,
     body: OAEventIn,
     current_user: dict = Depends(require_candidate_role),
 ) -> Dict[str, Any]:
-    attempt, _ = _active_attempt(application_id, current_user)
-    column = {"tab_switch": "tab_switches", "fullscreen_exit": "fullscreen_exits", "paste": "paste_events"}[body.type]
-    if attempt["status"] == "in_progress":
-        db_client.table("oa_attempts").update(
-            {column: int(attempt.get(column) or 0) + 1}
-        ).eq("id", attempt["id"]).execute()
+    attempt, sections = _active_attempt(application_id, current_user)
+    if attempt["status"] != "in_progress":
+        return {"ok": True}
+    logged = int(attempt.get("events_logged") or 0)
+    update: Dict[str, Any] = {}
+    counter = EVENT_COUNTERS.get(body.type)
+    if counter:   # counters keep counting past the log cap: they are what flags a candidate
+        update[counter] = int(attempt.get(counter) or 0) + 1
+    if logged < MAX_EVENTS_PER_ATTEMPT:
+        question_id = None
+        idx = int(attempt["current_section"]) - 1
+        if body.question_id and 0 <= idx < len(sections):   # only questions of the section being taken
+            current = _questions_for([sections[idx]["id"]]).get(sections[idx]["id"], [])
+            question_id = body.question_id if any(q["id"] == body.question_id for q in current) else None
+        db_client.table("oa_events").insert({
+            "attempt_id": attempt["id"],
+            "question_id": question_id,
+            "type": body.type,
+            "occurred_at": _now().isoformat(),
+            "meta": _clean_detail(body.detail),
+        }).execute()
+        update["events_logged"] = logged + 1
+    if update:
+        db_client.table("oa_attempts").update(update).eq("id", attempt["id"]).execute()
+    return {"ok": True}
+
+
+# ── POST /candidate/oa/{application_id}/snapshots ───────────────────
+
+class SnapshotIn(BaseModel):
+    # data URL or bare base64 of a small JPEG; validated again server-side
+    image: str = Field(min_length=100, max_length=oa_snapshots.MAX_BYTES * 2)
+    question_id: Optional[str] = Field(default=None, max_length=64)
+    # faces the browser counted (FaceDetector, where it exists). Untrusted: only used to
+    # point a reviewer at the frames worth looking at.
+    faces: Optional[int] = Field(default=None, ge=0, le=20)
+
+
+@router.post("/{application_id}/snapshots")
+def snapshot_route(
+    application_id: str,
+    body: SnapshotIn,
+    current_user: dict = Depends(require_candidate_role),
+) -> Dict[str, Any]:
+    attempt, sections = _active_attempt(application_id, current_user)
+    if attempt["status"] != "in_progress":
+        raise HTTPException(status_code=409, detail="The assessment has ended.")
+    if not attempt.get("webcam_consent_at") or (attempt.get("webcam_mode") or "off") == "off":
+        raise HTTPException(status_code=403, detail="Camera monitoring isn't enabled for this attempt.")
+    taken = int(attempt.get("snapshots_taken") or 0)
+    if taken >= oa_snapshots.MAX_PER_ATTEMPT:
+        return {"ok": True, "stored": False, "reason": "limit"}
+    now = _now()
+    last = _parse_ts(attempt.get("last_snapshot_at")) if attempt.get("last_snapshot_at") else None
+    if last and (now - last).total_seconds() < oa_snapshots.MIN_SECONDS_BETWEEN:
+        return {"ok": True, "stored": False, "reason": "too_soon"}
+    try:
+        data = oa_snapshots.decode_jpeg(body.image)
+    except oa_snapshots.BadSnapshot as e:
+        raise HTTPException(status_code=422, detail=str(e))
+
+    question_id = None
+    idx = int(attempt["current_section"]) - 1
+    if body.question_id and 0 <= idx < len(sections):
+        current = _questions_for([sections[idx]["id"]]).get(sections[idx]["id"], [])
+        question_id = body.question_id if any(q["id"] == body.question_id for q in current) else None
+
+    path = f"{attempt['assessment_id']}/{attempt['id']}/{int(now.timestamp() * 1000)}.jpg"
+    try:
+        oa_snapshots.upload(path, data)
+    except Exception as exc:  # noqa: BLE001 — storage hiccup must never break the test
+        log.warning("OA snapshot upload failed: %s", exc)
+        return {"ok": True, "stored": False, "reason": "storage"}
+    db_client.table("oa_snapshots").insert({
+        "attempt_id": attempt["id"], "question_id": question_id, "path": path,
+        "taken_at": now.isoformat(), "bytes": len(data), "faces": body.faces,
+    }).execute()
+    db_client.table("oa_attempts").update({
+        "snapshots_taken": taken + 1,
+        "snapshots_no_face": int(attempt.get("snapshots_no_face") or 0) + (1 if body.faces == 0 else 0),
+        "snapshots_multi_face": int(attempt.get("snapshots_multi_face") or 0) + (1 if (body.faces or 0) > 1 else 0),
+        "last_snapshot_at": now.isoformat(),
+    }).eq("id", attempt["id"]).execute()
+    return {"ok": True, "stored": True}
+
+
+# ── GET / POST /candidate/oa/{application_id}/feedback ──────────────
+
+MAX_FEEDBACK_CHARS = 2000
+
+
+class FeedbackIn(BaseModel):
+    rating: int = Field(ge=1, le=5)
+    comment: Optional[str] = Field(default=None, max_length=MAX_FEEDBACK_CHARS)
+
+
+def _submitted_attempt(application_id: str, current_user: dict) -> dict:
+    attempt, sections = _active_attempt(application_id, current_user)
+    attempt = _settle(attempt, sections)   # a timed-out attempt counts as submitted
+    if attempt["status"] != "submitted":
+        raise HTTPException(status_code=409, detail="Feedback opens once you have submitted the assessment.")
+    return attempt
+
+
+@router.get("/{application_id}/feedback")
+def get_feedback_route(
+    application_id: str, current_user: dict = Depends(require_candidate_role)
+) -> Dict[str, Any]:
+    attempt = _submitted_attempt(application_id, current_user)
+    row = _first(db_client.table("oa_feedback").select("rating, comment").eq("attempt_id", attempt["id"]).limit(1).execute())
+    return {"submitted": bool(row), "rating": row["rating"] if row else None, "comment": row.get("comment") if row else None}
+
+
+@router.post("/{application_id}/feedback")
+def send_feedback_route(
+    application_id: str, body: FeedbackIn, current_user: dict = Depends(require_candidate_role)
+) -> Dict[str, Any]:
+    attempt = _submitted_attempt(application_id, current_user)
+    comment = (body.comment or "").strip() or None
+    db_client.table("oa_feedback").upsert(
+        {"attempt_id": attempt["id"], "rating": body.rating, "comment": comment, "updated_at": _now().isoformat()},
+        on_conflict="attempt_id",
+    ).execute()
     return {"ok": True}

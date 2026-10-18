@@ -18,6 +18,7 @@ class Q:
 
     def select(self, *_): return self
     def eq(self, c, v): self.f.append(lambda r: r.get(c) == v); return self
+    def lt(self, c, v): self.f.append(lambda r: str(r.get(c)) < str(v)); return self
     def neq(self, c, v): self.f.append(lambda r: r.get(c) != v); return self
     def in_(self, c, vs): s = set(vs); self.f.append(lambda r: r.get(c) in s); return self
     def order(self, c, desc=False): self.ord = (c, desc); return self

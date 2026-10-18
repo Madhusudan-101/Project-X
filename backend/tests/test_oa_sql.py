@@ -66,6 +66,9 @@ MIGRATIONS = [
     "db/college_onboarding_migration.sql", "db/job_internship_perks_and_colleges_seed.sql",
     "db/job_drives_migration.sql",
     "db/online_assessment_migration.sql", "db/online_assessment_coding_migration.sql",
+    "db/online_assessment_languages_migration.sql", "db/online_assessment_events_migration.sql",
+    "db/online_assessment_proctoring_migration.sql", "db/online_assessment_feedback_migration.sql",
+    "db/online_assessment_precheck_migration.sql",
 ]
 
 fails = []
@@ -89,10 +92,10 @@ cur = conn.cursor()
 cur.execute(PRELUDE)
 for m in MIGRATIONS:
     cur.execute(open(os.path.join(BACKEND, m), encoding="utf-8").read())
-# idempotent: the two OA files must be safely re-runnable
-for m in MIGRATIONS[-2:]:
+# idempotent: every OA file must be safely re-runnable
+for m in MIGRATIONS[-7:]:
     cur.execute(open(os.path.join(BACKEND, m), encoding="utf-8").read())
-check("all migrations apply, OA ones twice", True)
+check("all migrations apply, the seven OA ones twice", True)
 
 
 def rejected(sql, args=()):
@@ -110,9 +113,10 @@ for p in seed:
     tests = p.pop("tests")
     cur.execute(
         "insert into oa_problems(id,title,difficulty,topics,statement_html,constraints_html,function_name,params,"
-        "starter_code,languages,compare,validated) values (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)",
+        "starter_code,languages,compare,validated,signature) values (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)",
         (p["id"], p["title"], p["difficulty"], p["topics"], p["statement_html"], p["constraints_html"],
-         p["function_name"], p["params"], json.dumps(p["starter_code"]), p["languages"], p["compare"], p["validated"]))
+         p["function_name"], p["params"], json.dumps(p["starter_code"]), p["languages"], p["compare"], p["validated"],
+         json.dumps(p["signature"])))
     for i, t in enumerate(tests, 1):
         cur.execute("insert into oa_problem_tests(problem_id,position,args,expected,is_visible) values (%s,%s,%s,%s,%s)",
                     (p["id"], i, json.dumps(t["args"]), json.dumps(t["expected"]), t["is_visible"]))
@@ -180,11 +184,64 @@ check("another student sees neither", other["oa_invites"] == 0 and other["oa_att
 check("hidden tests, submissions and answers are not readable by students",
       all(v in (0, "denied") for k, v in mine.items() if k in ("oa_problem_tests", "oa_submissions", "oa_answers")), mine)
 
+# ── Java / C++, event log, webcam (the three newer migrations) ──────
+cur.execute("select count(*) from oa_problems where validated and not ('java' = any(languages) and 'cpp' = any(languages) and signature is not null)")
+check("every seeded problem offers java + cpp and carries a signature", cur.fetchone()[0] == 0)
+cur.execute("select webcam_mode from oa_assessments where id=%s", (ASM,))
+check("assessments default to no camera", cur.fetchone()[0] == "off")
+check("bad webcam mode rejected", rejected("update oa_assessments set webcam_mode='always' where id=%s", (ASM,)))
+cur.execute("select webcam_mode, webcam_consent_at, snapshots_taken, snapshots_no_face, snapshots_multi_face, events_logged from oa_attempts where id=%s", (ATT,))
+check("attempts start with no consent and zeroed counters", cur.fetchone() == ("off", None, 0, 0, 0, 0))
+for t in ("tab_switch", "tab_return", "window_blur", "window_focus", "fullscreen_exit", "fullscreen_enter",
+          "paste", "copy", "cut", "camera_denied", "camera_lost", "camera_restored"):
+    cur.execute("insert into oa_events(attempt_id,question_id,type,meta) values (%s,%s,%s,%s)", (ATT, Q, t, json.dumps({"length": 3})))
+check("all twelve event types accepted", True)
+check("unknown event type rejected", rejected("insert into oa_events(attempt_id,type) values (%s,'screen_share')", (ATT,)))
+cur.execute("insert into oa_snapshots(attempt_id,question_id,path,bytes,faces) values (%s,%s,'a/b/1.jpg',1234,1),(%s,%s,'a/b/2.jpg',999,NULL)", (ATT, Q, ATT, Q))
+check("snapshots store an optional face count", True)
+mine_ev = {}
+for t in ("oa_events", "oa_snapshots"):
+    cur.execute("begin"); cur.execute("set local role authenticated")
+    cur.execute("select set_config('request.jwt.claim.sub', %s, true)", (S1,))
+    cur.execute("savepoint sp")
+    try:
+        cur.execute(f"select count(*) from {t}"); mine_ev[t] = cur.fetchone()[0]
+    except psycopg2.Error:
+        mine_ev[t] = "denied"; cur.execute("rollback to savepoint sp")
+    cur.execute("rollback")
+check("students can neither read nor delete their own event trail or photos", all(v in (0, "denied") for v in mine_ev.values()), mine_ev)
+
+cur.execute("select monitor_mode from oa_assessments where id=%s", (ASM,))
+check("assessments default to no display check", cur.fetchone()[0] == "off")
+check("bad monitor mode rejected", rejected("update oa_assessments set monitor_mode='always' where id=%s", (ASM,)))
+cur.execute("update oa_attempts set candidate_details=%s, details_confirmed_at=now(), precheck=%s where id=%s",
+            (json.dumps({"full_name": "A"}), json.dumps({"monitors": {"status": "single"}}), ATT))
+cur.execute("select candidate_details->>'full_name', precheck->'monitors'->>'status' from oa_attempts where id=%s", (ATT,))
+check("an attempt keeps the confirmed details and the pre-test checks", cur.fetchone() == ("A", "single"))
+cur.execute("insert into oa_events(attempt_id,type,meta) values (%s,'multi_monitor','{\"count\":2}')", (ATT,))
+check("multi_monitor is a valid event type, and the camera ones still are", True)
+cur.execute("insert into oa_feedback(attempt_id,rating,comment) values (%s,5,'great')", (ATT,))
+check("one feedback row per attempt", rejected("insert into oa_feedback(attempt_id,rating) values (%s,4)", (ATT,)))
+check("rating must be 1-5", rejected("insert into oa_feedback(attempt_id,rating) values (gen_random_uuid(),6)") and rejected("insert into oa_feedback(attempt_id,rating) values (gen_random_uuid(),0)"))
+check("comment is capped at 2000 characters", rejected("update oa_feedback set comment=%s where attempt_id=%s", ("x" * 2001, ATT)))
+cur.execute("begin"); cur.execute("set local role authenticated"); cur.execute("select set_config('request.jwt.claim.sub', %s, true)", (S1,))
+cur.execute("savepoint sp")
+try:
+    cur.execute("select count(*) from oa_feedback"); fb_visible = cur.fetchone()[0]
+except psycopg2.Error:
+    fb_visible = "denied"; cur.execute("rollback to savepoint sp")
+cur.execute("rollback")
+check("students cannot read feedback rows directly", fb_visible in (0, "denied"), fb_visible)
+
 # ── cascades ────────────────────────────────────────────────────────
 cur.execute("delete from oa_assessments where id=%s", (ASM,))
 cur.execute("select (select count(*) from oa_sections),(select count(*) from oa_questions),(select count(*) from oa_attempts),"
             "(select count(*) from oa_submissions),(select count(*) from oa_answers),(select count(*) from oa_invites)")
 check("deleting an assessment removes everything under it", cur.fetchone() == (0, 0, 0, 0, 0, 0))
+cur.execute("select (select count(*) from oa_events),(select count(*) from oa_snapshots)")
+check("...including its event log and snapshot rows", cur.fetchone() == (0, 0))
+cur.execute("select count(*) from oa_feedback")
+check("...and its feedback", cur.fetchone()[0] == 0)
 cur.execute("select count(*) from oa_problems")
 check("...but never the problem library", cur.fetchone()[0] == len(seed))
 

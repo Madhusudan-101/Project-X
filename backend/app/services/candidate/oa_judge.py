@@ -37,12 +37,16 @@ from typing import Any, Dict, List, Optional
 
 import httpx
 
+from . import oa_drivers, oa_signature
+
 log = logging.getLogger(__name__)
 
-SUPPORTED_LANGUAGES = ("javascript", "python")
+SUPPORTED_LANGUAGES = ("javascript", "python", "java", "cpp")
+TYPED_LANGUAGES = ("java", "cpp")   # need a static signature (see oa_signature)
 
 PER_CASE_SECONDS = 2
 RUN_TIMEOUT_SECONDS = 10
+COMPILE_TIMEOUT_SECONDS = 20   # javac / g++ only
 MAX_SOURCE_CHARS = 50_000
 MAX_CAPTURED_STDOUT = 4_000
 MEMORY_LIMIT_BYTES = 512 * 1024 * 1024
@@ -116,11 +120,16 @@ def python_starter(js_name: str, params: List[str]) -> str:
     return f"def {snake_case(js_name)}({args}):\n    # Write your code here\n    pass\n"
 
 
-def starter_for(language: str, js_name: str, params: List[str], stored: Dict[str, str]) -> str:
+def starter_for(language: str, js_name: str, params: List[str], stored: Dict[str, str],
+                signature: Optional[Dict[str, Any]] = None) -> str:
     if language in stored:
         return stored[language]
     if language == "python":
         return python_starter(js_name, params)
+    if language == "java" and signature:
+        return oa_signature.java_starter(js_name, params, signature)
+    if language == "cpp" and signature:
+        return oa_signature.cpp_starter(js_name, params, signature)
     return f"function {js_name}({', '.join(params)}) {{\n  // Write your code here\n}}\n"
 
 
@@ -244,13 +253,30 @@ emit({ results: out });
 '''
 
 
-def build_program(language: str, source: str, function_name: str) -> str:
+@dataclass
+class Program:
+    text: str
+    filename: str
+    line_offset: int = 0      # candidate line N appears at line N + line_offset in `text`
+    cand_lines: int = 0
+
+
+def build_program(language: str, source: str, function_name: str,
+                  signature: Optional[Dict[str, Any]] = None) -> Program:
+    if language in TYPED_LANGUAGES:
+        if not signature:
+            raise JudgeUnavailable(f"{language} isn't available for this problem (its argument types are unknown).")
+        if language == "java":
+            text, off, n = oa_drivers.java_program(source, function_name, signature, MAX_CAPTURED_STDOUT)
+            return Program(text, "Main.java", off, n)
+        text, off, n = oa_drivers.cpp_program(source, function_name, signature, MAX_CAPTURED_STDOUT)
+        return Program(text, "solution.cpp", off, n)
     fmt = {"source": json.dumps(json.dumps(source)), "fn": json.dumps(json.dumps(function_name)),
            "cap": MAX_CAPTURED_STDOUT}
     if language == "python":
-        return _PY_DRIVER % fmt
+        return Program(_PY_DRIVER % fmt, "main.py")
     if language == "javascript":
-        return _JS_DRIVER % fmt
+        return Program(_JS_DRIVER % fmt, "main.js")
     raise ValueError(f"unsupported language {language}")
 
 
@@ -286,30 +312,39 @@ def outputs_match(actual: Any, expected: Any, compare: str = "exact") -> bool:
 
 # ── Backends ────────────────────────────────────────────────────────
 
-def _run_piston(language: str, program: str, stdin: str) -> Dict[str, Any]:
+_PISTON_LANG = {"python": "python", "javascript": "javascript", "java": "java", "cpp": "c++"}
+
+
+def _run_piston(language: str, prog: Program, stdin: str) -> Dict[str, Any]:
     url = os.getenv("OA_PISTON_URL", "").rstrip("/")
     headers = {"Content-Type": "application/json"}
     if os.getenv("OA_PISTON_TOKEN"):
         headers["Authorization"] = os.environ["OA_PISTON_TOKEN"]
-    name = "main.py" if language == "python" else "main.js"
+    typed = language in TYPED_LANGUAGES
     body = {
-        "language": "python" if language == "python" else "javascript",
+        "language": _PISTON_LANG[language],
         "version": "*",
-        "files": [{"name": name, "content": program}],
+        "files": [{"name": prog.filename, "content": prog.text}],
         "stdin": stdin,
-        "compile_timeout": 10_000,
+        "compile_timeout": COMPILE_TIMEOUT_SECONDS * 1000,
         "run_timeout": RUN_TIMEOUT_SECONDS * 1000,
         "run_memory_limit": MEMORY_LIMIT_BYTES,
     }
     try:
-        res = httpx.post(f"{url}/api/v2/execute", json=body, headers=headers, timeout=RUN_TIMEOUT_SECONDS + 10)
+        res = httpx.post(f"{url}/api/v2/execute", json=body, headers=headers,
+                         timeout=RUN_TIMEOUT_SECONDS + (COMPILE_TIMEOUT_SECONDS if typed else 0) + 10)
     except httpx.HTTPError as e:
         raise JudgeUnavailable(f"Couldn't reach the code execution service: {e.__class__.__name__}") from e
     if res.status_code >= 500 or res.status_code in (401, 403, 429):
         raise JudgeUnavailable(f"Code execution service returned {res.status_code}")
     if res.status_code >= 400:
         raise JudgeUnavailable("Code execution service rejected the request (is the language installed?)")
-    run = (res.json() or {}).get("run") or {}
+    payload = res.json() or {}
+    comp = payload.get("compile") or {}
+    if typed and comp.get("code") not in (None, 0):
+        return {"stdout": "", "stderr": "", "code": None, "timed_out": False,
+                "compile_failed": (comp.get("stderr") or comp.get("output") or comp.get("stdout") or "Compilation failed.")}
+    run = payload.get("run") or {}
     return {
         "stdout": run.get("stdout") or "",
         "stderr": run.get("stderr") or "",
@@ -318,26 +353,49 @@ def _run_piston(language: str, program: str, stdin: str) -> Dict[str, Any]:
     }
 
 
-def _run_local(language: str, program: str, stdin: str) -> Dict[str, Any]:
+def _run_local(language: str, prog: Program, stdin: str) -> Dict[str, Any]:
     if os.getenv("OA_ALLOW_LOCAL_JUDGE") != "1":
         raise JudgeUnavailable("Local judge is disabled.")
     import resource  # POSIX only; local judge is a dev tool
 
-    def limits() -> None:
-        resource.setrlimit(resource.RLIMIT_AS, (MEMORY_LIMIT_BYTES * 2, MEMORY_LIMIT_BYTES * 2))
-        resource.setrlimit(resource.RLIMIT_CPU, (RUN_TIMEOUT_SECONDS, RUN_TIMEOUT_SECONDS + 1))
-        resource.setrlimit(resource.RLIMIT_FSIZE, (1 << 20, 1 << 20))
+    def limits(address_space: bool = True) -> Any:
+        def apply() -> None:
+            if address_space:
+                resource.setrlimit(resource.RLIMIT_AS, (MEMORY_LIMIT_BYTES * 2, MEMORY_LIMIT_BYTES * 2))
+            resource.setrlimit(resource.RLIMIT_CPU, (RUN_TIMEOUT_SECONDS * 2, RUN_TIMEOUT_SECONDS * 2 + 1))
+            resource.setrlimit(resource.RLIMIT_FSIZE, (64 << 20, 64 << 20))
+        return apply
 
-    exe = ["python3", "-I"] if language == "python" else ["node"]
     with tempfile.TemporaryDirectory(prefix="oa_judge_") as tmp:
-        path = os.path.join(tmp, "main.py" if language == "python" else "main.js")
+        env = {"PATH": os.environ.get("PATH", ""), "HOME": tmp, "LANG": "C.UTF-8"}
+        path = os.path.join(tmp, prog.filename)
         with open(path, "w", encoding="utf-8") as f:
-            f.write(program)
+            f.write(prog.text)
+        if language == "python":
+            cmd, address_space = ["python3", "-I", path], True
+        elif language == "javascript":
+            cmd, address_space = ["node", path], True
+        else:
+            if language == "java":
+                build = ["javac", "-nowarn", "-d", tmp, path]
+                cmd, address_space = ["java", "-Xss16m", "-Xmx512m", "-cp", tmp, "Main"], False
+            else:
+                exe = os.path.join(tmp, "solution")
+                build = ["g++", "-std=c++17", "-O2", "-o", exe, path]
+                cmd, address_space = [exe], True
+            try:
+                c = subprocess.run(build, capture_output=True, text=True, cwd=tmp, env=env,
+                                   timeout=COMPILE_TIMEOUT_SECONDS * 2)
+            except subprocess.TimeoutExpired:
+                return {"stdout": "", "stderr": "", "code": None, "timed_out": False,
+                        "compile_failed": "Compilation timed out."}
+            if c.returncode != 0:
+                return {"stdout": "", "stderr": "", "code": None, "timed_out": False,
+                        "compile_failed": c.stderr or c.stdout or "Compilation failed."}
         try:
             p = subprocess.run(
-                exe + [path], input=stdin, capture_output=True, text=True, cwd=tmp,
-                timeout=RUN_TIMEOUT_SECONDS, preexec_fn=limits,
-                env={"PATH": os.environ.get("PATH", ""), "HOME": tmp, "LANG": "C.UTF-8"},
+                cmd, input=stdin, capture_output=True, text=True, cwd=tmp,
+                timeout=RUN_TIMEOUT_SECONDS, preexec_fn=limits(address_space), env=env,
             )
         except subprocess.TimeoutExpired:
             return {"stdout": "", "stderr": "", "code": None, "timed_out": True}
@@ -347,7 +405,7 @@ def _run_local(language: str, program: str, stdin: str) -> Dict[str, Any]:
 # ── Public entry point ──────────────────────────────────────────────
 
 def judge(language: str, source: str, function_name: str, cases: List[Dict[str, Any]],
-          compare: str = "exact") -> JudgeRun:
+          compare: str = "exact", signature: Optional[Dict[str, Any]] = None) -> JudgeRun:
     """Run `source` against `cases` (each {"args": [...], "expected": <json>?}).
 
     Raises JudgeUnavailable / JudgeBusy; never raises for bad candidate code —
@@ -362,7 +420,13 @@ def judge(language: str, source: str, function_name: str, cases: List[Dict[str, 
 
     nonce = "@@OA" + secrets.token_hex(12) + "@@"
     stdin = json.dumps({"nonce": nonce, "cases": [c["args"] for c in cases], "per_case": PER_CASE_SECONDS})
-    program = build_program(language, source, function_name_for(language, function_name))
+    if language in TYPED_LANGUAGES and signature is None:
+        try:   # callers should pass the signature the candidate was shown; this is the fallback
+            signature = oa_signature.infer_signature(
+                [f"p{i}" for i in range(len(cases[0]["args"]))] if cases else [], cases)
+        except (ValueError, IndexError, TypeError):
+            signature = None
+    program = build_program(language, source, function_name_for(language, function_name), signature)
 
     slots = _get_slots()
     if not slots.acquire(timeout=float(os.getenv("OA_JUDGE_QUEUE_WAIT") or 20)):
@@ -373,6 +437,10 @@ def judge(language: str, source: str, function_name: str, cases: List[Dict[str, 
         slots.release()
 
     run = JudgeRun()
+    if raw.get("compile_failed") is not None:
+        run.compile_error = oa_drivers.clean_compile_error(
+            language, raw["compile_failed"], program.line_offset, program.cand_lines, source)
+        return run
     line = next((ln for ln in reversed(raw["stdout"].splitlines()) if ln.startswith(nonce)), None)
     if line is None:
         run.crash_kind = "time_limit" if raw["timed_out"] else "runtime_error"

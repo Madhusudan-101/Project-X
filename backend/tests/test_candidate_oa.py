@@ -42,6 +42,8 @@ oa.get_application = lambda aid: next((a for a in db.store.get("applications", [
 oa.get_job = lambda jid: {"id": jid, "title": "Backend Engineer", "domain": "tech"}
 oa.get_drive_for_job_college = lambda jid, cid: state["drive"]
 oa.get_company_names = lambda ids: {i: "Acme" for i in ids}
+START = {"agreed": True, "details": {"full_name": "Asha Verma", "phone": "+91 98765 43210", "college": "Alpha College",
+         "roll_number": "2024101108", "branch": "CSE", "graduation_year": 2026, "cgpa": 8.7}}
 client = TestClient(main.app)
 
 fails = []
@@ -68,24 +70,24 @@ setup(NOW + timedelta(hours=1), NOW + timedelta(hours=3))
 r = client.get("/candidate/oa/app-1").json()
 check("upcoming state", r["state"] == "upcoming")
 check("coding template: 3 sections 15/30/45", [s["duration_minutes"] for s in r["sections"]] == [15, 30, 45], r["sections"])
-check("start before window refused", client.post("/candidate/oa/app-1/start").status_code == 409)
+check("start before window refused", client.post("/candidate/oa/app-1/start", json=START).status_code == 409)
 setup(None, None)
 check("unscheduled", client.get("/candidate/oa/app-1").json()["state"] == "unscheduled")
 setup(NOW - timedelta(hours=3), NOW - timedelta(hours=1))
 check("closed", client.get("/candidate/oa/app-1").json()["state"] == "closed")
-check("start after window refused", client.post("/candidate/oa/app-1/start").status_code == 409)
+check("start after window refused", client.post("/candidate/oa/app-1/start", json=START).status_code == 409)
 
 # 2. ownership
 setup(NOW - timedelta(hours=1), NOW + timedelta(hours=1))
 check("other student's application is 404", client.get("/candidate/oa/app-2").status_code == 404)
 
 # 3. start + no answer key leak
-r = client.post("/candidate/oa/app-1/start")
+r = client.post("/candidate/oa/app-1/start", json=START)
 check("start ok", r.status_code == 200, r.text)
 sec = r.json()["section"]
 check("section 1 is Coding 1", sec["title"] == "Coding 1" and sec["position"] == 1)
 check("no correct_option in payload", "correct_option" not in r.text)
-check("double start idempotent", client.post("/candidate/oa/app-1/start").status_code == 200
+check("double start idempotent", client.post("/candidate/oa/app-1/start", json=START).status_code == 200
       and len(db.store["oa_attempts"]) == 1)
 
 # 4. autosave + resume
@@ -113,7 +115,7 @@ r = client.post("/candidate/oa/app-1/sections/submit").json()
 check("submit last section finalises", r["status"] == "submitted")
 check("attempt submitted in db", db.store["oa_attempts"][0]["status"] == "submitted")
 check("overview shows submitted", client.get("/candidate/oa/app-1").json()["state"] == "submitted")
-check("no restart after submit", client.post("/candidate/oa/app-1/start").json()["status"] == "submitted")
+check("no restart after submit", client.post("/candidate/oa/app-1/start", json=START).json()["status"] == "submitted")
 check("no answers after submit", client.put("/candidate/oa/app-1/answers", json={"question_id": qid, "answer": "x"}).status_code == 409)
 
 # 8. full timeout of everything finalises, and MCQ grading
@@ -122,7 +124,7 @@ db.store["jobs"] = []
 oa.get_job = lambda jid: {"id": jid, "title": "Marketing Associate", "domain": "non-tech"}
 r = client.get("/candidate/oa/app-1").json()
 check("aptitude template has 5 sections", len(r["sections"]) == 5, [s["title"] for s in r["sections"]])
-client.post("/candidate/oa/app-1/start")
+client.post("/candidate/oa/app-1/start", json=START)
 sec = client.get("/candidate/oa/app-1/session").json()["section"]  # Quant
 keys = {q["id"]: q for q in db.store["oa_questions"]}
 for q in sec["questions"]:

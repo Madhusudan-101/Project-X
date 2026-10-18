@@ -12,7 +12,7 @@ interface Props {
   value: string;
   onChange: (code: string) => void;
   onLanguageChange: (language: string) => void;
-  onPaste?: () => void;
+  onPaste?: (text: string) => void;
   disabled?: boolean;
 }
 
@@ -91,7 +91,7 @@ export function CodeEditor({
           onChange={(e) => onChange(e.target.value)}
           onKeyDown={onKeyDown}
           onScroll={onScroll}
-          onPaste={(_e: ClipboardEvent) => onPaste?.()}
+          onPaste={(e: ClipboardEvent) => onPaste?.(e.clipboardData.getData("text"))}
           readOnly={disabled}
           spellCheck={false}
           autoCapitalize="off"

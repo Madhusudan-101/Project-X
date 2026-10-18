@@ -64,7 +64,7 @@ def seed():
     db.store["oa_problems"] = [
         {"id": "two-sum", "title": "Two Sum", "difficulty": "Easy", "topics": ["Array & Hashing"], "statement_html": "<p>Find two numbers.</p>",
          "constraints_html": "<li>n >= 2</li>", "function_name": "twoSum", "params": ["nums", "target"],
-         "starter_code": {"javascript": "function twoSum(nums, target) {\n}\n"}, "languages": ["javascript", "python"],
+         "starter_code": {"javascript": "function twoSum(nums, target) {\n}\n"}, "languages": ["javascript", "python", "java", "cpp"],
          "validated": True, "active": True},
         {"id": "raw-one", "title": "Raw", "difficulty": "Easy", "topics": [], "statement_html": "<p>x</p>", "constraints_html": "",
          "function_name": "rawOne", "params": ["a"], "starter_code": {}, "languages": ["python"], "validated": False, "active": True},
@@ -87,6 +87,8 @@ oa.get_application = lambda aid: next((a for a in db.store["applications"] if a[
 oa.get_job = lambda jid: {"id": jid, "title": "Backend Engineer", "domain": "tech"}
 oa.get_drive_for_job_college = lambda jid, cid: st["drive"] if cid == COLLEGE else None
 oa.get_company_names = lambda ids: {i: "Acme" for i in ids}
+START = {"agreed": True, "details": {"full_name": "Asha Verma", "phone": "+91 98765 43210", "college": "Alpha College",
+         "roll_number": "2024101108", "branch": "CSE", "graduation_year": 2026, "cgpa": 8.7}}
 client = TestClient(main.app)
 
 fails = []
@@ -170,9 +172,11 @@ check("other student can't open someone else's application", client.get("/candid
 as_candidate("stu-1")
 
 # ── 4. take it ──────────────────────────────────────────────────────
-r = client.post("/candidate/oa/app-1/start").json()
+r = client.post("/candidate/oa/app-1/start", json=START).json()
 q = r["section"]["questions"][0]
-check("session carries the problem, html prompt, both languages", q["prompt_format"] == "html" and q["problem"]["languages"] == ["javascript", "python"], q)
+check("session carries the problem, html prompt, all four languages", q["prompt_format"] == "html" and q["problem"]["languages"] == ["javascript", "python", "java", "cpp"], q)
+check("java + c++ starters are typed from the examples", "public int[] twoSum(int[] nums, int target)" in q["starter_code"]["java"]
+      and "vector<int> twoSum(vector<int>& nums, int target)" in q["starter_code"]["cpp"], q["starter_code"])
 check("python starter generated from the signature", "def two_sum(nums, target):" in q["starter_code"]["python"], q["starter_code"])
 check("visible examples shown as 'name = value'", q["problem"]["examples"][0] == {"input": "nums = [2,7,11,15], target = 9", "expected": "[0,1]"}, q["problem"]["examples"])
 body = str(r)
@@ -185,6 +189,14 @@ r = client.post(RUN, json={"language": "python", "source": GOOD_PY}).json()
 check("run: python passes both examples", r["verdict"] == "accepted" and [c["status"] for c in r["cases"]] == ["pass", "pass"], r)
 r = client.post(RUN, json={"language": "javascript", "source": GOOD_JS}).json()
 check("run: javascript passes", r["verdict"] == "accepted", r)
+GOOD_JAVA = "import java.util.*;\nclass Solution { public int[] twoSum(int[] nums, int target) { Map<Integer,Integer> m = new HashMap<>(); for (int i = 0; i < nums.length; i++) { if (m.containsKey(target - nums[i])) return new int[]{m.get(target - nums[i]), i}; m.put(nums[i], i); } return null; } }"
+GOOD_CPP = "class Solution { public: vector<int> twoSum(vector<int>& nums, int target) { unordered_map<int,int> m; for (int i = 0; i < (int)nums.size(); i++) { if (m.count(target - nums[i])) return {m[target - nums[i]], i}; m[nums[i]] = i; } return {}; } };"
+r = client.post(RUN, json={"language": "java", "source": GOOD_JAVA}).json()
+check("run: java passes both examples", r["verdict"] == "accepted" and [c["status"] for c in r["cases"]] == ["pass", "pass"], r)
+r = client.post(RUN, json={"language": "cpp", "source": GOOD_CPP}).json()
+check("run: c++ passes both examples", r["verdict"] == "accepted" and [c["status"] for c in r["cases"]] == ["pass", "pass"], r)
+r = client.post(RUN, json={"language": "java", "source": GOOD_JAVA.replace("return null;", "return null")}).json()
+check("run: java compile error is reported with a line number", r["verdict"] == "compile_error" and "Line 2:" in r["compile_error"], r)
 r = client.post(RUN, json={"language": "python", "source": GOOD_PY, "custom_args": [[1, 5, 9], 14]}).json()
 check("run: custom input returns the real output", r["cases"][-1]["label"] == "Custom" and r["cases"][-1]["actual"] == "[1,2]" and r["cases"][-1]["expected"] is None, r)
 check("run: wrong custom arity → 422", client.post(RUN, json={"language": "python", "source": GOOD_PY, "custom_args": [[1]]}).status_code == 422)
@@ -192,7 +204,7 @@ r = client.post(RUN, json={"language": "python", "source": "def two_sum(:\n"}).j
 check("run: syntax error reported", r["verdict"] == "compile_error" and "SyntaxError" in r["compile_error"], r)
 r = client.post(RUN, json={"language": "python", "source": "def two_sum(n, t):\n    return n[99]\n"}).json()
 check("run: runtime error shown with line", r["verdict"] == "runtime_error" and "IndexError" in r["cases"][0]["error"], r)
-check("run: language not on the problem → 422", client.post(RUN, json={"language": "java", "source": "x"}).status_code == 422)
+check("run: language not on the problem → 422", client.post(RUN, json={"language": "ruby", "source": "x"}).status_code == 422)
 check("run: empty source → 422", client.post(RUN, json={"language": "python", "source": "  "}).status_code == 422)
 check("run is not stored", "oa_submissions" not in db.store or not db.store["oa_submissions"])
 
@@ -224,6 +236,33 @@ a = db.store["oa_attempts"][0]
 check("integrity counters", (a["tab_switches"], a["fullscreen_exits"], a["paste_events"]) == (4, 1, 2), a)
 check("unknown event type rejected", client.post("/candidate/oa/app-1/events", json={"type": "nope"}).status_code == 422)
 
+# ── 4b. timestamped event log ───────────────────────────────────────
+n0 = len(db.store["oa_events"])
+check("every event above was logged with a server timestamp", n0 == 7 and all(e.get("occurred_at") for e in db.store["oa_events"]), db.store.get("oa_events"))
+BIG = "x = 1\n" * 1000
+client.post("/candidate/oa/app-1/events", json={"type": "paste", "question_id": QID,
+            "detail": {"text": BIG, "length": len(BIG), "target": "editor", "evil": "<script>", "away_ms": "no"}})
+client.post("/candidate/oa/app-1/events", json={"type": "tab_return", "question_id": "not-a-question", "detail": {"away_ms": 4200}})
+client.post("/candidate/oa/app-1/events", json={"type": "copy", "question_id": QID, "detail": {"text": "Given an array of integers", "target": "other"}})
+ev = db.store["oa_events"][n0:]
+p_ev, ret_ev, copy_ev = ev
+check("paste keeps its question, capped text, full length and target", p_ev["question_id"] == QID and len(p_ev["meta"]["text"]) == 4000
+      and p_ev["meta"]["length"] == len(BIG) and p_ev["meta"]["truncated"] is True and p_ev["meta"]["target"] == "editor", p_ev["meta"].keys())
+check("unknown detail keys and bad types are dropped", set(p_ev["meta"]) == {"text", "length", "truncated", "target"}, p_ev["meta"].keys())
+check("a question outside the current section is not recorded", ret_ev["question_id"] is None and ret_ev["meta"] == {"away_ms": 4200}, ret_ev)
+check("copy is logged but is not a counter", copy_ev["meta"]["text"].startswith("Given an array") and db.store["oa_attempts"][0]["paste_events"] == 3
+      and db.store["oa_attempts"][0]["tab_switches"] == 4, db.store["oa_attempts"][0])
+import app.routers.candidate.assessment as _oa_mod
+_oa_mod.MAX_EVENTS_PER_ATTEMPT = len(db.store["oa_events"])
+client.post("/candidate/oa/app-1/events", json={"type": "tab_switch"})
+check("past the cap: counters still count, the log stops", len(db.store["oa_events"]) == _oa_mod.MAX_EVENTS_PER_ATTEMPT
+      and db.store["oa_attempts"][0]["tab_switches"] == 5)
+db.store["oa_attempts"][0]["tab_switches"] = 4   # restore for the later assertions
+_oa_mod.MAX_EVENTS_PER_ATTEMPT = 2000
+
+check("feedback is closed until the assessment is submitted", client.get("/candidate/oa/app-1/feedback").status_code == 409
+      and client.post("/candidate/oa/app-1/feedback", json={"rating": 5}).status_code == 409 and not db.store.get("oa_feedback"))
+
 # ── 5. locking ──────────────────────────────────────────────────────
 as_company()
 check("assessment locked once someone started", put(GOOD).status_code == 409 and client.delete(URL).status_code == 409)
@@ -247,23 +286,212 @@ check("no running code after submission", client.post(RUN, json={"language": "py
 as_company()
 res = client.get(URL + "/results").json()
 row = res["rows"][0]
-check("results row", row["state"] == "submitted" and row["percent"] == 100.0 and row["tab_switches"] == 4 and row["flagged"] is True and row["paste_events"] == 2, row)
-check("results stats", res["stats"] == {"invited": 1, "started": 1, "submitted": 1, "average_percent": 100.0, "flagged": 1}, res["stats"])
+check("results row", row["state"] == "submitted" and row["percent"] == 100.0 and row["tab_switches"] == 4 and row["flagged"] is True and row["paste_events"] == 3, row)
+check("results stats", res["stats"] == {"invited": 1, "started": 1, "submitted": 1, "average_percent": 100.0, "flagged": 1, "average_rating": None, "feedback_count": 0}, res["stats"])
 d = client.get(URL + "/results/app-1").json()
 cq = next(x for x in d["questions"] if x["qtype"] == "coding")
 check("detail: every submission with its code", len(cq["submissions"]) == 4 and "def two_sum" in cq["submissions"][0]["source"] and cq["best_score"] == 100.0, cq["best_score"])
 mqd = next(x for x in d["questions"] if x["qtype"] == "mcq")
 check("detail: mcq shows chosen vs correct", mqd["chosen_option"] == 1 and mqd["correct_option"] == 1)
+tl = d["events"]
+check("detail: timeline is ordered, placed on the clock and on a question",
+      [e["type"] for e in tl["items"]][:2] == ["tab_switch", "tab_switch"] and all(e["offset_seconds"] is not None for e in tl["items"]), tl["items"][:2])
+big = next(e for e in tl["items"] if e["type"] == "paste" and e["detail"].get("length") == len(BIG))
+check("detail: paste shows where and what", big["question"]["title"] and big["detail"]["text"].startswith("x = 1"), big)
+check("detail: summary counts", tl["counts"]["tab_switch"] == 4 and tl["counts"]["paste"] == 3 and tl["largest_paste"] == len(BIG) and tl["capped"] is False, tl["counts"])
 check("no attempt → 404 detail", client.get(URL + "/results/app-2").status_code == 404)
+
+# ── 7a. candidate feedback ──────────────────────────────────────────
+as_candidate()
+check("no feedback yet", client.get("/candidate/oa/app-1/feedback").json() == {"submitted": False, "rating": None, "comment": None})
+for bad in ({"rating": 0}, {"rating": 6}, {"rating": "x"}, {"rating": 3, "comment": "x" * 2001}, {}):
+    check(f"feedback rejects {str(bad)[:30]}", client.post("/candidate/oa/app-1/feedback", json=bad).status_code == 422)
+check("a rating alone is enough", client.post("/candidate/oa/app-1/feedback", json={"rating": 4}).json() == {"ok": True})
+check("the comment is optional and blanks become null", db.store["oa_feedback"][0]["comment"] is None)
+check("a later submit updates, never duplicates", client.post("/candidate/oa/app-1/feedback", json={"rating": 5, "comment": "  Smooth test, fair questions.  "}).status_code == 200
+      and len(db.store["oa_feedback"]) == 1 and db.store["oa_feedback"][0]["comment"] == "Smooth test, fair questions.")
+check("the candidate sees what they sent", client.get("/candidate/oa/app-1/feedback").json() == {"submitted": True, "rating": 5, "comment": "Smooth test, fair questions."})
+as_candidate("stu-2")
+check("another student can't read or write it", client.get("/candidate/oa/app-1/feedback").status_code == 404 and client.post("/candidate/oa/app-1/feedback", json={"rating": 1}).status_code == 404)
+as_candidate()
+as_company()
+res = client.get(URL + "/results").json()
+check("results: average rating + count + per-candidate rating", res["stats"]["average_rating"] == 5.0 and res["stats"]["feedback_count"] == 1 and res["rows"][0]["rating"] == 5, res["stats"])
+fb = client.get(URL + "/results/app-1").json()["feedback"]
+check("detail: the candidate's words reach the recruiter", fb["rating"] == 5 and fb["comment"] == "Smooth test, fair questions.", fb)
+as_company("co-user-2")
+check("other company sees no feedback", client.get(URL + "/results/app-1").status_code == 404)
+as_company()
+
+# ── 7b. code similarity ─────────────────────────────────────────────
+att1 = db.store["oa_attempts"][0]
+db.store["oa_submissions"] = [x for x in db.store["oa_submissions"] if x["language"] == "python"]   # app-1's best is its python solution
+db.store["oa_attempts"].append({**att1, "id": "att-2", "application_id": "app-2", "student_id": "stu-2"})
+COPY_PY = GOOD_PY.replace("seen", "cache").replace("nums", "arr").replace("target", "goal").replace(" n ", " v ").replace("[n]", "[v]").replace("i, n in", "k, v in").replace(", i]", ", k]")
+db.store["oa_submissions"].append({"id": "sub-x", "attempt_id": "att-2", "question_id": QID, "language": "python", "source": COPY_PY,
+                                   "verdict": "accepted", "passed": 5, "total": 5, "score": 100, "created_at": "2026-10-16T12:00:00+00:00"})
+sim = client.get(URL + "/similarity").json()
+sq = next(x for x in sim["questions"] if x["question_id"] == QID)
+check("similarity: the renamed copy is flagged high", len(sq["pairs"]) == 1 and sq["pairs"][0]["level"] == "high" and sq["pairs"][0]["similarity"] >= 0.9, sq)
+check("similarity: names both candidates, summary + caveat", {sq["pairs"][0]["a"]["name"], sq["pairs"][0]["b"]["name"]} == {"Student stu-1", "Student stu-2"}
+      and sim["summary"] == {"flagged_pairs": 1, "candidates_involved": 2} and "not proof" in sim["note"], sim["summary"])
+cmp_ = client.get(URL + "/similarity/compare", params={"question_id": QID, "a": "app-1", "b": "app-2"}).json()
+check("similarity: side-by-side with the shared lines marked", cmp_["comparable"] and cmp_["a"]["source"] == GOOD_PY and cmp_["b"]["source"] == COPY_PY
+      and cmp_["a"]["matched_lines"] and cmp_["b"]["matched_lines"] and cmp_["level"] == "high", cmp_["a"]["matched_lines"])
+db.store["oa_submissions"][-1]["source"] = PARTIAL_PY
+check("similarity: a different solution is not flagged", client.get(URL + "/similarity").json()["summary"]["flagged_pairs"] == 0)
+check("similarity: a candidate without code → 404", client.get(URL + "/similarity/compare", params={"question_id": QID, "a": "app-1", "b": "app-9"}).status_code == 404)
+check("similarity: the other company can't see it", (lambda: (as_company("co-user-2"), client.get(URL + "/similarity").status_code)[1])() == 404)
+as_company()
+db.store["oa_attempts"] = [x for x in db.store["oa_attempts"] if x["id"] != "att-2"]
+db.store["oa_submissions"] = [x for x in db.store["oa_submissions"] if x["id"] != "sub-x"]
 
 # ── 8. expiry enforced on the server for code endpoints ─────────────
 seed(); put(GOOD); client.post(URL + "/invites", json={"all": True}); sent.clear()
 as_candidate()
-q = client.post("/candidate/oa/app-1/start").json()["section"]["questions"][0]
+q = client.post("/candidate/oa/app-1/start", json=START).json()["section"]["questions"][0]
 backdate(16)   # coding section is 15 min
 r = client.post(f"/candidate/oa/app-1/questions/{q['id']}/submit", json={"language": "python", "source": GOOD_PY})
 check("submit after the section expired is refused", r.status_code == 409, r.text)
 check("nothing was graded", not db.store.get("oa_submissions"))
+
+# ── 9. webcam snapshots ─────────────────────────────────────────────
+import base64
+from app.services.candidate import oa_snapshots as snaps
+stored_objs = {}
+snaps.upload = lambda path, data: stored_objs.__setitem__(path, data)
+snaps.signed_urls = lambda paths: {p: "https://signed.example/" + p for p in paths}
+JPEG = b"\xff\xd8\xff\xe0" + b"j" * 200 + b"\xff\xd9"
+IMG = "data:image/jpeg;base64," + base64.b64encode(JPEG).decode()
+def snap(**kw): return client.post("/candidate/oa/app-1/snapshots", json={"image": IMG, **kw})
+
+as_company(); seed()
+check("webcam_mode must be off|optional|required", put({**GOOD, "webcam_mode": "always"}).status_code == 422)
+r = put({**GOOD, "webcam_mode": "required"}).json()
+check("company can require the camera", r["webcam_mode"] == "required" and client.get(URL).json()["webcam_mode"] == "required", r)
+client.post(URL + "/invites", json={"all": True})
+as_candidate()
+ov = client.get("/candidate/oa/app-1").json()
+check("instructions page learns the camera policy", ov["webcam_mode"] == "required" and ov["snapshot_retention_days"] == 30, ov)
+r = client.post("/candidate/oa/app-1/start", json=START)
+check("required camera: can't start without consenting", r.status_code == 409 and not db.store.get("oa_attempts"), r.text)
+r = client.post("/candidate/oa/app-1/start", json={**START, "webcam_consent": False})
+check("required camera: explicit 'no' is refused too", r.status_code == 409)
+r = client.post("/candidate/oa/app-1/start", json={**START, "webcam_consent": True}).json()
+check("consent starts the attempt with the camera active", r["webcam"] == {"mode": "required", "active": True, "interval_seconds": 60}
+      and db.store["oa_attempts"][0]["webcam_consent_at"], r.get("webcam"))
+q1 = r["section"]["questions"][0]["id"]
+check("a snapshot is stored under the attempt and question", snap(question_id=q1, faces=1).json() == {"ok": True, "stored": True}
+      and len(stored_objs) == 1 and next(iter(stored_objs.values())) == JPEG and db.store["oa_snapshots"][0]["question_id"] == q1)
+check("snapshots closer than the server floor are dropped", snap().json() == {"ok": True, "stored": False, "reason": "too_soon"} and len(stored_objs) == 1)
+def age(): db.store["oa_attempts"][0]["last_snapshot_at"] = (NOW - timedelta(minutes=5)).isoformat()
+age()
+check("not a JPEG → 422", client.post("/candidate/oa/app-1/snapshots", json={"image": "data:image/png;base64," + base64.b64encode(JPEG).decode()}).status_code == 422)
+check("JPEG header only → 422", client.post("/candidate/oa/app-1/snapshots", json={"image": base64.b64encode(b"\xff\xd8\xff" + b"x" * 200).decode()}).status_code == 422)
+check("oversized → 422", client.post("/candidate/oa/app-1/snapshots", json={"image": base64.b64encode(JPEG + b"x" * 200_000).decode()}).status_code == 422)
+check("question outside the current section is not recorded", snap(question_id="nope", faces=0).json()["stored"] and db.store["oa_snapshots"][-1]["question_id"] is None)
+age(); snap(faces=3); age(); snap()
+a = db.store["oa_attempts"][0]
+check("counters: taken / no face / several faces", (a["snapshots_taken"], a["snapshots_no_face"], a["snapshots_multi_face"]) == (4, 1, 1), a)
+age(); a["snapshots_taken"] = snaps.MAX_PER_ATTEMPT
+check("per-attempt cap", snap().json() == {"ok": True, "stored": False, "reason": "limit"})
+a["snapshots_taken"] = 4
+client.post("/candidate/oa/app-1/events", json={"type": "camera_lost"})
+check("camera_lost lands on the timeline", db.store["oa_events"][-1]["type"] == "camera_lost")
+
+as_company()
+g = client.get(URL + "/results/app-1/snapshots").json()
+check("gallery: signed urls, time on the clock, question, face counts", g["mode"] == "required" and len(g["items"]) == 4
+      and all(i["url"].startswith("https://signed.example/") for i in g["items"]) and g["items"][0]["question"]["position"] == 1
+      and [i["faces"] for i in g["items"]] == [1, 0, 3, None] and g["retention_days"] == 30, g)
+row = client.get(URL + "/results").json()["rows"][0]
+check("results row carries the snapshot counters", (row["snapshots"], row["snapshots_no_face"], row["snapshots_multi_face"], row["webcam_consented"]) == (4, 1, 1, True), row)
+check("other company can't open the gallery", (lambda: (as_company("co-user-2"), client.get(URL + "/results/app-1/snapshots").status_code)[1])() == 404)
+as_company()
+check("no attempt → 404 gallery", client.get(URL + "/results/app-2/snapshots").status_code == 404)
+
+# optional: a candidate who declines is never photographed, even if their browser tries
+seed(); put({**GOOD, "webcam_mode": "optional"}); client.post(URL + "/invites", json={"all": True}); as_candidate()
+r = client.post("/candidate/oa/app-1/start", json=START).json()
+check("optional camera: can start without consenting, camera inactive", r["webcam"] == {"mode": "optional", "active": False, "interval_seconds": 60}, r["webcam"])
+check("no consent → snapshots refused", snap().status_code == 403 and not db.store.get("oa_snapshots"))
+# off: nothing to consent to
+seed(); put(GOOD); client.post(URL + "/invites", json={"all": True})
+r = client.post("/candidate/oa/app-1/start", json={**START, "webcam_consent": True}).json()
+check("camera off: consent is ignored, no snapshots", r["webcam"]["active"] is False and db.store["oa_attempts"][0]["webcam_consent_at"] is None and snap().status_code == 403)
+
+# ── 9b. start screen: details, declaration, pre-test checks, multiple-monitor check ──
+PROFILE = {"id": "stu-1", "name": "Asha Verma", "email": "asha@x.edu", "college_name": "Alpha College", "branch": "CSE",
+           "graduation_year": 2026, "cgpa": 8.7}
+def fresh(monitor=None, webcam="off"):
+    seed(); db.store["profiles"] = [dict(PROFILE)]; put({**GOOD, "webcam_mode": webcam, **({"monitor_mode": monitor} if monitor else {})})
+    client.post(URL + "/invites", json={"all": True}); as_candidate()
+S = "/candidate/oa/app-1/start"
+as_company(); fresh()
+ov = client.get("/candidate/oa/app-1").json()
+check("the details form can be prefilled from the profile", ov["prefill"]["full_name"] == "Asha Verma" and ov["prefill"]["email"] == "asha@x.edu"
+      and ov["prefill"]["college"] == "Alpha College" and ov["prefill"]["cgpa"] == 8.7 and ov["prefill"]["roll_number"] == "", ov["prefill"])
+check("monitor_mode defaults to off and must be off|optional|required", ov["monitor_mode"] == "off"
+      and (as_company() or put({**GOOD, "monitor_mode": "always"}).status_code == 422))
+as_candidate()
+check("can't start without the declaration + details", client.post(S).status_code == 422 and client.post(S, json={}).status_code == 422
+      and client.post(S, json={"agreed": True}).status_code == 422 and client.post(S, json={"details": START["details"]}).status_code == 422
+      and not db.store.get("oa_attempts"))
+for field, bad in (("full_name", "A"), ("phone", "abc"), ("phone", "12"), ("college", ""), ("roll_number", ""), ("branch", "x"),
+                   ("graduation_year", 1980), ("cgpa", 11), ("cgpa", -1)):
+    r = client.post(S, json={**START, "details": {**START["details"], field: bad}})
+    check(f"details: {field}={bad!r} rejected", r.status_code == 422 and not db.store.get("oa_attempts"))
+check("details: a missing field is rejected", client.post(S, json={**START, "details": {k: v for k, v in START["details"].items() if k != "roll_number"}}).status_code == 422)
+r = client.post(S, json={**START, "precheck": {"webcam": "not_required", "fullscreen": True, "browser": "Mozilla/5.0 X" * 20, "screen": "1920x1080",
+                                              "monitors": {"status": "single", "count": 1, "method": "is-extended"}}})
+a = db.store["oa_attempts"][0]
+check("starting stores the confirmed details, the time and the pre-test checks", r.status_code == 200 and a["candidate_details"] == START["details"]
+      and a["details_confirmed_at"] and a["precheck"]["monitors"]["status"] == "single" and a["precheck"]["fullscreen"] is True
+      and "server_user_agent" in a["precheck"], (r.status_code, r.text[:200]))
+check("an oversized browser string is refused", client.post(S, json={**START, "precheck": {"browser": "x" * 301}}).status_code == 422)
+
+# required monitor check
+as_company(); fresh(monitor="required")
+check("required: starting without a display check is refused", client.post(S, json=START).status_code == 409 and not db.store.get("oa_attempts"))
+r = client.post(S, json={**START, "precheck": {"monitors": {"status": "multiple", "count": 2, "method": "window-management"}}})
+check("required: more than one display is refused with a clear reason", r.status_code == 409 and "display" in r.json()["detail"].lower() and not db.store.get("oa_attempts"), r.text)
+check("required: a bad status is a validation error", client.post(S, json={**START, "precheck": {"monitors": {"status": "maybe"}}}).status_code == 422)
+r = client.post(S, json={**START, "precheck": {"monitors": {"status": "unknown", "method": "unsupported"}}})
+check("required: a browser that can't tell is let in, and it is recorded as unverified",
+      r.status_code == 200 and db.store["oa_attempts"][0]["precheck"]["monitors"] == {"status": "unknown", "count": None, "method": "unsupported"}, r.text[:200])
+as_company(); fresh(monitor="required")
+check("required: a single display starts fine", client.post(S, json={**START, "precheck": {"monitors": {"status": "single", "count": 1, "method": "is-extended"}}}).status_code == 200)
+# optional monitor check only records
+as_company(); fresh(monitor="optional")
+r = client.post(S, json={**START, "precheck": {"monitors": {"status": "multiple", "method": "is-extended"}}})
+check("optional: several displays still start, and are recorded", r.status_code == 200 and db.store["oa_attempts"][0]["precheck"]["monitors"]["status"] == "multiple")
+client.post("/candidate/oa/app-1/events", json={"type": "multi_monitor", "detail": {"count": 3}})
+client.post("/candidate/oa/app-1/events", json={"type": "multi_monitor", "detail": {"count": 999}})
+check("a display appearing mid-test lands on the timeline (count bounded)", [e["meta"].get("count") for e in db.store["oa_events"] if e["type"] == "multi_monitor"] == [3, 16], db.store["oa_events"])
+as_company()
+d = client.get(URL + "/results/app-1").json()
+check("recruiter sees the confirmed details and the pre-test checks", d["details"]["roll_number"] == "2024101108" and d["details_confirmed_at"]
+      and d["precheck"]["monitors"]["status"] == "multiple" and d["monitor_mode"] == "optional" and d["events"]["counts"]["multi_monitor"] == 2, d["precheck"])
+check("monitor_mode is returned by the assessment definition", client.get(URL).json()["monitor_mode"] == "optional")
+as_candidate()
+
+# ── 10. retention purge ─────────────────────────────────────────────
+sys.path.insert(0, str(__import__("pathlib").Path(__file__).resolve().parents[1] / "scripts"))
+import purge_oa_snapshots as purge_mod  # noqa: E402
+purge_mod.db_client = db
+removed_paths = []
+snaps.delete = lambda paths: (removed_paths.extend(paths), None)[1]
+db.store["oa_snapshots"] = [
+    {"id": "old-1", "attempt_id": "x", "path": "a/b/1.jpg", "taken_at": (NOW - timedelta(days=45)).isoformat()},
+    {"id": "old-2", "attempt_id": "x", "path": "a/b/2.jpg", "taken_at": (NOW - timedelta(days=31)).isoformat()},
+    {"id": "new-1", "attempt_id": "x", "path": "a/b/3.jpg", "taken_at": (NOW - timedelta(days=2)).isoformat()},
+]
+check("purge dry run changes nothing", purge_mod.purge(30, dry_run=True) == (0, 0) and len(db.store["oa_snapshots"]) == 3 and not removed_paths)
+check("purge removes only snapshots past retention, files then rows", purge_mod.purge(30) == (2, 0)
+      and sorted(removed_paths) == ["a/b/1.jpg", "a/b/2.jpg"] and [r["id"] for r in db.store["oa_snapshots"]] == ["new-1"])
+snaps.delete = lambda paths: "storage down"
+db.store["oa_snapshots"].append({"id": "old-3", "attempt_id": "x", "path": "a/b/4.jpg", "taken_at": (NOW - timedelta(days=99)).isoformat()})
+check("a storage failure keeps the rows so the next run retries", purge_mod.purge(30) == (0, 1) and any(r["id"] == "old-3" for r in db.store["oa_snapshots"]))
 
 print("\n%d failed" % len(fails) if fails else "\nall passed")
 sys.exit(1 if fails else 0)

@@ -23,6 +23,7 @@ import type { JobDrive } from "@/types/jobs";
 import { AssessmentBuilderDialog } from "./AssessmentBuilderDialog";
 import { InvitesPanel } from "./InvitesPanel";
 import { ResultsPanel } from "./ResultsPanel";
+import { SimilarityPanel } from "./SimilarityPanel";
 
 const TEMPLATES: { id: AssessmentTemplate; label: string; hint: string }[] = [
   {
@@ -129,6 +130,7 @@ export function DriveAssessmentCard({ jobId, drive }: { jobId: string; drive: Jo
             <TabsTrigger value="setup">Setup</TabsTrigger>
             <TabsTrigger value="invites">Invites ({data.stats.invited})</TabsTrigger>
             <TabsTrigger value="results">Results ({data.stats.submitted})</TabsTrigger>
+            <TabsTrigger value="similarity">Similarity</TabsTrigger>
           </TabsList>
 
           <TabsContent value="setup" className="space-y-3 pt-3">
@@ -213,6 +215,9 @@ export function DriveAssessmentCard({ jobId, drive }: { jobId: string; drive: Jo
           </TabsContent>
           <TabsContent value="results" className="pt-3">
             <ResultsPanel jobId={jobId} driveId={drive.id} />
+          </TabsContent>
+          <TabsContent value="similarity" className="pt-3">
+            <SimilarityPanel jobId={jobId} driveId={drive.id} />
           </TabsContent>
         </Tabs>
       )}

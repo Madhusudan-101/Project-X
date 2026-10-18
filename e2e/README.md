@@ -9,6 +9,7 @@ Real Chromium driving the real **frontend** (Vite dev server), the real **FastAP
 | Gemini job scoring | a fixed 72% / weighted-composite result (`backend_server.py`) |
 | LiveKit room/dispatch API | no-op stub (the signed participant token is still real) |
 | Camera / microphone | Chromium fake media devices |
+| Supabase Storage (OA camera snapshots) | in-memory store served from `/__e2e/files/` (`backend_server.py`) |
 
 Code execution for online assessments is **real** (local judge), using the repo's own OA problem
 library (`backend/db/seed/oa_problems.json`) and reference solutions.
@@ -34,6 +35,7 @@ Every test calls `POST /__e2e/reset` first, so the run is one worker, fully isol
 | `oa.spec.ts` | assessment overview, consent, timed sections, real Run/Submit grading (accepted / wrong / compile / runtime / TLE), throttle, autosave across reload, one-way sections, answer-key secrecy, window gating, ownership |
 | `company.spec.ts` | dashboard, job list filters, 4-step create-job wizard, applicants table, shortlisting |
 | `company-assessment.spec.ts` | template assessment, invite-only gating, candidate solves, results back to company, tenant isolation |
+| `oa-features.spec.ts` | the start screen's permissions step (camera consent, tips, one item opening after another), the multiple-monitor check (blocked / unverified / a display plugged in mid-test; hardware simulated by overriding `screen.isExtended`), Java/C++ in the editor (real judge), fake-camera snapshots + recruiter gallery, camera denied, optional/off modes, the builder's camera setting, fullscreen on Start, the post-submit feedback card (stars + comment, read by the recruiter), the integrity event timeline (paste text, tab leave/return), similarity flag + side-by-side |
 | `college.spec.ts` | all pages, roster, add student, CSV upload (good + bad), search, export, campus drive, analytics |
 | `admin.spec.ts` | KPIs, every sidebar page, date range, search, access control |
 | `ai-interview.spec.ts` | session start (real LiveKit JWT), graceful media failure, quota, agent report webhook (secret, idempotent, ownership) |

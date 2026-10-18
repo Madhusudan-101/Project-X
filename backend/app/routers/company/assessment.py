@@ -36,7 +36,7 @@ from ...crud import (
     list_drives_for_job,
 )
 from ...deps import db_client, require_company_role
-from ...services.candidate import oa_judge
+from ...services.candidate import oa_judge, oa_similarity, oa_snapshots
 from ...services.candidate.oa_bank import template_sections
 from ...services.notifications import oa_emails
 from ..candidate.assessment import _first, _parse_ts, format_args, provision_template
@@ -76,6 +76,10 @@ class SectionIn(BaseModel):
 class AssessmentIn(BaseModel):
     title: str = Field(min_length=1, max_length=200)
     invite_mode: str = Field(default="invited", pattern="^(all|invited)$")
+    # Webcam snapshots during the test. 'required' blocks starting without agreeing to the camera.
+    webcam_mode: str = Field(default="off", pattern="^(off|optional|required)$")
+    # Multiple-display check before the test. 'required' blocks a candidate whose browser reports more than one.
+    monitor_mode: str = Field(default="off", pattern="^(off|optional|required)$")
     template: Optional[str] = Field(default=None, pattern="^(coding|analytics|aptitude)$")
     sections: Optional[List[SectionIn]] = Field(default=None, max_length=MAX_SECTIONS)
 
@@ -143,6 +147,8 @@ def _definition(assessment: dict) -> Dict[str, Any]:
         "id": assessment["id"],
         "title": assessment["title"],
         "invite_mode": assessment.get("invite_mode", "invited"),
+        "webcam_mode": assessment.get("webcam_mode") or "off",
+        "monitor_mode": assessment.get("monitor_mode") or "off",
         "locked": bool(attempts),
         "coding_enabled": oa_judge.judge_enabled(),
         "stats": {
@@ -275,14 +281,16 @@ def put_assessment(
     if existing:
         db_client.table("oa_sections").delete().eq("assessment_id", existing["id"]).execute()
         db_client.table("oa_assessments").update(
-            {"title": body.title, "invite_mode": body.invite_mode}
+            {"title": body.title, "invite_mode": body.invite_mode, "webcam_mode": body.webcam_mode,
+             "monitor_mode": body.monitor_mode}
         ).eq("id", existing["id"]).execute()
-        assessment = {**existing, "title": body.title, "invite_mode": body.invite_mode}
+        assessment = {**existing, "title": body.title, "invite_mode": body.invite_mode,
+                      "webcam_mode": body.webcam_mode, "monitor_mode": body.monitor_mode}
     else:
         assessment = _first(
             db_client.table("oa_assessments").insert({
                 "drive_id": drive["id"], "title": body.title, "invite_mode": body.invite_mode,
-                "created_by": current_user["id"],
+                "webcam_mode": body.webcam_mode, "monitor_mode": body.monitor_mode, "created_by": current_user["id"],
             }).execute()
         )
     try:
@@ -467,6 +475,11 @@ def _row(app_id: str, inv: Optional[dict], att: Optional[dict], person: dict) ->
         "tab_switches": tabs,
         "fullscreen_exits": int(att.get("fullscreen_exits") or 0) if att else 0,
         "paste_events": int(att.get("paste_events") or 0) if att else 0,
+        "snapshots": int(att.get("snapshots_taken") or 0) if att else 0,
+        "snapshots_no_face": int(att.get("snapshots_no_face") or 0) if att else 0,
+        "snapshots_multi_face": int(att.get("snapshots_multi_face") or 0) if att else 0,
+        "webcam_mode": (att.get("webcam_mode") or "off") if att else "off",
+        "webcam_consented": bool(att and att.get("webcam_consent_at")),
         "flagged": tabs > FLAG_TAB_SWITCHES,
     }
 
@@ -482,6 +495,11 @@ def results(job_id: str, drive_id: str, current_user: dict = Depends(require_com
     apps = {a["id"]: a for a in list_applications_for_job(job_id) if a["id"] in ids}
     people = get_profiles_basic([a["student_id"] for a in apps.values()])
     rows = [_row(i, invites.get(i), attempts.get(i), people.get(apps[i]["student_id"], {})) for i in apps]
+    ratings = _ratings([a["id"] for a in attempts.values()])
+    for r in rows:
+        att = attempts.get(r["application_id"])
+        r["rating"] = ratings.get(att["id"]) if att else None
+    given = [r["rating"] for r in rows if r["rating"] is not None]
     scored = [r["percent"] for r in rows if r["percent"] is not None]
     return {
         "rows": rows,
@@ -491,6 +509,8 @@ def results(job_id: str, drive_id: str, current_user: dict = Depends(require_com
             "submitted": sum(1 for r in rows if r["state"] == "submitted"),
             "average_percent": round(sum(scored) / len(scored), 1) if scored else None,
             "flagged": sum(1 for r in rows if r["flagged"]),
+            "average_rating": round(sum(given) / len(given), 1) if given else None,
+            "feedback_count": len(given),
         },
     }
 
@@ -555,4 +575,235 @@ def result_detail(
         "assessment_title": assessment["title"],
         "questions": detail_qs,
         "section_titles": {s["position"]: s["title"] for s in definition["sections"]},
+        "events": _timeline(attempt, questions, sec_pos),
+        "feedback": _feedback(attempt["id"]),
+        "details": attempt.get("candidate_details"),
+        "details_confirmed_at": str(attempt["details_confirmed_at"]) if attempt.get("details_confirmed_at") else None,
+        "precheck": attempt.get("precheck"),
+        "monitor_mode": assessment.get("monitor_mode") or "off",
+    }
+
+
+def _ratings(attempt_ids: List[str]) -> Dict[str, int]:
+    out: Dict[str, int] = {}
+    for chunk in _chunks(attempt_ids):
+        for r in db_client.table("oa_feedback").select("attempt_id, rating").in_("attempt_id", chunk).execute().data or []:
+            out[r["attempt_id"]] = int(r["rating"])
+    return out
+
+
+def _feedback(attempt_id: str) -> Optional[Dict[str, Any]]:
+    row = _first(db_client.table("oa_feedback").select("rating, comment, created_at, updated_at")
+                 .eq("attempt_id", attempt_id).limit(1).execute())
+    if not row:
+        return None
+    return {"rating": int(row["rating"]), "comment": row.get("comment"),
+            "at": str(row.get("updated_at") or row.get("created_at") or "")}
+
+
+MAX_TIMELINE_EVENTS = 2000
+
+
+def _timeline(attempt: dict, questions: List[dict], sec_pos: Dict[str, int]) -> Dict[str, Any]:
+    """The attempt's integrity events in order, each placed on the clock and on a question."""
+    rows = (
+        db_client.table("oa_events").select("type, question_id, occurred_at, meta")
+        .eq("attempt_id", attempt["id"]).order("occurred_at", desc=False).limit(MAX_TIMELINE_EVENTS)
+        .execute().data or []
+    )
+    where = {q["id"]: {"section": sec_pos.get(q["section_id"]), "position": q["position"], "title": q["title"]}
+             for q in questions}
+    started = _parse_ts(attempt["started_at"])
+    items: List[Dict[str, Any]] = []
+    counts: Dict[str, int] = {}
+    largest_paste = 0
+    for r in rows:
+        at = _parse_ts(r["occurred_at"])
+        meta = r.get("meta") or {}
+        counts[r["type"]] = counts.get(r["type"], 0) + 1
+        if r["type"] == "paste":
+            largest_paste = max(largest_paste, int(meta.get("length") or 0))
+        items.append({
+            "type": r["type"], "at": str(r["occurred_at"]),
+            "offset_seconds": max(0, int((at - started).total_seconds())) if at and started else None,
+            "question": where.get(r.get("question_id")), "detail": meta,
+        })
+    return {"items": items, "counts": counts, "largest_paste": largest_paste,
+            "logged": int(attempt.get("events_logged") or 0), "capped": len(rows) >= MAX_TIMELINE_EVENTS}
+
+
+# ── Code similarity ─────────────────────────────────────────────────
+
+SIMILARITY_NOTE = (
+    "Similarity is evidence to review, not proof. Short or textbook solutions converge honestly, "
+    "so shared fingerprints are weighted by how rare they are across this drive, and the starter code "
+    "is ignored. Open the side-by-side view before acting on a flag."
+)
+MAX_COMPARED_PER_QUESTION = 1500
+
+
+def _chunks(items: List[str], n: int = 100) -> List[List[str]]:
+    return [items[i:i + n] for i in range(0, len(items), n)]
+
+
+def _display_name(person: dict) -> str:
+    return person.get("name") or " ".join(x for x in [person.get("first_name"), person.get("last_name")] if x) or "Candidate"
+
+
+def _similarity_inputs(job_id: str, assessment: dict) -> Dict[str, Any]:
+    """Each candidate's final code per coding question, ready to compare."""
+    attempts = {a["id"]: a for a in _attempts(assessment["id"])}
+    sections = db_client.table("oa_sections").select("id, position").eq("assessment_id", assessment["id"]).execute().data or []
+    sec_pos = {x["id"]: x["position"] for x in sections}
+    questions = [q for q in (db_client.table("oa_questions").select("*")
+                             .in_("section_id", list(sec_pos)).execute().data or [])
+                 if q["qtype"] == "coding" and q.get("problem_id")] if sec_pos else []
+    qids = [q["id"] for q in questions]
+    starters = {p["id"]: (p.get("starter_code") or {}) for p in (
+        db_client.table("oa_problems").select("id, starter_code").in_("id", list({q["problem_id"] for q in questions}))
+        .execute().data or [])} if questions else {}
+
+    best: Dict[tuple, dict] = {}
+    for chunk in _chunks(list(attempts)):
+        if not qids:
+            break
+        for sub in db_client.table("oa_submissions").select("attempt_id, question_id, language, source, score, created_at") \
+                .in_("attempt_id", chunk).in_("question_id", qids).execute().data or []:
+            k = (sub["attempt_id"], sub["question_id"])
+            cur = best.get(k)
+            if not cur or (float(sub["score"]), str(sub["created_at"])) > (float(cur["score"]), str(cur["created_at"])):
+                best[k] = sub
+        for ans in db_client.table("oa_answers").select("attempt_id, question_id, language, answer") \
+                .in_("attempt_id", chunk).in_("question_id", qids).execute().data or []:
+            k = (ans["attempt_id"], ans["question_id"])
+            if k not in best and ans.get("answer") and ans.get("language"):   # never submitted: use the saved draft
+                best[k] = {"language": ans["language"], "source": ans["answer"], "score": -1, "created_at": "", "draft": True}
+
+    apps = {a["id"]: a for a in list_applications_for_job(job_id)}
+    people = get_profiles_basic([a["student_id"] for a in apps.values()])
+    names = {app_id: _display_name(people.get(a["student_id"], {})) for app_id, a in apps.items()}
+    return {"attempts": attempts, "questions": questions, "sec_pos": sec_pos, "starters": starters, "best": best, "names": names}
+
+
+def _prepare_solutions(inputs: Dict[str, Any], question: dict) -> Dict[str, "oa_similarity.Solution"]:
+    out: Dict[str, oa_similarity.Solution] = {}
+    for (attempt_id, qid), sub in inputs["best"].items():
+        if qid != question["id"] or sub["language"] not in oa_similarity.LANGUAGES:
+            continue
+        app_id = inputs["attempts"][attempt_id]["application_id"]
+        starter = (inputs["starters"].get(question["problem_id"]) or {}).get(sub["language"], "")
+        sol = oa_similarity.prepare(app_id, sub["language"], sub["source"], starter)
+        sol.draft = bool(sub.get("draft"))
+        out[app_id] = sol
+    return out
+
+
+@router.get(_BASE + "/similarity")
+def similarity(
+    job_id: str, drive_id: str,
+    min_similarity: float = Query(default=oa_similarity.LEVEL_MEDIUM, ge=0.3, le=1.0),
+    current_user: dict = Depends(require_company_role),
+) -> Dict[str, Any]:
+    """Pairs of candidates whose code for the same question looks copied, per question."""
+    job, drive = _owned_drive(job_id, drive_id, current_user)
+    assessment = _need_assessment(drive)
+    inputs = _similarity_inputs(job_id, assessment)
+    names = inputs["names"]
+    report: List[Dict[str, Any]] = []
+    involved: set = set()
+    flagged_pairs = 0
+    for q in sorted(inputs["questions"], key=lambda x: (inputs["sec_pos"].get(x["section_id"], 0), x["position"])):
+        sols = _prepare_solutions(inputs, q)
+        usable = [s for s in sols.values() if s.usable][:MAX_COMPARED_PER_QUESTION]
+        matches = oa_similarity.compare_all(usable, min_similarity)
+        flagged_pairs += len(matches)
+        for m in matches:
+            involved.update((m.a, m.b))
+        report.append({
+            "question_id": q["id"], "title": q["title"], "section": inputs["sec_pos"].get(q["section_id"]),
+            "position": q["position"], "compared": len(usable),
+            "skipped": sum(1 for s in sols.values() if not s.usable),
+            "pairs": [{
+                "a": {"application_id": m.a, "name": names.get(m.a, "Candidate"), "draft": sols[m.a].draft},
+                "b": {"application_id": m.b, "name": names.get(m.b, "Candidate"), "draft": sols[m.b].draft},
+                "language": m.language, "similarity": m.similarity, "overlap": m.overlap,
+                "raw_overlap": m.raw_overlap, "level": m.level,
+            } for m in matches],
+            "clusters": [{"size": len(g), "members": [{"application_id": x, "name": names.get(x, "Candidate")} for x in g]}
+                         for g in oa_similarity.clusters(matches) if len(g) >= 3],
+        })
+    return {
+        "note": SIMILARITY_NOTE, "min_similarity": min_similarity,
+        "levels": {"high": oa_similarity.LEVEL_HIGH, "medium": oa_similarity.LEVEL_MEDIUM},
+        "summary": {"flagged_pairs": flagged_pairs, "candidates_involved": len(involved)},
+        "questions": report,
+    }
+
+
+@router.get(_BASE + "/similarity/compare")
+def similarity_compare(
+    job_id: str, drive_id: str,
+    question_id: str = Query(...), a: str = Query(...), b: str = Query(...),
+    current_user: dict = Depends(require_company_role),
+) -> Dict[str, Any]:
+    """Both candidates' code for one question side by side, with the shared lines marked."""
+    job, drive = _owned_drive(job_id, drive_id, current_user)
+    assessment = _need_assessment(drive)
+    inputs = _similarity_inputs(job_id, assessment)
+    question = next((q for q in inputs["questions"] if q["id"] == question_id), None)
+    if not question:
+        raise HTTPException(status_code=404, detail="Coding question not found in this assessment.")
+    sols = _prepare_solutions(inputs, question)
+    if a == b or a not in sols or b not in sols:
+        raise HTTPException(status_code=404, detail="Both candidates need code for this question.")
+    sa, sb = sols[a], sols[b]
+    matches = oa_similarity.compare_all([x for x in (sa, sb) if x.usable], 0.0)
+    match = matches[0] if matches else None
+    lines_a, lines_b = oa_similarity.matched_lines(sa, sb) if sa.usable and sb.usable else ([], [])
+    side = lambda s: {"application_id": s.key, "name": inputs["names"].get(s.key, "Candidate"), "language": s.language,
+                      "source": s.source, "draft": s.draft, "matched_lines": lines_a if s is sa else lines_b,
+                      "skipped": s.skipped}
+    return {
+        "note": SIMILARITY_NOTE, "question": {"id": question["id"], "title": question["title"]},
+        "similarity": match.similarity if match else 0.0, "raw_overlap": match.raw_overlap if match else 0.0,
+        "level": match.level if match else None, "comparable": sa.language == sb.language and sa.usable and sb.usable,
+        "a": side(sa), "b": side(sb),
+    }
+
+
+# ── Webcam snapshots ────────────────────────────────────────────────
+
+@router.get(_BASE + "/results/{application_id}/snapshots")
+def result_snapshots(
+    job_id: str, drive_id: str, application_id: str,
+    current_user: dict = Depends(require_company_role),
+) -> Dict[str, Any]:
+    """The candidate's camera snapshots with short-lived signed URLs (they expire in minutes)."""
+    job, drive = _owned_drive(job_id, drive_id, current_user)
+    assessment = _need_assessment(drive)
+    attempt = _first(db_client.table("oa_attempts").select("*").eq("application_id", application_id)
+                     .eq("assessment_id", assessment["id"]).limit(1).execute())
+    if not attempt:
+        raise HTTPException(status_code=404, detail="No attempt found for that applicant.")
+    rows = (
+        db_client.table("oa_snapshots").select("id, question_id, path, taken_at, faces")
+        .eq("attempt_id", attempt["id"]).order("taken_at", desc=False).limit(oa_snapshots.MAX_PER_ATTEMPT)
+        .execute().data or []
+    )
+    urls = oa_snapshots.signed_urls([r["path"] for r in rows])
+    sections = db_client.table("oa_sections").select("id, position").eq("assessment_id", assessment["id"]).execute().data or []
+    sec_pos = {x["id"]: x["position"] for x in sections}
+    qrows = db_client.table("oa_questions").select("id, section_id, position, title") \
+        .in_("section_id", list(sec_pos)).execute().data or [] if sec_pos else []
+    where = {q["id"]: {"section": sec_pos.get(q["section_id"]), "position": q["position"], "title": q["title"]} for q in qrows}
+    started = _parse_ts(attempt["started_at"])
+    return {
+        "mode": attempt.get("webcam_mode") or "off",
+        "consented_at": str(attempt["webcam_consent_at"]) if attempt.get("webcam_consent_at") else None,
+        "retention_days": oa_snapshots.retention_days(),
+        "items": [{
+            "id": r["id"], "taken_at": str(r["taken_at"]), "faces": r.get("faces"),
+            "offset_seconds": max(0, int((_parse_ts(r["taken_at"]) - started).total_seconds())),
+            "question": where.get(r.get("question_id")), "url": urls.get(r["path"]),
+        } for r in rows],
     }

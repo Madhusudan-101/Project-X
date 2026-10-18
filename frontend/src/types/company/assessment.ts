@@ -33,10 +33,14 @@ export interface AssessmentSection {
   questions: AssessmentQuestion[];
 }
 
+export type WebcamMode = "off" | "optional" | "required";
+
 export interface Assessment {
   id: string;
   title: string;
   inviteMode: InviteMode;
+  webcamMode: WebcamMode;
+  monitorMode: WebcamMode;
   locked: boolean;
   codingEnabled: boolean;
   stats: { invited: number; started: number; submitted: number };
@@ -70,6 +74,8 @@ export interface SectionDraft {
 export interface AssessmentDraft {
   title: string;
   inviteMode: InviteMode;
+  webcamMode?: WebcamMode;
+  monitorMode?: WebcamMode;
   template?: AssessmentTemplate;
   sections?: SectionDraft[];
 }
@@ -105,6 +111,15 @@ export interface ResultRow {
   tabSwitches: number;
   fullscreenExits: number;
   pasteEvents: number;
+  /** camera photos taken / ones where the browser saw nobody / several people */
+  snapshots: number;
+  snapshotsNoFace: number;
+  snapshotsMultiFace: number;
+  /** the candidate's 1-5 rating of the assessment, if they gave one */
+  rating: number | null;
+  /** the camera policy this attempt started under */
+  webcamMode: WebcamMode;
+  webcamConsented: boolean;
   flagged: boolean;
 }
 
@@ -116,6 +131,9 @@ export interface Results {
     submitted: number;
     averagePercent: number | null;
     flagged: number;
+    /** mean of the 1-5 star ratings candidates gave the assessment, and how many gave one */
+    averageRating: number | null;
+    feedbackCount: number;
   };
 }
 
@@ -144,9 +162,159 @@ export interface ResultQuestion {
   submissions?: CodeSubmission[];
 }
 
+export type IntegrityEventType =
+  | "tab_switch"
+  | "tab_return"
+  | "window_blur"
+  | "window_focus"
+  | "fullscreen_exit"
+  | "fullscreen_enter"
+  | "paste"
+  | "copy"
+  | "cut"
+  | "camera_denied"
+  | "camera_lost"
+  | "camera_restored"
+  | "multi_monitor";
+
+export interface IntegrityEvent {
+  type: IntegrityEventType;
+  at: string;
+  /** seconds since the candidate started */
+  offsetSeconds: number | null;
+  question: { section: number | null; position: number; title: string } | null;
+  text?: string;
+  length?: number;
+  truncated?: boolean;
+  target?: "editor" | "other";
+  awayMs?: number;
+}
+
+export interface IntegrityTimeline {
+  items: IntegrityEvent[];
+  counts: Partial<Record<IntegrityEventType, number>>;
+  largestPaste: number;
+  /** events the candidate's browser sent, including any past the log cap */
+  logged: number;
+  capped: boolean;
+}
+
+export interface CandidateFeedback {
+  rating: number;
+  comment: string | null;
+  at: string;
+}
+
+export interface CandidateDetails {
+  fullName: string;
+  phone: string;
+  college: string;
+  rollNumber: string;
+  branch: string;
+  graduationYear: number;
+  cgpa: number;
+}
+
+export interface Precheck {
+  webcam: "granted" | "denied" | "skipped" | "not_required";
+  monitors: {
+    status: "single" | "multiple" | "unknown";
+    count: number | null;
+    method: string | null;
+  } | null;
+  fullscreen: boolean;
+  browser: string | null;
+  screen: string | null;
+}
+
 export interface ResultDetail {
+  details: CandidateDetails | null;
+  detailsConfirmedAt: string | null;
+  precheck: Precheck | null;
+  monitorMode: WebcamMode;
+  feedback: CandidateFeedback | null;
+  events: IntegrityTimeline;
   candidate: ResultRow;
   assessmentTitle: string;
   sectionTitles: Record<number, string>;
   questions: ResultQuestion[];
+}
+
+export type SimilarityLevel = "high" | "medium";
+
+export interface SimilarityPerson {
+  applicationId: string;
+  name: string;
+  /** never submitted: this is the saved editor draft */
+  draft?: boolean;
+}
+
+export interface SimilarityPair {
+  a: SimilarityPerson;
+  b: SimilarityPerson;
+  language: string;
+  /** rarity-weighted share of the shorter solution found in the other (0-1) */
+  similarity: number;
+  overlap: number;
+  /** same, with variable names kept: high means they even share names */
+  rawOverlap: number;
+  level: SimilarityLevel;
+}
+
+export interface SimilarityQuestion {
+  questionId: string;
+  title: string;
+  section: number | null;
+  position: number;
+  compared: number;
+  skipped: number;
+  pairs: SimilarityPair[];
+  clusters: { size: number; members: SimilarityPerson[] }[];
+}
+
+export interface SimilarityReport {
+  note: string;
+  minSimilarity: number;
+  summary: { flaggedPairs: number; candidatesInvolved: number };
+  questions: SimilarityQuestion[];
+}
+
+export interface SimilarityCompareSide {
+  applicationId: string;
+  name: string;
+  language: string;
+  source: string;
+  draft: boolean;
+  matchedLines: number[];
+  skipped: string | null;
+}
+
+export interface SimilarityCompare {
+  note: string;
+  question: { id: string; title: string };
+  similarity: number;
+  rawOverlap: number;
+  level: SimilarityLevel | null;
+  /** same language and enough code on both sides */
+  comparable: boolean;
+  a: SimilarityCompareSide;
+  b: SimilarityCompareSide;
+}
+
+export interface CameraSnapshot {
+  id: string;
+  takenAt: string;
+  offsetSeconds: number;
+  /** faces the candidate's browser counted; null when it couldn't tell */
+  faces: number | null;
+  question: { section: number | null; position: number; title: string } | null;
+  /** short-lived signed URL; null if storage couldn't sign it */
+  url: string | null;
+}
+
+export interface CameraSnapshots {
+  mode: WebcamMode;
+  consentedAt: string | null;
+  retentionDays: number;
+  items: CameraSnapshot[];
 }

@@ -300,3 +300,30 @@ def test_no_runaway_blank_lines_after_drops():
     hunks, segments = build_hunks("A\n\n- x\n\nB\n", "A\n\nB\n")
     out = assemble_final_text(segments, _decide(hunks, "accepted"), {})
     assert "\n\n\n" not in out
+
+
+def test_database_errors_become_json_with_cors_and_name_a_missing_migration():
+    """An unhandled PostgREST error must not look like a network failure to the browser."""
+    import os
+    os.environ.setdefault("SUPABASE_URL", "http://unused")
+    os.environ.setdefault("SUPABASE_SERVICE_ROLE_KEY", "unused")
+    from fastapi.testclient import TestClient
+    from postgrest.exceptions import APIError
+    from app.main import app
+
+    @app.get("/__test/db-schema")
+    def _schema():
+        raise APIError({"message": "Could not find the 'webcam_mode' column of 'oa_assessments' in the schema cache", "code": "PGRST204"})
+
+    @app.get("/__test/db-other")
+    def _other():
+        raise APIError({"message": "duplicate key", "code": "23505"})
+
+    client = TestClient(app, raise_server_exceptions=False)
+    r = client.get("/__test/db-schema", headers={"Origin": "http://localhost:8080"})
+    assert r.status_code == 503
+    assert r.headers["access-control-allow-origin"] == "http://localhost:8080"
+    assert "migration" in r.json()["detail"] and "webcam_mode" in r.json()["detail"] and "reload schema" in r.json()["detail"]
+    r = client.get("/__test/db-other", headers={"Origin": "http://localhost:8080"})
+    assert r.status_code == 500 and r.headers["access-control-allow-origin"] == "http://localhost:8080"
+    assert "duplicate key" not in r.json()["detail"]   # no internals leaked for other errors

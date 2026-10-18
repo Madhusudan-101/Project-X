@@ -23,6 +23,14 @@ export interface OAOverview {
   totalQuestions: number;
   sections: OASection[];
   codingEnabled: boolean;
+  /** off | optional | required: whether snapshots are taken from the candidate's camera */
+  webcamMode: "off" | "optional" | "required";
+  /** off | optional | required: the multiple-display check before the test */
+  monitorMode: OffOptionalRequired;
+  /** what the profile already knows, to prefill the details form */
+  prefill: Partial<OADetailsForm>;
+  snapshotIntervalSeconds: number;
+  snapshotRetentionDays: number;
   attempt: {
     status: "in_progress" | "submitted";
     currentSection: number;
@@ -40,7 +48,7 @@ export interface OAListItem {
   windowEnd: string | null;
 }
 
-export type CodeLanguage = "javascript" | "python";
+export type CodeLanguage = "javascript" | "python" | "java" | "cpp";
 
 export interface OAProblem {
   id: string;
@@ -69,6 +77,10 @@ export interface OASession {
   status: "in_progress" | "submitted";
   serverTime: string;
   codingEnabled: boolean;
+  /** `active` = the candidate agreed, so the browser should send snapshots */
+  webcam: { mode: "off" | "optional" | "required"; active: boolean; intervalSeconds: number };
+  /** the multiple-display check this attempt started under; the test page keeps watching */
+  monitorMode: OffOptionalRequired;
   section: {
     position: number;
     totalSections: number;
@@ -117,4 +129,68 @@ export interface OASubmitResult extends OARunResult {
   submissionsLeft: number;
 }
 
-export type OAEventType = "tab_switch" | "fullscreen_exit" | "paste";
+export type OAEventType =
+  | "tab_switch"
+  | "tab_return"
+  | "window_blur"
+  | "window_focus"
+  | "fullscreen_exit"
+  | "fullscreen_enter"
+  | "paste"
+  | "copy"
+  | "cut"
+  | "camera_denied"
+  | "camera_lost"
+  | "camera_restored"
+  | "multi_monitor";
+
+/** What accompanies an event. Text is capped by the client and again by the server. */
+export interface OAEventExtra {
+  questionId?: string | null;
+  /** paste / copy / cut: the clipboard text */
+  text?: string;
+  /** where it happened: inside the code editor, or elsewhere on the page */
+  target?: "editor" | "other";
+  /** tab_return / window_focus: how long the candidate was away */
+  awayMs?: number;
+  /** multi_monitor: how many displays, when the browser can count them */
+  count?: number;
+}
+
+export type OffOptionalRequired = "off" | "optional" | "required";
+
+/** What the details form asks for. Numbers stay strings while typing. */
+export interface OADetailsForm {
+  fullName: string;
+  email: string;
+  phone: string;
+  college: string;
+  rollNumber: string;
+  branch: string;
+  graduationYear: string;
+  cgpa: string;
+}
+
+export type DisplayStatus = "single" | "multiple" | "unknown";
+
+export interface OADisplayCheck {
+  status: DisplayStatus;
+  count: number | null;
+  method: "is-extended" | "window-management" | "unsupported";
+}
+
+/** What the pre-test checks found; sent with Start and kept for the recruiter. */
+export interface OAPrecheck {
+  webcam: "granted" | "denied" | "skipped" | "not_required";
+  monitors: OADisplayCheck | null;
+  fullscreen: boolean;
+  browser: string;
+  screen: string;
+}
+
+export interface OAStartPayload {
+  webcamConsent: boolean;
+  agreed: boolean;
+  details: Omit<OADetailsForm, "email">;
+  precheck: OAPrecheck;
+}

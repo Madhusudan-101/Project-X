@@ -1,4 +1,4 @@
-import { expect, test, signedIn, API, bearer, apiLogin, anyHydrated, type Page } from "./helpers";
+import { expect, test, signedIn, API, bearer, apiLogin, anyHydrated, beginAssessment, type Page } from "./helpers";
 import fs from "node:fs";
 import path from "node:path";
 
@@ -59,8 +59,7 @@ test.describe("company: online-assessment management", () => {
     await cp.addInitScript((s) => localStorage.setItem("mirracle.auth", JSON.stringify({ state: { session: s }, version: 0 })), session);
     await cp.goto(`http://127.0.0.1:8080/candidate-oa/${appId}`);
     await anyHydrated(cp);
-    await cp.getByRole("checkbox").click();
-    await cp.getByRole("button", { name: "Start assessment" }).click();
+    await beginAssessment(cp);
     await expect(cp.getByText("Section 1 of 3")).toBeVisible();
     await cp.locator("select").first().selectOption("python");
     await cp.locator("textarea").first().fill(solution("two-sum"));

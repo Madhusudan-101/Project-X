@@ -59,7 +59,7 @@ export function ResultsPanel({ jobId, driveId }: { jobId: string; driveId: strin
 
   return (
     <div className="space-y-4">
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
         {tile("Invited", data.stats.invited)}
         {tile("Started", data.stats.started)}
         {tile("Submitted", data.stats.submitted)}
@@ -68,6 +68,12 @@ export function ResultsPanel({ jobId, driveId }: { jobId: string; driveId: strin
           data.stats.averagePercent == null ? "—" : `${data.stats.averagePercent}%`,
         )}
         {tile("Flagged", data.stats.flagged)}
+        {tile(
+          "Candidate rating",
+          data.stats.averageRating == null
+            ? "—"
+            : `${data.stats.averageRating} ★ (${data.stats.feedbackCount})`,
+        )}
       </div>
 
       <div className="flex flex-wrap items-center gap-2 text-xs">
@@ -168,6 +174,10 @@ export function ResultsPanel({ jobId, driveId }: { jobId: string; driveId: strin
                   >
                     {r.flagged && <AlertTriangle className="h-3.5 w-3.5" />}
                     {r.tabSwitches} tab · {r.fullscreenExits} fs · {r.pasteEvents} paste
+                    {r.webcamMode !== "off" &&
+                      ` · ${r.snapshots} photo${r.snapshots === 1 ? "" : "s"}${
+                        r.snapshotsNoFace + r.snapshotsMultiFace > 0 ? " ⚠" : ""
+                      }`}
                   </span>
                 )}
               </TableCell>

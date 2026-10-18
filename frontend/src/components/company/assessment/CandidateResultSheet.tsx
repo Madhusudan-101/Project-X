@@ -1,11 +1,13 @@
 import { useQuery } from "@tanstack/react-query";
-import { Check, X } from "lucide-react";
+import { Check, Star, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Skeleton } from "@/components/ui/skeleton";
 import { companyAssessmentService } from "@/services/api/company/assessment";
 import type { ResultDetail } from "@/types/company/assessment";
 import { fmtDuration } from "./format";
+import { CameraGallery } from "./CameraGallery";
+import { IntegrityTimelineCard } from "./IntegrityTimeline";
 
 const VERDICT: Record<string, string> = {
   accepted: "Accepted",
@@ -62,6 +64,47 @@ export function CandidateResultSheet({
                 value={`${data.candidate.pasteEvents} / ${data.candidate.fullscreenExits}`}
               />
             </dl>
+
+            {(data.details || data.precheck) && <DetailsAndChecks data={data} />}
+
+            {data.feedback && (
+              <section className="space-y-2 rounded-lg border border-border p-4">
+                <div className="flex flex-wrap items-center gap-2">
+                  <h3 className="font-medium">Candidate feedback on the assessment</h3>
+                  <span
+                    className="ml-auto flex gap-0.5"
+                    role="img"
+                    aria-label={`${data.feedback.rating} out of 5 stars`}
+                  >
+                    {[1, 2, 3, 4, 5].map((n) => (
+                      <Star
+                        key={n}
+                        className={
+                          "h-4 w-4 " +
+                          (n <= data.feedback!.rating
+                            ? "fill-amber-400 text-amber-400"
+                            : "text-muted-foreground/40")
+                        }
+                      />
+                    ))}
+                  </span>
+                </div>
+                {data.feedback.comment ? (
+                  <p className="whitespace-pre-wrap text-sm">{data.feedback.comment}</p>
+                ) : (
+                  <p className="text-xs text-muted-foreground">No written comment.</p>
+                )}
+              </section>
+            )}
+
+            <CameraGallery
+              jobId={jobId}
+              driveId={driveId}
+              applicationId={data.candidate.applicationId}
+              mode={data.candidate.webcamMode}
+            />
+
+            <IntegrityTimelineCard timeline={data.events} />
 
             {data.questions.map((q, i) => (
               <section key={i} className="space-y-2 rounded-lg border border-border p-4">
@@ -196,5 +239,98 @@ function Code({
         {source}
       </pre>
     </div>
+  );
+}
+
+const CHECK_TONE = {
+  ok: "text-success",
+  warn: "text-amber-600 dark:text-amber-400",
+  bad: "text-destructive",
+} as const;
+
+function DetailsAndChecks({ data }: { data: ResultDetail }) {
+  const d = data.details;
+  const p = data.precheck;
+  const checks: { label: string; text: string; tone: keyof typeof CHECK_TONE }[] = [];
+  if (p) {
+    checks.push(
+      p.webcam === "not_required"
+        ? { label: "Camera", text: "Not used in this assessment", tone: "ok" }
+        : p.webcam === "granted"
+          ? { label: "Camera", text: "Allowed", tone: "ok" }
+          : {
+              label: "Camera",
+              text: p.webcam === "denied" ? "Blocked by the candidate" : "Skipped",
+              tone: "warn",
+            },
+    );
+    if (data.monitorMode !== "off") {
+      const m = p.monitors;
+      checks.push(
+        !m
+          ? { label: "Displays", text: "Not checked", tone: "warn" }
+          : m.status === "single"
+            ? { label: "Displays", text: "One display", tone: "ok" }
+            : m.status === "multiple"
+              ? {
+                  label: "Displays",
+                  text: m.count ? `${m.count} displays detected` : "More than one display detected",
+                  tone: "bad",
+                }
+              : {
+                  label: "Displays",
+                  text: "Could not be verified (browser unsupported)",
+                  tone: "warn",
+                },
+      );
+    }
+    checks.push({
+      label: "Fullscreen",
+      text: p.fullscreen ? "On at start" : "Not on at start",
+      tone: p.fullscreen ? "ok" : "warn",
+    });
+  }
+  return (
+    <section className="space-y-3 rounded-lg border border-border p-4">
+      <h3 className="font-medium">Candidate details &amp; pre-test checks</h3>
+      {d && (
+        <dl className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm sm:grid-cols-3">
+          {[
+            ["Name", d.fullName],
+            ["Roll number", d.rollNumber],
+            ["Contact", d.phone],
+            ["College", d.college],
+            ["Branch", d.branch],
+            ["Graduation / CGPA", `${d.graduationYear} · ${d.cgpa}`],
+          ].map(([k, v]) => (
+            <div key={k}>
+              <dt className="text-xs text-muted-foreground">{k}</dt>
+              <dd className="font-medium">{v}</dd>
+            </div>
+          ))}
+        </dl>
+      )}
+      {data.detailsConfirmedAt && (
+        <p className="text-xs text-muted-foreground">
+          Confirmed, declaration accepted {new Date(data.detailsConfirmedAt).toLocaleString()}.
+        </p>
+      )}
+      {checks.length > 0 && (
+        <ul className="grid gap-1.5 text-sm sm:grid-cols-3">
+          {checks.map((c) => (
+            <li key={c.label} className="rounded-md border border-border px-3 py-2">
+              <span className="block text-xs text-muted-foreground">{c.label}</span>
+              <span className={"font-medium " + CHECK_TONE[c.tone]}>{c.text}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+      {p?.browser && (
+        <p className="truncate text-xs text-muted-foreground" title={p.browser}>
+          {p.screen ? `${p.screen} · ` : ""}
+          {p.browser}
+        </p>
+      )}
+    </section>
   );
 }

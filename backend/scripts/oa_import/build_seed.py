@@ -26,7 +26,7 @@ os.environ.setdefault("SUPABASE_SERVICE_ROLE_KEY", "unused")
 os.environ.setdefault("OA_JUDGE_BACKEND", "local")
 os.environ.setdefault("OA_ALLOW_LOCAL_JUDGE", "1")
 
-from app.services.candidate import oa_judge  # noqa: E402
+from app.services.candidate import oa_judge, oa_signature  # noqa: E402
 from app.utils.html_sanitize import sanitize_html  # noqa: E402
 
 
@@ -96,12 +96,20 @@ def main() -> None:
         else:
             report["unvalidated"].append(p["id"])
 
+        try:
+            signature = oa_signature.infer_signature(
+                p["params"], [{"args": t["args"], "expected": t["expected"]} for t in tests])
+        except ValueError as e:
+            signature = None
+            report.setdefault("no_signature", {})[p["id"]] = str(e)   # Java / C++ stay off for it
+        languages = ["javascript", "python"] + (["java", "cpp"] if signature else [])
+
         result.append({
             "id": p["id"], "title": p["title"], "difficulty": p["difficulty"], "topics": p["topics"],
             "statement_html": sanitize_html(p["statement_html"]),
             "constraints_html": sanitize_html(p["constraints_html"]),
             "function_name": p["function_name"], "params": p["params"],
-            "starter_code": starter, "languages": ["javascript", "python"],
+            "starter_code": starter, "languages": languages, "signature": signature,
             "compare": compare, "validated": validated, "tests": tests,
         })
     json.dump(result, open(out, "w"), indent=1)

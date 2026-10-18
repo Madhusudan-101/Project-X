@@ -9,7 +9,7 @@
  *   GET  /candidate/oa/{applicationId}/session          current section + questions
  *   PUT  /candidate/oa/{applicationId}/answers          autosave one answer
  *   POST /candidate/oa/{applicationId}/sections/submit  close the current section
- *   POST /candidate/oa/{applicationId}/events           integrity signal (tab switch / fullscreen exit / paste)
+ *   POST /candidate/oa/{applicationId}/events           timestamped integrity event (tab / focus / fullscreen / clipboard)
  *   POST /candidate/oa/{applicationId}/questions/{qid}/run     run visible examples (+ custom input)
  *   POST /candidate/oa/{applicationId}/questions/{qid}/submit  grade against all tests
  */
@@ -17,6 +17,8 @@
 import { request } from "../client";
 import type {
   OACaseResult,
+  OAEventExtra,
+  OAStartPayload,
   OAEventType,
   OAListItem,
   OAOverview,
@@ -28,6 +30,9 @@ import type {
   OASubmitResult,
   CodeLanguage,
 } from "@/types/candidate/assessment";
+
+/** Mirrors the server cap; keeps a huge paste from becoming a huge request. */
+const EVENT_TEXT_LIMIT = 4000;
 
 type Raw = Record<string, unknown>;
 
@@ -65,6 +70,12 @@ function normalizeSession(raw: Raw): OASession {
     status: raw.status as OASession["status"],
     serverTime: raw.server_time as string,
     codingEnabled: Boolean(raw.coding_enabled),
+    monitorMode: (raw.monitor_mode as OASession["monitorMode"]) ?? "off",
+    webcam: {
+      mode: ((raw.webcam as Raw | undefined)?.mode as OASession["webcam"]["mode"]) ?? "off",
+      active: Boolean((raw.webcam as Raw | undefined)?.active),
+      intervalSeconds: Number((raw.webcam as Raw | undefined)?.interval_seconds ?? 60),
+    },
     section: s
       ? {
           position: Number(s.position),
@@ -76,6 +87,20 @@ function normalizeSession(raw: Raw): OASession {
           questions: ((s.questions as Raw[]) ?? []).map(normalizeQuestion),
         }
       : null,
+  };
+}
+
+function normalizePrefill(p: Raw): OAOverview["prefill"] {
+  const str = (v: unknown) => (v == null ? "" : String(v));
+  return {
+    fullName: str(p.full_name),
+    email: str(p.email),
+    phone: str(p.phone),
+    college: str(p.college),
+    rollNumber: str(p.roll_number),
+    branch: str(p.branch),
+    graduationYear: str(p.graduation_year),
+    cgpa: str(p.cgpa),
   };
 }
 
@@ -93,6 +118,11 @@ function normalizeOverview(raw: Raw): OAOverview {
     totalDurationMinutes: Number(raw.total_duration_minutes),
     totalQuestions: Number(raw.total_questions),
     codingEnabled: Boolean(raw.coding_enabled),
+    webcamMode: (raw.webcam_mode as OAOverview["webcamMode"]) ?? "off",
+    monitorMode: (raw.monitor_mode as OAOverview["monitorMode"]) ?? "off",
+    prefill: normalizePrefill((raw.prefill as Raw | undefined) ?? {}),
+    snapshotIntervalSeconds: Number(raw.snapshot_interval_seconds ?? 60),
+    snapshotRetentionDays: Number(raw.snapshot_retention_days ?? 30),
     sections: ((raw.sections as Raw[]) ?? []).map((s) => ({
       position: Number(s.position),
       title: s.title as string,
@@ -148,8 +178,50 @@ export const candidateAssessmentService = {
   getOverview: (applicationId: string): Promise<OAOverview> =>
     request<Raw>(`/candidate/oa/${applicationId}`).then(normalizeOverview),
 
-  start: (applicationId: string): Promise<OASession> =>
-    request<Raw>(`/candidate/oa/${applicationId}/start`, { method: "POST" }).then(normalizeSession),
+  start: (applicationId: string, p: OAStartPayload): Promise<OASession> =>
+    request<Raw>(`/candidate/oa/${applicationId}/start`, {
+      method: "POST",
+      body: {
+        webcam_consent: p.webcamConsent,
+        agreed: p.agreed,
+        details: {
+          full_name: p.details.fullName.trim(),
+          phone: p.details.phone.trim(),
+          college: p.details.college.trim(),
+          roll_number: p.details.rollNumber.trim(),
+          branch: p.details.branch.trim(),
+          graduation_year: Number(p.details.graduationYear),
+          cgpa: Number(p.details.cgpa),
+        },
+        precheck: p.precheck,
+      },
+    }).then(normalizeSession),
+
+  getFeedback: (
+    applicationId: string,
+  ): Promise<{ submitted: boolean; rating: number | null; comment: string | null }> =>
+    request<{ submitted: boolean; rating: number | null; comment: string | null }>(
+      `/candidate/oa/${applicationId}/feedback`,
+    ),
+
+  sendFeedback: (
+    applicationId: string,
+    body: { rating: number; comment?: string },
+  ): Promise<void> =>
+    request<unknown>(`/candidate/oa/${applicationId}/feedback`, {
+      method: "POST",
+      body: { rating: body.rating, comment: body.comment?.trim() || null },
+    }).then(() => undefined),
+
+  /** One camera frame (JPEG data URL). `faces` is what the browser counted, if it can. */
+  sendSnapshot: (
+    applicationId: string,
+    body: { image: string; questionId?: string | null; faces?: number | null },
+  ): Promise<void> =>
+    request<unknown>(`/candidate/oa/${applicationId}/snapshots`, {
+      method: "POST",
+      body: { image: body.image, question_id: body.questionId ?? null, faces: body.faces ?? null },
+    }).then(() => undefined),
 
   getSession: (applicationId: string): Promise<OASession> =>
     request<Raw>(`/candidate/oa/${applicationId}/session`).then(normalizeSession),
@@ -168,11 +240,24 @@ export const candidateAssessmentService = {
       normalizeSession,
     ),
 
-  reportEvent: (applicationId: string, type: OAEventType): Promise<void> =>
-    request<unknown>(`/candidate/oa/${applicationId}/events`, {
+  reportEvent: (
+    applicationId: string,
+    type: OAEventType,
+    extra: OAEventExtra = {},
+  ): Promise<void> => {
+    const detail: Record<string, unknown> = {};
+    if (extra.text !== undefined) {
+      detail.text = extra.text.slice(0, EVENT_TEXT_LIMIT);
+      detail.length = extra.text.length;
+    }
+    if (extra.target) detail.target = extra.target;
+    if (extra.awayMs !== undefined) detail.away_ms = Math.round(extra.awayMs);
+    if (extra.count !== undefined) detail.count = extra.count;
+    return request<unknown>(`/candidate/oa/${applicationId}/events`, {
       method: "POST",
-      body: { type },
-    }).then(() => undefined),
+      body: { type, question_id: extra.questionId ?? null, detail },
+    }).then(() => undefined);
+  },
 
   runCode: (
     applicationId: string,

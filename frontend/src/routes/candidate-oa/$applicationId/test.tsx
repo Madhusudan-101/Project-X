@@ -2,7 +2,17 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Check, CheckCircle2, Circle, Loader2, Maximize, ShieldAlert, Timer } from "lucide-react";
+import {
+  Check,
+  CheckCircle2,
+  Circle,
+  Loader2,
+  Maximize,
+  MonitorX,
+  ShieldAlert,
+  Timer,
+  VideoOff,
+} from "lucide-react";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -21,9 +31,14 @@ import { CodeEditor } from "@/components/candidate/oa/CodeEditor";
 import { CodingWorkspace } from "@/components/candidate/oa/CodingWorkspace";
 import { PromptText } from "@/components/candidate/oa/PromptText";
 import { useCandidateGuard } from "@/hooks/candidate/use-candidate-guard";
+import { FeedbackCard } from "@/components/candidate/oa/FeedbackCard";
+import { CameraPreview } from "@/components/candidate/oa/CameraPreview";
+import { useDisplayWatch } from "@/components/candidate/oa/start/useDisplayWatch";
+import { useProctorCamera } from "@/components/candidate/oa/useProctorCamera";
 import { candidateAssessmentService } from "@/services/api/candidate/assessment";
 import type {
   CodeLanguage,
+  OAEventExtra,
   OAEventType,
   OAQuestion,
   OASession,
@@ -214,41 +229,124 @@ function AssessmentRunnerPage() {
 
   // ── Integrity: tab switches, fullscreen exits, pastes, second tabs ──
   const inProgress = data?.status === "in_progress";
+  // Once the test is over there is nothing left to guard: hand the screen back.
+  useEffect(() => {
+    if (data?.status === "submitted" && document.fullscreenElement) {
+      document.exitFullscreen().catch(() => undefined);
+    }
+  }, [data?.status]);
+  // The question on screen, so every event is filed under it (set below, once `q` exists).
+  const activeQuestionId = useRef<string | null>(null);
+  const fullscreenRef = useRef(false);
   const report = useCallback(
-    (type: OAEventType) => {
-      candidateAssessmentService.reportEvent(applicationId, type).catch(() => undefined);
+    (type: OAEventType, extra: OAEventExtra = {}) => {
+      candidateAssessmentService
+        .reportEvent(applicationId, type, { questionId: activeQuestionId.current, ...extra })
+        .catch(() => undefined);
     },
     [applicationId],
   );
 
+  // ── Camera snapshots (only when the company turned them on AND the candidate agreed) ──
+  const webcam = data?.webcam;
+  const camera = useProctorCamera({
+    enabled: inProgress && !!webcam?.active,
+    intervalSeconds: webcam?.intervalSeconds ?? 60,
+    onSnapshot: (image, faces) => {
+      candidateAssessmentService
+        .sendSnapshot(applicationId, { image, questionId: activeQuestionId.current, faces })
+        .catch(() => undefined);
+    },
+    onEvent: (type) => report(type),
+  });
+  // A second display plugged in mid-test is recorded; the banner stays until it is removed.
+  const monitorMode = data?.monitorMode ?? "off";
+  const extraDisplay = useDisplayWatch({
+    enabled: inProgress && monitorMode !== "off",
+    onExtended: () => {
+      report("multi_monitor");
+      toast.warning("A second display was detected. This has been recorded.");
+    },
+  });
+  const cameraBlocked =
+    inProgress &&
+    !!webcam?.active &&
+    webcam.mode === "required" &&
+    (camera.status === "denied" || camera.status === "lost");
+
   useEffect(() => {
     if (!inProgress) return;
+    // Fullscreen is often already on (entered by the Start click before this page mounted).
+    fullscreenRef.current = !!document.fullscreenElement;
+    setInFullscreen(fullscreenRef.current);
+    let hiddenAt = 0;
+    let blurredAt = 0;
     const onVisibility = () => {
-      if (document.visibilityState !== "hidden") return;
-      setTabSwitches((n) => n + 1);
-      report("tab_switch");
-      toast.warning("You left the assessment tab. This has been recorded.");
+      if (document.visibilityState === "hidden") {
+        hiddenAt = Date.now();
+        setTabSwitches((n) => n + 1);
+        report("tab_switch");
+        toast.warning("You left the assessment tab. This has been recorded.");
+      } else if (hiddenAt) {
+        report("tab_return", { awayMs: Date.now() - hiddenAt });
+        hiddenAt = 0;
+      }
+    };
+    // Focus lost while the tab is still visible: another window, a second monitor, a popup.
+    const onBlur = () => {
+      window.setTimeout(() => {
+        if (document.visibilityState === "visible" && !document.hasFocus() && !blurredAt) {
+          blurredAt = Date.now();
+          report("window_blur");
+        }
+      }, 50);
+    };
+    const onFocus = () => {
+      if (!blurredAt) return;
+      report("window_focus", { awayMs: Date.now() - blurredAt });
+      blurredAt = 0;
     };
     const onFullscreen = () => {
       const now = !!document.fullscreenElement;
-      setInFullscreen((was) => {
-        if (was && !now) {
-          report("fullscreen_exit");
-          toast.warning("You left fullscreen. This has been recorded.");
-        }
-        return now;
-      });
+      const was = fullscreenRef.current;
+      fullscreenRef.current = now;
+      setInFullscreen(now);
+      if (was && !now) {
+        report("fullscreen_exit");
+        toast.warning("You left fullscreen. This has been recorded.");
+      } else if (!was && now) {
+        report("fullscreen_enter");
+      }
     };
+    // What leaves the page is as telling as what comes in (e.g. the problem statement copied out).
+    const onClipboard = (type: "copy" | "cut") => (e: ClipboardEvent) => {
+      const el = e.target;
+      const inEditor = el instanceof HTMLTextAreaElement;
+      const text = inEditor
+        ? el.value.slice(el.selectionStart, el.selectionEnd)
+        : (window.getSelection()?.toString() ?? "");
+      if (text) report(type, { text, target: inEditor ? "editor" : "other" });
+    };
+    const onCopy = onClipboard("copy");
+    const onCut = onClipboard("cut");
     const onBeforeUnload = (e: BeforeUnloadEvent) => {
       e.preventDefault();
       e.returnValue = "";
     };
     document.addEventListener("visibilitychange", onVisibility);
     document.addEventListener("fullscreenchange", onFullscreen);
+    document.addEventListener("copy", onCopy);
+    document.addEventListener("cut", onCut);
+    window.addEventListener("blur", onBlur);
+    window.addEventListener("focus", onFocus);
     window.addEventListener("beforeunload", onBeforeUnload);
     return () => {
       document.removeEventListener("visibilitychange", onVisibility);
       document.removeEventListener("fullscreenchange", onFullscreen);
+      document.removeEventListener("copy", onCopy);
+      document.removeEventListener("cut", onCut);
+      window.removeEventListener("blur", onBlur);
+      window.removeEventListener("focus", onFocus);
       window.removeEventListener("beforeunload", onBeforeUnload);
     };
   }, [inProgress, report]);
@@ -291,14 +389,15 @@ function AssessmentRunnerPage() {
   if (data.status === "submitted" || !section) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-surface-2 p-4">
-        <Card className="max-w-md space-y-4 p-8 text-center">
+        <Card className="w-full max-w-md space-y-5 p-8 text-center">
           <CheckCircle2 className="mx-auto h-12 w-12 text-success" />
           <h1 className="font-display text-xl font-semibold">Assessment submitted</h1>
           <p className="text-sm text-muted-foreground">
             Your answers are recorded and can&apos;t be changed. The hiring team will review your
             attempt and update your application status.
           </p>
-          <Button asChild className="bg-gradient-brand text-primary-foreground">
+          <FeedbackCard applicationId={applicationId} />
+          <Button asChild variant="outline" className="w-full">
             <Link to="/candidate">Back to dashboard</Link>
           </Button>
         </Card>
@@ -307,6 +406,7 @@ function AssessmentRunnerPage() {
   }
 
   const q = section.questions[Math.min(activeIdx, section.questions.length - 1)];
+  activeQuestionId.current = q.id;
   const a = answers[q.id];
   const isLast = section.position === section.totalSections;
   const answeredCount = section.questions.filter((x) => isAnswered(x, answers[x.id])).length;
@@ -346,6 +446,7 @@ function AssessmentRunnerPage() {
 
           <div className="ml-auto flex items-center gap-4">
             <SaveIndicator state={saveState} />
+            {webcam?.active && <CameraPreview videoRef={camera.videoRef} status={camera.status} />}
             <div
               role="timer"
               aria-label="Time remaining in this section"
@@ -418,13 +519,72 @@ function AssessmentRunnerPage() {
             the server, so edits in two tabs can overwrite each other.
           </p>
         )}
-        {!inFullscreen && typeof document !== "undefined" && document.fullscreenEnabled && (
-          <button
-            onClick={() => document.documentElement.requestFullscreen().catch(() => undefined)}
-            className="inline-flex w-fit items-center gap-1.5 rounded-md border border-border bg-surface px-3 py-1.5 text-xs hover:bg-muted"
+        {webcam?.active &&
+          webcam.mode === "optional" &&
+          (camera.status === "denied" || camera.status === "lost") && (
+            <div className="flex items-center gap-2 rounded-md border border-amber-400/50 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:bg-amber-950/30 dark:text-amber-300">
+              <VideoOff className="h-3.5 w-3.5" />
+              Your camera is off. The assessment continues, and this has been noted.
+              <button type="button" onClick={camera.retry} className="ml-auto underline">
+                Turn camera on
+              </button>
+            </div>
+          )}
+        {extraDisplay && monitorMode !== "off" && (
+          <div
+            role="alert"
+            className={
+              "flex items-center gap-2 rounded-md border px-3 py-2 text-xs " +
+              (monitorMode === "required"
+                ? "border-destructive/40 bg-destructive/10 text-destructive"
+                : "border-amber-400/50 bg-amber-50 text-amber-800 dark:bg-amber-950/30 dark:text-amber-300")
+            }
           >
-            <Maximize className="h-3.5 w-3.5" /> Enter fullscreen (recommended)
-          </button>
+            <MonitorX className="h-3.5 w-3.5" />A second display is connected. Please disconnect it.
+            This has been recorded for the hiring team.
+          </div>
+        )}
+        {cameraBlocked && (
+          <div
+            role="alertdialog"
+            aria-label="Camera required"
+            className="fixed inset-0 z-50 flex items-center justify-center bg-background/95 p-4 backdrop-blur"
+          >
+            <Card className="max-w-md space-y-4 p-8 text-center">
+              <VideoOff className="mx-auto h-10 w-10 text-destructive" />
+              <h2 className="font-display text-lg font-semibold">Camera access is required</h2>
+              <p className="text-sm text-muted-foreground">
+                This assessment is monitored by camera. Allow camera access in your browser (the
+                icon in the address bar), then try again. Your timer keeps running.
+              </p>
+              <Button
+                onClick={camera.retry}
+                className="bg-gradient-brand text-primary-foreground shadow-soft"
+              >
+                Turn camera on
+              </Button>
+            </Card>
+          </div>
+        )}
+        {!inFullscreen && typeof document !== "undefined" && document.fullscreenEnabled && (
+          <div
+            role="region"
+            aria-label="Fullscreen"
+            className="flex flex-wrap items-center gap-3 rounded-md border border-primary/30 bg-primary/5 px-4 py-3 text-sm"
+          >
+            <Maximize className="h-4 w-4 shrink-0 text-primary" />
+            <span>
+              <b>Use fullscreen.</b> It hides your browser tabs and taskbar so you can focus.
+              Leaving it is recorded.
+            </span>
+            <Button
+              size="sm"
+              onClick={() => document.documentElement.requestFullscreen().catch(() => undefined)}
+              className="ml-auto bg-gradient-brand text-primary-foreground shadow-soft"
+            >
+              Enter fullscreen
+            </Button>
+          </div>
         )}
 
         {q.qtype === "coding" && q.problem ? (
@@ -436,7 +596,7 @@ function AssessmentRunnerPage() {
             code={a?.answer ?? ""}
             codingEnabled={data.codingEnabled}
             best={best[q.id] ?? null}
-            onPaste={() => report("paste")}
+            onPaste={(text) => report("paste", { text, target: "editor" })}
             onSubmitted={(r) =>
               setBest((prev) =>
                 !prev[q.id] || r.score >= prev[q.id].score ? { ...prev, [q.id]: r } : prev,
@@ -466,7 +626,7 @@ function AssessmentRunnerPage() {
             </Card>
             <CodeEditor
               key={q.id}
-              onPaste={() => report("paste")}
+              onPaste={(text) => report("paste", { text, target: "editor" })}
               languages={Object.keys(q.starterCode ?? { python: "" })}
               language={a?.language ?? defaultLanguage(q) ?? "python"}
               value={a?.answer ?? ""}

@@ -18,6 +18,7 @@ import type {
   Assessment,
   AssessmentDraft,
   InviteMode,
+  WebcamMode,
   McqDraft,
   SectionDraft,
 } from "@/types/company/assessment";
@@ -32,10 +33,19 @@ const emptyMcq = (): McqDraft => ({
 });
 
 function draftFrom(a: Assessment | null): AssessmentDraft {
-  if (!a) return { title: "", inviteMode: "invited", sections: [] };
+  if (!a)
+    return {
+      title: "",
+      inviteMode: "invited",
+      webcamMode: "off",
+      monitorMode: "off",
+      sections: [],
+    };
   return {
     title: a.title,
     inviteMode: a.inviteMode,
+    webcamMode: a.webcamMode,
+    monitorMode: a.monitorMode,
     // MCQ text isn't returned by the overview; editing an existing template-based
     // assessment re-creates its coding sections only. MCQ sections must be re-entered.
     sections: a.sections
@@ -144,6 +154,42 @@ export function AssessmentBuilderDialog({
                 <option value="invited">Only invited applicants</option>
                 <option value="all">All eligible applicants</option>
               </select>
+            </div>
+            <div className="space-y-1.5 sm:col-span-2">
+              <Label htmlFor="oa-webcam">Camera monitoring</Label>
+              <select
+                id="oa-webcam"
+                value={draft.webcamMode ?? "off"}
+                onChange={(e) => setDraft({ ...draft, webcamMode: e.target.value as WebcamMode })}
+                className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+              >
+                <option value="off">Off</option>
+                <option value="optional">Optional (candidates can decline)</option>
+                <option value="required">Required (candidates must agree to start)</option>
+              </select>
+              <p className="text-xs text-muted-foreground">
+                A small photo is taken about once a minute, with the candidate&apos;s consent, and
+                deleted automatically after the retention period (30 days by default). You review
+                them next to each result.
+              </p>
+            </div>
+            <div className="space-y-1.5 sm:col-span-2">
+              <Label htmlFor="oa-monitors">Multiple-monitor check</Label>
+              <select
+                id="oa-monitors"
+                value={draft.monitorMode ?? "off"}
+                onChange={(e) => setDraft({ ...draft, monitorMode: e.target.value as WebcamMode })}
+                className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+              >
+                <option value="off">Off</option>
+                <option value="optional">Record only (never blocks a candidate)</option>
+                <option value="required">Required (a second display blocks starting)</option>
+              </select>
+              <p className="text-xs text-muted-foreground">
+                Candidates run a display check before starting, and a display connected during the
+                test is logged. It works in Chrome and Edge; in other browsers it is recorded as
+                unverified.
+              </p>
             </div>
           </div>
 

@@ -12,6 +12,16 @@
 
 import { request } from "../client";
 import type {
+  CameraSnapshot,
+  Precheck,
+  CameraSnapshots,
+  IntegrityEvent,
+  SimilarityCompare,
+  SimilarityCompareSide,
+  SimilarityPair,
+  SimilarityPerson,
+  SimilarityReport,
+  IntegrityTimeline,
   Assessment,
   AssessmentDraft,
   InviteResult,
@@ -34,6 +44,8 @@ function normalizeAssessment(raw: Raw): Assessment {
     id: raw.id as string,
     title: raw.title as string,
     inviteMode: raw.invite_mode as Assessment["inviteMode"],
+    webcamMode: (raw.webcam_mode as Assessment["webcamMode"]) ?? "off",
+    monitorMode: (raw.monitor_mode as Assessment["monitorMode"]) ?? "off",
     locked: Boolean(raw.locked),
     codingEnabled: Boolean(raw.coding_enabled),
     stats: {
@@ -58,6 +70,29 @@ function normalizeAssessment(raw: Raw): Assessment {
   };
 }
 
+function normalizeTimeline(t: Raw): IntegrityTimeline {
+  return {
+    items: ((t.items as Raw[]) ?? []).map((e) => {
+      const d = (e.detail as Raw | undefined) ?? {};
+      return {
+        type: e.type as IntegrityEvent["type"],
+        at: e.at as string,
+        offsetSeconds: e.offset_seconds == null ? null : Number(e.offset_seconds),
+        question: (e.question as IntegrityEvent["question"]) ?? null,
+        text: typeof d.text === "string" ? d.text : undefined,
+        length: d.length == null ? undefined : Number(d.length),
+        truncated: d.truncated ? true : undefined,
+        target: d.target as IntegrityEvent["target"],
+        awayMs: d.away_ms == null ? undefined : Number(d.away_ms),
+      };
+    }),
+    counts: (t.counts as IntegrityTimeline["counts"]) ?? {},
+    largestPaste: Number(t.largest_paste ?? 0),
+    logged: Number(t.logged ?? 0),
+    capped: Boolean(t.capped),
+  };
+}
+
 function normalizeRow(r: Raw): ResultRow {
   return {
     applicationId: r.application_id as string,
@@ -74,6 +109,12 @@ function normalizeRow(r: Raw): ResultRow {
     tabSwitches: Number(r.tab_switches ?? 0),
     fullscreenExits: Number(r.fullscreen_exits ?? 0),
     pasteEvents: Number(r.paste_events ?? 0),
+    snapshots: Number(r.snapshots ?? 0),
+    snapshotsNoFace: Number(r.snapshots_no_face ?? 0),
+    snapshotsMultiFace: Number(r.snapshots_multi_face ?? 0),
+    rating: r.rating == null ? null : Number(r.rating),
+    webcamMode: (r.webcam_mode as ResultRow["webcamMode"]) ?? "off",
+    webcamConsented: Boolean(r.webcam_consented),
     flagged: Boolean(r.flagged),
   };
 }
@@ -82,6 +123,8 @@ function toPayload(d: AssessmentDraft): Raw {
   return {
     title: d.title,
     invite_mode: d.inviteMode,
+    webcam_mode: d.webcamMode ?? "off",
+    monitor_mode: d.monitorMode ?? "off",
     template: d.template ?? null,
     sections: d.template
       ? null
@@ -201,6 +244,77 @@ export const companyAssessmentService = {
   ): Promise<{ sent: number; skipped: number; failed: number }> =>
     request(`${base(jobId, driveId)}/remind`, { method: "POST" }),
 
+  similarity: (jobId: string, driveId: string): Promise<SimilarityReport> =>
+    request<Raw>(`${base(jobId, driveId)}/similarity`).then((r) => {
+      const person = (p: Raw): SimilarityPerson => ({
+        applicationId: p.application_id as string,
+        name: p.name as string,
+        draft: p.draft ? true : undefined,
+      });
+      const s = (r.summary as Raw) ?? {};
+      return {
+        note: r.note as string,
+        minSimilarity: Number(r.min_similarity),
+        summary: {
+          flaggedPairs: Number(s.flagged_pairs ?? 0),
+          candidatesInvolved: Number(s.candidates_involved ?? 0),
+        },
+        questions: ((r.questions as Raw[]) ?? []).map((q) => ({
+          questionId: q.question_id as string,
+          title: q.title as string,
+          section: (q.section as number | null) ?? null,
+          position: Number(q.position),
+          compared: Number(q.compared),
+          skipped: Number(q.skipped),
+          pairs: ((q.pairs as Raw[]) ?? []).map((p) => ({
+            a: person(p.a as Raw),
+            b: person(p.b as Raw),
+            language: p.language as string,
+            similarity: Number(p.similarity),
+            overlap: Number(p.overlap),
+            rawOverlap: Number(p.raw_overlap),
+            level: p.level as SimilarityPair["level"],
+          })),
+          clusters: ((q.clusters as Raw[]) ?? []).map((c) => ({
+            size: Number(c.size),
+            members: ((c.members as Raw[]) ?? []).map(person),
+          })),
+        })),
+      };
+    }),
+
+  similarityCompare: (
+    jobId: string,
+    driveId: string,
+    questionId: string,
+    a: string,
+    b: string,
+  ): Promise<SimilarityCompare> =>
+    request<Raw>(
+      `${base(jobId, driveId)}/similarity/compare?question_id=${encodeURIComponent(questionId)}&a=${encodeURIComponent(a)}&b=${encodeURIComponent(b)}`,
+    ).then((r) => {
+      const side = (x: Raw): SimilarityCompareSide => ({
+        applicationId: x.application_id as string,
+        name: x.name as string,
+        language: x.language as string,
+        source: x.source as string,
+        draft: Boolean(x.draft),
+        matchedLines: (x.matched_lines as number[]) ?? [],
+        skipped: (x.skipped as string | null) ?? null,
+      });
+      const q = r.question as Raw;
+      return {
+        note: r.note as string,
+        question: { id: q.id as string, title: q.title as string },
+        similarity: Number(r.similarity),
+        rawOverlap: Number(r.raw_overlap),
+        level: (r.level as SimilarityCompare["level"]) ?? null,
+        comparable: Boolean(r.comparable),
+        a: side(r.a as Raw),
+        b: side(r.b as Raw),
+      };
+    }),
+
   results: (jobId: string, driveId: string): Promise<Results> =>
     request<Raw>(`${base(jobId, driveId)}/results`).then((r) => {
       const s = r.stats as Raw;
@@ -212,15 +326,66 @@ export const companyAssessmentService = {
           submitted: Number(s.submitted),
           averagePercent: s.average_percent == null ? null : Number(s.average_percent),
           flagged: Number(s.flagged),
+          averageRating: s.average_rating == null ? null : Number(s.average_rating),
+          feedbackCount: Number(s.feedback_count ?? 0),
         },
       };
     }),
+
+  cameraSnapshots: (
+    jobId: string,
+    driveId: string,
+    applicationId: string,
+  ): Promise<CameraSnapshots> =>
+    request<Raw>(`${base(jobId, driveId)}/results/${applicationId}/snapshots`).then((r) => ({
+      mode: (r.mode as CameraSnapshots["mode"]) ?? "off",
+      consentedAt: (r.consented_at as string | null) ?? null,
+      retentionDays: Number(r.retention_days ?? 30),
+      items: ((r.items as Raw[]) ?? []).map((i) => ({
+        id: i.id as string,
+        takenAt: i.taken_at as string,
+        offsetSeconds: Number(i.offset_seconds ?? 0),
+        faces: i.faces == null ? null : Number(i.faces),
+        question: (i.question as CameraSnapshot["question"]) ?? null,
+        url: (i.url as string | null) ?? null,
+      })),
+    })),
 
   resultDetail: (jobId: string, driveId: string, applicationId: string): Promise<ResultDetail> =>
     request<Raw>(`${base(jobId, driveId)}/results/${applicationId}`).then((r) => ({
       candidate: normalizeRow(r.candidate as Raw),
       assessmentTitle: r.assessment_title as string,
       sectionTitles: (r.section_titles as Record<number, string>) ?? {},
+      details: r.details
+        ? {
+            fullName: String((r.details as Raw).full_name ?? ""),
+            phone: String((r.details as Raw).phone ?? ""),
+            college: String((r.details as Raw).college ?? ""),
+            rollNumber: String((r.details as Raw).roll_number ?? ""),
+            branch: String((r.details as Raw).branch ?? ""),
+            graduationYear: Number((r.details as Raw).graduation_year),
+            cgpa: Number((r.details as Raw).cgpa),
+          }
+        : null,
+      detailsConfirmedAt: (r.details_confirmed_at as string | null) ?? null,
+      precheck: r.precheck
+        ? {
+            webcam: (r.precheck as Raw).webcam as Precheck["webcam"],
+            monitors: ((r.precheck as Raw).monitors as Precheck["monitors"]) ?? null,
+            fullscreen: Boolean((r.precheck as Raw).fullscreen),
+            browser: ((r.precheck as Raw).browser as string | null) ?? null,
+            screen: ((r.precheck as Raw).screen as string | null) ?? null,
+          }
+        : null,
+      monitorMode: (r.monitor_mode as ResultDetail["monitorMode"]) ?? "off",
+      feedback: r.feedback
+        ? {
+            rating: Number((r.feedback as Raw).rating),
+            comment: ((r.feedback as Raw).comment as string | null) ?? null,
+            at: (r.feedback as Raw).at as string,
+          }
+        : null,
+      events: normalizeTimeline((r.events as Raw | undefined) ?? {}),
       questions: ((r.questions as Raw[]) ?? []).map((q) => ({
         section: (q.section as number | null) ?? null,
         position: Number(q.position),
