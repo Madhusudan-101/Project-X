@@ -13,6 +13,7 @@ import { useEffect, type ReactNode } from "react";
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
 import { Toaster } from "@/components/ui/sonner";
+import { capturePendingInvite } from "../lib/pendingInvite";
 
 function NotFoundComponent() {
   return (
@@ -153,20 +154,22 @@ function useSupabaseHashRedirect() {
     const hash = window.location.hash;
     if (
       hash &&
-      (hash.includes("access_token=") ||
-        hash.includes("error=") ||
-        hash.includes("error_code="))
+      (hash.includes("access_token=") || hash.includes("error=") || hash.includes("error_code="))
     ) {
       // Preserve the full hash so /auth/confirm can parse it
       navigate({ to: "/auth/confirm", hash: hash.replace(/^#/, "") });
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 }
 
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
   useSupabaseHashRedirect();
+  // Keep an interview invitation link alive through sign-in redirects.
+  useEffect(() => {
+    capturePendingInvite(window.location.search);
+  }, []);
 
   return (
     <QueryClientProvider client={queryClient}>

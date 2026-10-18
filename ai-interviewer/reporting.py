@@ -45,3 +45,36 @@ def submit_report(payload: dict) -> bool:
         if attempt < MAX_ATTEMPTS:
             time.sleep(2 ** attempt)
     return False
+
+
+def submit_integrity_events(room_id: str, events: list[dict]) -> bool:
+    """POST video-check observations (no face, more than one person, camera blocked).
+
+    Same trust model as reports: shared secret, and the backend decides which
+    student the room belongs to. The backend also refuses these events unless the
+    candidate consented to video analysis. Blocking; call via asyncio.to_thread.
+    Observations are time-sensitive and low value on their own, so this retries
+    less than a report does.
+    """
+    base = (os.getenv("MIRRACLE_WEBHOOK_URL") or "").rstrip("/")
+    secret = os.getenv("AI_INTERVIEW_SHARED_SECRET")
+    if not base or not secret or not room_id or not events:
+        return False
+    for attempt in range(1, 3):
+        try:
+            res = httpx.post(
+                f"{base}/internal/ai-interview-integrity",
+                json={"room_id": room_id, "events": events},
+                headers={"Authorization": f"Bearer {secret}"},
+                timeout=10.0,
+            )
+            if res.status_code < 300:
+                return True
+            if res.status_code < 500 and res.status_code != 429:
+                print(f"Integrity events rejected ({res.status_code}): {res.text[:200]}")
+                return False
+        except httpx.HTTPError as exc:
+            print(f"Integrity events attempt {attempt}/2 failed: {exc}")
+        if attempt < 2:
+            time.sleep(1)
+    return False

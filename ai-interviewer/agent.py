@@ -15,7 +15,10 @@ from livekit.plugins import (
 )
 from livekit.plugins.turn_detector.multilingual import MultilingualModel
 
+from consent import has_audio_consent, has_video_consent
+from reconnect import ReconnectGuard, grace_seconds
 from graph import create_workflow  # <-- our compiled LangGraph app
+from video_monitor import start_video_check
 
 load_dotenv(".env.local")
 
@@ -50,12 +53,27 @@ async def entrypoint(ctx: agents.JobContext):
     except json.JSONDecodeError:
         pass
     initial_domain = meta.get("domain")
+    # The interviewer listens only if the candidate explicitly allowed it. Without
+    # that there is no interview: do not start the voice pipeline or open the mic.
+    if not has_audio_consent(meta):
+        print("Candidate did not consent to audio: not starting the interview")
+        ctx.shutdown(reason="no audio consent")
+        return
+    # True only if the candidate explicitly allowed the interviewer to view their camera.
+    video_consent = has_video_consent(meta)
     try:
         max_minutes = int(meta.get("max_minutes") or os.getenv("AI_INTERVIEW_MAX_MINUTES", "20"))
     except ValueError:
         max_minutes = 20
+    # A company interview carries the hiring team's rubric (frozen by the backend when the candidate
+    # started). Practice interviews carry none and use a built-in track.
     interview_workflow, generate_report = create_workflow(
-        room_name=ctx.job.room.name, initial_domain=initial_domain
+        room_name=ctx.job.room.name,
+        initial_domain=initial_domain,
+        rubric=meta.get("rubric"),
+        role_title=str(meta.get("role_title") or ""),
+        company_name=str(meta.get("company_name") or ""),
+        level=str(meta.get("level") or ""),
     )
 
     # 2) Wrap it as an LLM for LiveKit via the LangChain plugin
@@ -115,8 +133,30 @@ async def entrypoint(ctx: agents.JobContext):
         agent=InterviewAgent(),
         room_input_options=RoomInputOptions(
             noise_cancellation=noise_cancellation.BVC(),
+            # Follow the candidate across a dropped connection: the same identity rejoining is
+            # picked up again. We do not close the session the moment they drop (the guard below
+            # decides after a grace period).
+            participant_identity=meta.get("user_id") or None,
+            close_on_disconnect=False,
         ),
     )
+
+    # A dropped connection does not end the interview straight away. The candidate gets a grace
+    # period to rejoin (the backend issues a new token); after that the interview is closed and
+    # graded on what was answered, as before.
+    guard = ReconnectGuard(
+        meta.get("user_id") or None,
+        grace_seconds(),
+        lambda: asyncio.ensure_future(_end_interview(ctx)),
+    )
+    ctx.room.on("participant_disconnected", lambda p: guard.on_disconnect(p.identity))
+    ctx.room.on("participant_connected", lambda p: guard.on_connect(p.identity))
+    ctx.add_shutdown_callback(lambda: guard.cancel())
+
+    # Video check (no face / more than one person / camera blocked). It only runs
+    # with the candidate's consent and never feeds the interview LLM or the score.
+    video_check = start_video_check(ctx.room, ctx.job.room.name, video_consent)
+    ctx.add_shutdown_callback(lambda: video_check.stop())
 
     # Start the interview workflow - the graph will drive the conversation
     print("Starting changing your learning graph")

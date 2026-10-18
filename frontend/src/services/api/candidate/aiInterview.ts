@@ -1,18 +1,80 @@
 import { request } from "@/services/api/client";
 import type {
+  AiInterviewAssignment,
+  AiInterviewConfig,
   AiInterviewDomain,
   AiInterviewReport,
   AiInterviewReportDetail,
   AiInterviewSession,
+  IntegrityEvent,
 } from "@/types/candidate/aiInterview";
 
 export const aiInterviewService = {
   /** Start an interview: creates the LiveKit room server-side and returns join info. */
-  startSession(domain: AiInterviewDomain): Promise<AiInterviewSession> {
+  startSession(domain: AiInterviewDomain, consentVersion: string): Promise<AiInterviewSession> {
     return request<AiInterviewSession>("/candidate/ai-interview/session", {
       method: "POST",
-      body: { domain },
+      body: { domain, consent: true, audioConsent: true, videoConsent: true, consentVersion },
     });
+  },
+
+  /** Start the interview a company invited this candidate to (one attempt, no daily limit). */
+  startInviteSession(inviteId: string, consentVersion: string): Promise<AiInterviewSession> {
+    return request<AiInterviewSession>("/candidate/ai-interview/session", {
+      method: "POST",
+      body: { inviteId, consent: true, audioConsent: true, videoConsent: true, consentVersion },
+    });
+  },
+
+  /** The AI interviewer never joined: cancel and get the attempt back (the server double-checks). */
+  abortSession(roomName: string): Promise<{ released: boolean; kind: "company" | "practice" }> {
+    return request(`/candidate/ai-interview/session/${encodeURIComponent(roomName)}/abort`, {
+      method: "POST",
+      body: { reason: "interviewer_missing" },
+    });
+  },
+
+  /** A fresh join token for my own live interview after a dropped connection. */
+  rejoinSession(roomName: string): Promise<AiInterviewSession> {
+    return request<AiInterviewSession>(
+      `/candidate/ai-interview/session/${encodeURIComponent(roomName)}/rejoin`,
+      { method: "POST" },
+    );
+  },
+
+  /** Ask the company for an accommodation (extra time, another format) before starting. */
+  requestAccommodation(
+    inviteId: string,
+    message: string,
+  ): Promise<{ ok: boolean; company_emailed: boolean }> {
+    return request(
+      `/candidate/ai-interview/assignments/${encodeURIComponent(inviteId)}/accommodation`,
+      {
+        method: "POST",
+        body: { message },
+      },
+    );
+  },
+
+  /** Interviews companies have sent me. */
+  listAssignments(signal?: AbortSignal): Promise<AiInterviewAssignment[]> {
+    return request<AiInterviewAssignment[]>("/candidate/ai-interview/assignments", { signal });
+  },
+
+  /** Real duration, daily limit, attempts left and the rules version to accept. */
+  getConfig(signal?: AbortSignal): Promise<AiInterviewConfig> {
+    return request<AiInterviewConfig>("/candidate/ai-interview/config", { signal });
+  },
+
+  /** Save supervision signals (tab left, camera lost...) against the live interview. */
+  logIntegrityEvents(
+    roomName: string,
+    events: { kind: IntegrityEvent["kind"]; offsetSeconds: number }[],
+  ): Promise<{ accepted: number }> {
+    return request<{ accepted: number }>(
+      `/candidate/ai-interview/session/${encodeURIComponent(roomName)}/integrity-events`,
+      { method: "POST", body: { events } },
+    );
   },
 
   listReports(): Promise<AiInterviewReport[]> {

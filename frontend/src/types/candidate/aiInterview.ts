@@ -7,6 +7,57 @@ export interface AiInterviewSession {
   maxMinutes: number;
 }
 
+/** Limits and rules version the briefing screen must show; fetched before the candidate can start. */
+export interface AiInterviewConfig {
+  maxMinutes: number;
+  dailyLimit: number;
+  usedToday: number;
+  remainingToday: number;
+  consentVersion: string;
+}
+
+/** An interview a company has sent this candidate. Never includes the rubric or any scoring. */
+export interface AiInterviewAssignment {
+  id: string;
+  company_name: string;
+  role_title: string;
+  level: "intern" | "junior" | "mid" | "senior";
+  duration_minutes: number;
+  instructions: string;
+  expires_at: string;
+  status: "invited" | "started" | "completed" | "expired";
+  /** The candidate has already asked this company for an accommodation. */
+  accommodation_requested?: boolean;
+}
+
+export type IntegrityKind =
+  | "tab_hidden"
+  | "window_blur"
+  | "camera_lost"
+  | "camera_restored"
+  | "mic_lost"
+  | "mic_restored"
+  /** Seen by the AI interviewer's video check (only with the candidate's consent). */
+  | "no_face"
+  | "multiple_faces"
+  | "camera_blocked";
+
+export type VideoFlagKind = "no_face" | "multiple_faces" | "camera_blocked";
+
+export interface IntegrityEvent {
+  kind: IntegrityKind;
+  offset_seconds: number;
+  source?: "browser" | "agent";
+}
+
+export interface IntegritySummary {
+  tab_switches: number;
+  camera_lost: number;
+  mic_lost: number;
+  video_flags: number;
+  total: number;
+}
+
 export interface AiInterviewQuestionFeedback {
   question: string;
   feedback: string;
@@ -29,9 +80,11 @@ export interface AiInterviewReport {
   final_recommendation: string | null;
   duration_seconds: number | null;
   created_at: string;
+  integrity?: IntegritySummary;
 }
 
 export interface AiInterviewReportDetail extends AiInterviewReport {
   report_markdown: string | null;
   transcript: string | null;
+  integrity_events?: IntegrityEvent[];
 }

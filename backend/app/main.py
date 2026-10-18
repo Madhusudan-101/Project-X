@@ -25,6 +25,7 @@ from .routers.company import jobs as company_jobs
 from .routers.company import applicants as company_applicants
 from .routers.company import drives as company_drives
 from .routers.company import assessment as company_assessment
+from .routers.company import ai_interviews as company_ai_interviews
 from .routers.admin import overview as admin_overview
 from .routers.admin import peer_safety as admin_peer_safety
 from .routers.candidate import peer_safety as candidate_peer_safety
@@ -124,6 +125,7 @@ app.include_router(company_jobs.router)
 app.include_router(company_applicants.router)
 app.include_router(company_drives.router)
 app.include_router(company_assessment.router)
+app.include_router(company_ai_interviews.router)
 app.include_router(candidate_jobs.router)
 app.include_router(candidate_assessment.router)
 app.include_router(candidate_assessment_code.router)

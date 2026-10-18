@@ -83,6 +83,7 @@ import { PeerHistoryDialog } from "@/components/candidate/peer/PeerHistoryDialog
 import { peerSafetyService } from "@/services/api/candidate/peerSafety";
 import { PrepPlanDialog } from "@/components/candidate/PrepPlanDialog";
 import { ApplicationFormModal } from "@/components/candidate/ApplicationFormModal";
+import { readPendingInvite } from "@/lib/pendingInvite";
 import { OnlineAssessmentsPanel } from "@/components/candidate/OnlineAssessmentsPanel";
 import {
   APPLICATION_STATUS_LABELS,
@@ -182,6 +183,19 @@ function derivePeerStats(reports: PeerReport[]): PeerStats {
 
 function CandidatePortal() {
   const [tab, setTab] = useState("overview");
+  // An AI interview invitation email links to /candidate?ai_interview_invite=<id>.
+  useEffect(() => {
+    try {
+      if (
+        new URLSearchParams(window.location.search).has("ai_interview_invite") ||
+        readPendingInvite()
+      ) {
+        setTab("ai-interview");
+      }
+    } catch {
+      /* no URL to read */
+    }
+  }, []);
   const hideForAi = tab === "ai-interview" ? "mt-0 hidden" : "mt-0";
   const [settingsOpen, setSettingsOpen] = useState(false);
   const navigate = useNavigate();

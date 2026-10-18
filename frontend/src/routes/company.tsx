@@ -43,6 +43,7 @@ import { jobsService } from "@/services/api/company/jobs";
 import { companyDashboardService } from "@/services/api/company/drives";
 import { JobFormDialog } from "@/components/company/jobs/JobFormDialog";
 import { DriveTemplateManager } from "@/components/company/jobs/DriveTemplateManager";
+import { AiInterviewStudio } from "@/components/company/ai-interviews/AiInterviewStudio";
 import type { Company } from "@/types/company/company";
 import type { Job as JobSummary } from "@/types/jobs";
 
@@ -289,12 +290,7 @@ function CompanyPortal() {
                 />
               </TabsContent>
               <TabsContent value="interviews" className="mt-0">
-                <ComingSoonTab
-                  icon={Video}
-                  title="AI Interview Studio"
-                  body="Configure interview weightage per job and run structured AI-assisted interviews."
-                  feature="Feature 6"
-                />
+                <AiInterviewStudio />
               </TabsContent>
               <TabsContent value="analytics" className="mt-0">
                 <ComingSoonTab

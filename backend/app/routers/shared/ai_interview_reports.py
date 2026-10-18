@@ -22,7 +22,12 @@ from typing import Any, List, Optional
 from fastapi import APIRouter, Header, HTTPException
 from pydantic import BaseModel, Field
 
+from ...crud import get_company_names, get_profiles_basic
 from ...deps import db_client
+from ...services.ai_interview.maintenance import run_maintenance
+from ...services.ai_interview.people import company_owner_email, display_name
+from ...services.notifications import ai_interview_emails
+from ..candidate.ai_interview import MAX_EVENTS_PER_SESSION, VIDEO_KINDS
 
 logger = logging.getLogger(__name__)
 
@@ -43,6 +48,33 @@ def _score(v: Optional[float]) -> Optional[float]:
     return None if v is None else max(0.0, min(100.0, float(v)))
 
 
+def _notify_finished(inv: dict, *, partial: bool) -> None:
+    """Tell the hiring team the report is ready and confirm to the candidate it arrived. Best effort."""
+    try:
+        trows = db_client.table("ai_interview_templates").select("role_title").eq("id", inv["template_id"]).limit(1).execute().data or []
+        role = trows[0]["role_title"] if trows else "the role"
+        company = get_company_names([inv["company_id"]]).get(inv["company_id"], "the company")
+        person = (get_profiles_basic([inv.get("student_id")]).get(inv.get("student_id")) if inv.get("student_id") else None)
+        owner = company_owner_email(inv["company_id"])
+        if owner:
+            ai_interview_emails.send_report_ready(
+                to=owner, company=company, role=role, partial=partial,
+                candidate=display_name(person, inv["email"]),
+            )
+        ai_interview_emails.send_submission_confirmation(to=inv["email"], company=company, role=role)
+    except Exception:  # noqa: BLE001
+        logger.exception("finish notifications failed")
+
+
+class CompetencyScoreIn(BaseModel):
+    """One rubric competency as graded by the agent. Lenient on purpose: a model that
+    answers on a 0-10 scale or leaves a score out must not make the whole report fail."""
+    name: str = Field(default="", max_length=60)
+    score: Optional[float] = None  # 0-100
+    weight: Optional[float] = None
+    evidence: str = Field(default="", max_length=2000)
+
+
 class AiInterviewReportIn(BaseModel):
     room_id: str = Field(min_length=1, max_length=64)
     partial: bool = False
@@ -57,6 +89,7 @@ class AiInterviewReportIn(BaseModel):
     report_markdown: Optional[str] = None
     transcript: Optional[str] = None
     duration_seconds: Optional[int] = None
+    competency_scores: List[CompetencyScoreIn] = Field(default_factory=list, max_length=8)
 
 
 @router.post("/ai-interview-reports", status_code=201)
@@ -68,7 +101,7 @@ def ingest_ai_interview_report(
 
     sess = (
         db_client.table("ai_voice_interview_sessions")
-        .select("student_id, domain")
+        .select("student_id, domain, invite_id")
         .eq("room_id", body.room_id)
         .limit(1)
         .execute()
@@ -92,6 +125,12 @@ def ingest_ai_interview_report(
         "report_markdown": body.report_markdown,
         "transcript": body.transcript,
         "duration_seconds": body.duration_seconds,
+        "competency_scores": [
+            {"name": c.name, "score": _score(c.score), "weight": c.weight, "evidence": c.evidence}
+            for c in body.competency_scores
+        ],
+        # A company interview belongs to the hiring team: the candidate does not see its report.
+        "candidate_visible": not sess[0].get("invite_id"),
     }
 
     try:
@@ -110,4 +149,95 @@ def ingest_ai_interview_report(
     except Exception:  # noqa: BLE001
         logger.exception("ai_voice_interview_sessions status update failed")
 
+    invite_id = sess[0].get("invite_id")
+    if invite_id:
+        try:
+            rows = db_client.table("ai_interview_invites").select("*").eq("id", invite_id).limit(1).execute().data or []
+            inv = rows[0] if rows else None
+            already_done = bool(inv and inv.get("status") == "completed")
+            db_client.table("ai_interview_invites").update({
+                "status": "completed",
+                "completed_at": datetime.now(timezone.utc).isoformat(),
+            }).eq("id", invite_id).execute()
+            if inv and not already_done:  # an agent retry must not email people twice
+                _notify_finished(inv, partial=body.partial)
+        except Exception:  # noqa: BLE001
+            logger.exception("ai_interview_invites completion update failed")
+
     return {"ok": True, "id": (res.data or [{}])[0].get("id")}
+
+
+class VideoEventIn(BaseModel):
+    kind: str
+    offset_seconds: int = Field(ge=0, le=24 * 3600)
+
+
+class VideoEventsIn(BaseModel):
+    room_id: str = Field(min_length=1, max_length=64)
+    events: List[VideoEventIn] = Field(min_length=1, max_length=20)
+
+
+@router.post("/ai-interview-integrity", status_code=201)
+def ingest_video_integrity(
+    body: VideoEventsIn,
+    authorization: Optional[str] = Header(None),
+) -> dict:
+    """Video-check observations from the interviewer agent (no face, more than one
+    person, camera blocked). Stored only if the candidate consented to video
+    analysis when starting, and only while the interview is live. The student is
+    taken from the session row, never from the payload."""
+    _verify_secret(authorization)
+    bad = sorted({e.kind for e in body.events if e.kind not in VIDEO_KINDS})
+    if bad:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unknown event kind. Must be one of: {', '.join(VIDEO_KINDS)}",
+        )
+
+    sess = (
+        db_client.table("ai_voice_interview_sessions")
+        .select("student_id, status, video_consent")
+        .eq("room_id", body.room_id)
+        .limit(1)
+        .execute()
+    ).data
+    if not sess:
+        raise HTTPException(status_code=404, detail="Unknown interview session")
+    row = sess[0]
+    if not row.get("video_consent"):
+        raise HTTPException(status_code=403, detail="Candidate did not consent to video analysis")
+    if row.get("status") != "started":
+        raise HTTPException(status_code=409, detail="This interview has already finished")
+
+    existing = (
+        db_client.table("ai_voice_interview_integrity_events")
+        .select("id", count="exact")
+        .eq("room_id", body.room_id)
+        .execute()
+    )
+    room_left = MAX_EVENTS_PER_SESSION - (existing.count or 0)
+    batch = body.events[: max(0, room_left)]
+    if batch:
+        try:
+            db_client.table("ai_voice_interview_integrity_events").insert([
+                {
+                    "room_id": body.room_id,
+                    "student_id": row["student_id"],
+                    "kind": e.kind,
+                    "offset_seconds": e.offset_seconds,
+                    "source": "agent",
+                }
+                for e in batch
+            ]).execute()
+        except Exception as e:  # noqa: BLE001
+            logger.exception("video integrity insert failed")
+            raise HTTPException(status_code=500, detail=f"Insert failed: {e}")
+    return {"accepted": len(batch)}
+
+
+@router.post("/ai-interview/maintenance")
+def ai_interview_maintenance(authorization: Optional[str] = Header(None)) -> dict:
+    """Scheduled upkeep: expiry reminders, closing stuck interviews, optional transcript retention.
+    Call it every 15 minutes from any scheduler, with the shared secret."""
+    _verify_secret(authorization)
+    return run_maintenance()
