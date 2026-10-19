@@ -58,7 +58,13 @@ export function GoogleSignInButton({ role }: GoogleSignInButtonProps) {
   };
 
   return (
-    <Button type="button" variant="outline" className="w-full" onClick={handleClick} disabled={loading}>
+    <Button
+      type="button"
+      variant="outline"
+      className="h-11 w-full rounded-lg bg-white"
+      onClick={handleClick}
+      disabled={loading}
+    >
       {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <GoogleIcon />}
       <span className="ml-2">Continue with Google</span>
     </Button>

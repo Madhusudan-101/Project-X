@@ -57,8 +57,10 @@ function LoginPage() {
 
   return (
     <div>
-      <h1 className="font-display text-3xl font-bold">Welcome back</h1>
-      <p className="mt-2 text-sm text-muted-foreground">Sign in to continue to Mirracle.</p>
+      <h1 className="text-3xl font-medium">Sign in</h1>
+      <p className="mt-1.5 text-sm text-muted-foreground">
+        Welcome back — sign in to continue to Mirracle.
+      </p>
 
       {/* College (TPO) accounts are provisioned by an Admin and signed into with the
           email + password set from the invitation link — no Google/social option, so
@@ -77,22 +79,46 @@ function LoginPage() {
         </>
       )}
 
-      <form method="post" onSubmit={form.handleSubmit(onSubmit)} className={role === "college" ? "mt-6 space-y-4" : "space-y-4"}>
+      <form
+        method="post"
+        onSubmit={form.handleSubmit(onSubmit)}
+        className={role === "college" ? "mt-6 space-y-4" : "space-y-4"}
+      >
         <div className="space-y-2">
-          <Label htmlFor="email">Email</Label>
-          <Input id="email" type="email" placeholder="you@work.com" {...form.register("email")} />
+          <Label htmlFor="email" className="text-xs text-muted-foreground">
+            Email ID
+          </Label>
+          <Input
+            id="email"
+            type="email"
+            placeholder="you@work.com"
+            className="h-11 rounded-lg bg-white"
+            {...form.register("email")}
+          />
           {form.formState.errors.email && (
             <p className="text-xs text-destructive">{form.formState.errors.email.message}</p>
           )}
         </div>
         <div className="space-y-2">
           <div className="flex items-center justify-between">
-            <Label htmlFor="password">Password</Label>
-            <Link to="/auth/forgot-password" search={{ role }} className="text-xs text-primary hover:underline">
+            <Label htmlFor="password" className="text-xs text-muted-foreground">
+              Password
+            </Label>
+            <Link
+              to="/auth/forgot-password"
+              search={{ role }}
+              className="text-xs text-muted-foreground hover:text-foreground hover:underline"
+            >
               Forgot?
             </Link>
           </div>
-          <Input id="password" type="password" placeholder="••••••••" {...form.register("password")} />
+          <Input
+            id="password"
+            type="password"
+            placeholder="••••••••"
+            className="h-11 rounded-lg bg-white"
+            {...form.register("password")}
+          />
           {form.formState.errors.password && (
             <p className="text-xs text-destructive">{form.formState.errors.password.message}</p>
           )}
@@ -101,7 +127,7 @@ function LoginPage() {
         <Button
           type="submit"
           disabled={submitting}
-          className="w-full bg-gradient-brand text-primary-foreground shadow-soft"
+          className="h-11 w-full rounded-lg bg-primary text-primary-foreground shadow-none hover:bg-primary/90"
         >
           {submitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
           Sign in
@@ -117,7 +143,11 @@ function LoginPage() {
       ) : (
         <p className="mt-6 text-center text-sm text-muted-foreground">
           Don't have an account?{" "}
-          <Link to="/auth/signup" search={{ role }} className="font-medium text-primary hover:underline">
+          <Link
+            to="/auth/signup"
+            search={{ role }}
+            className="font-medium text-foreground underline-offset-4 hover:underline"
+          >
             Create one
           </Link>
         </p>
