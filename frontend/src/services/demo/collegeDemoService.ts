@@ -23,6 +23,7 @@ import type {
   DriveCreateInput,
   DriveEligibleResponse,
   PlacementStatus,
+  PlatformOverview,
   ScoreDistribution,
   ShortlistFilters,
   ShortlistResult,
@@ -75,13 +76,20 @@ export const demoStudentsService = {
     run(() => mutate((d) => engine.bulkUpdatePlacement(d, studentIds, placementStatus))),
   remove: (studentId: string) => run(() => mutate((d) => engine.removeStudent(d, studentId))),
 
-  uploadCsv: async (file: File): Promise<CsvUploadResult> => {
+  uploadCsv: async (
+    file: File,
+    options: { dryRun?: boolean; expectedPlan?: string } = {},
+  ): Promise<CsvUploadResult> => {
     if (file.size > engine.MAX_DEMO_CSV_BYTES) {
       await pause();
       throw new ApiClientError("CSV too large for the demo (max 1 MB)", 413);
     }
     const text = await file.text();
-    return run(() => mutate((d) => engine.uploadStudentsCsv(d, text)));
+    // A preview must not touch the store (mutate() commits and persists), so it reads only.
+    if (options.dryRun) return run(() => engine.uploadStudentsCsv(read(), text, { dryRun: true }));
+    return run(() =>
+      mutate((d) => engine.uploadStudentsCsv(d, text, { expectedPlan: options.expectedPlan })),
+    );
   },
 
   exportCsv: (
@@ -115,6 +123,10 @@ export const demoShortlistService = {
     run(() => engine.shortlist(read(), filters)),
   exportCsv: (filters: ShortlistFilters): Promise<Blob> =>
     run(() => csvBlob(engine.exportShortlistCsv(read(), filters))),
+};
+
+export const demoPlatformService = {
+  overview: (): Promise<PlatformOverview> => run(() => engine.platformOverview(read())),
 };
 
 export const demoDepartmentsService = {

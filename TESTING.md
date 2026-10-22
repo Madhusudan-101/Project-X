@@ -9,6 +9,7 @@ dependencies and schemas are exercised.
 | Backend unit | `backend/tests/unit/` | `cd backend && python -m pytest tests/unit` |
 | Backend integration (HTTP → routers → fake Supabase) | `backend/tests/integration/` | `cd backend && python -m pytest tests/integration` |
 | Backend (both) | | `cd backend && python -m pytest` |
+| Backend College/Admin additions (CSV import, onboarding, platform view, suspension, audit, authorization sweep) | `backend/tests/integration/test_college_portal.py`, `test_college_authz.py`, `test_college_onboarding.py`, `test_college_platform.py`, `test_admin_college_suspension.py`, `test_audit_trail.py` | `cd backend && python -m pytest tests/integration` |
 | Backend legacy scripts (admin API, college access, OA, peer matchmaking) | `backend/tests/test_*.py` | `cd backend && python tests/<name>.py` (`test_ai_interview.py` via `python -m pytest tests/test_ai_interview.py`) |
 | Frontend unit + integration | `frontend/tests/` | `cd frontend && npm test` |
 | PeerMeet signaling unit | `PeerMeet/server/tests/roomManager.test.js` | `cd PeerMeet/server && npm run test:unit` |

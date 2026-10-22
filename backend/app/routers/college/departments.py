@@ -14,6 +14,7 @@ from postgrest.exceptions import APIError
 from supabase import Client
 
 from ...deps import get_current_tpo, get_user_supabase
+from ...services.college.audit import log_college_action
 from ...schemas import DepartmentIn, DepartmentUpdateIn
 from ...utils.college.branch import normalize_branch
 
@@ -117,6 +118,7 @@ def create_department(
     row = (res.data or [None])[0]
     if not row:
         raise HTTPException(status_code=500, detail="Insert returned no row")
+    log_college_action("department_created", tpo, target_type="department", target_id=row["id"], target_label=row["name"])
     return {"message": "Department created successfully", "department": _dept_to_out(row)}
 
 
@@ -186,6 +188,8 @@ def update_department(
     row = (res.data or [None])[0]
     if not row:
         raise HTTPException(status_code=404, detail="Department not found")
+    log_college_action("department_updated", tpo, target_type="department", target_id=row["id"], target_label=row["name"],
+                       metadata={"fields": sorted(patch)})
     return {"message": "Department updated successfully", "department": _dept_to_out(row)}
 
 
@@ -208,4 +212,6 @@ def delete_department(
 
     if not res.data:
         raise HTTPException(status_code=404, detail="Department not found")
+    log_college_action("department_deleted", tpo, target_type="department", target_id=res.data[0]["id"],
+                       target_label=res.data[0].get("name"))
     return {"message": "Department deleted successfully"}

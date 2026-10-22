@@ -33,7 +33,29 @@ EVENT_TYPES = frozenset({
     "report_generated",
     "permission_granted",
     "permission_revoked",
+
+
     "peer_report_resolved",
+    # College Portal actions (actor_role="college") — one event per action, never per row.
+    "roster_imported",
+    "student_created",
+    "student_updated",
+    "student_deleted",
+    "students_placement_updated",
+    "students_invited",
+    "student_access_changed",
+    "campus_drive_created",
+    "campus_drive_updated",
+    "campus_drive_deleted",
+    "department_created",
+    "department_updated",
+    "department_deleted",
+    "college_onboarding_saved",
+    # Super Admin / Admin Portal
+    "college_suspended",
+    "college_reactivated",
+    "access_denied",  # result="failure": a signed-in admin asked for something their grants do not cover
+
 })
 
 

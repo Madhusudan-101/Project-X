@@ -39,7 +39,8 @@ _FEED_KINDS = (
 # call sites): the block/unblock target ("user"), each table's csv_exported target,
 # the audit log's own export, and the two aggregate reports.
 _TARGET_TYPES = ("user", "colleges", "companies", "candidates", "drives", "partnerships",
-                  "users", "audit_log", "application_funnel", "compensation", "admin_permission")
+                  "users", "audit_log", "application_funnel", "compensation", "admin_permission",
+                  "roster", "student", "campus_drive", "department", "college", "admin_route")
 _ACTOR_ROLES = ("admin", "college", "company", "candidate")
 _RESULTS = ("success", "failure")
 

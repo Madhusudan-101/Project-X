@@ -15,6 +15,7 @@ admin_events (reused, not duplicated) is the history of every grant/revoke.
 from __future__ import annotations
 
 import logging
+import time
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
@@ -37,7 +38,7 @@ GLOBAL_SCOPE_ID = "00000000-0000-0000-0000-000000000000"
 # Portal has no such endpoints; no billing.edit: finance.py is read-only).
 ALL_PERMISSIONS = frozenset({
     "analytics.view",
-    "colleges.view", "colleges.create", "colleges.export",
+    "colleges.view", "colleges.create", "colleges.suspend", "colleges.export",
     "companies.view", "companies.export",
     "candidates.view", "candidates.export",
     "drives.view", "drives.export",
@@ -60,6 +61,8 @@ SCOPABLE: Dict[str, tuple] = {
     # Scoped to a college, "create" means: add TPO accounts to THAT college only
     # (never to another one, and never create a new college directory row).
     "colleges.create": ("college",),
+    # Scoped to a college, "suspend" means: suspend / reactivate THAT college only.
+    "colleges.suspend": ("college",),
     "candidates.view": ("college",), "candidates.export": ("college",),
     "companies.view": ("company",), "companies.export": ("company",),
     "drives.view": ("college", "company"), "drives.export": ("college", "company"),
@@ -197,6 +200,30 @@ def own_permissions(admin: Dict[str, Any]) -> Dict[str, Any]:
 
 # ── FastAPI dependencies (the actual enforcement) ───────────────────
 
+# A signed-in admin who asks for something their grants do not cover is recorded as an `access_denied`
+# event (result="failure") — the trail of someone probing beyond their role. One event per
+# (admin, permission) per minute per process, so a script hammering a forbidden route cannot flood the
+# audit log. The record names the permission, method and path; never a body, query string or token.
+_DENIED_WINDOW_SECONDS = 60.0
+_DENIED_RECENT: Dict[tuple, float] = {}
+
+
+def _log_denied(admin: Dict[str, Any], permission: str, request: Request, reason: str) -> None:
+    key = (admin["id"], permission)
+    now = time.monotonic()
+    if now - _DENIED_RECENT.get(key, float("-inf")) < _DENIED_WINDOW_SECONDS:
+        return
+    if len(_DENIED_RECENT) > 1000:  # bounded: forget the stale entries
+        for k in [k for k, t in _DENIED_RECENT.items() if now - t >= _DENIED_WINDOW_SECONDS]:
+            del _DENIED_RECENT[k]
+    _DENIED_RECENT[key] = now
+    log_event(
+        "access_denied", actor_user_id=admin["id"], actor_role=admin.get("profile_role"), actor_label=admin.get("email"),
+        target_type="admin_route", result="failure",
+        metadata={"permission": permission, "method": request.method, "path": request.url.path, "reason": reason},
+    )
+
+
 def require_permission(permission: str, scope_param: Optional[str] = None):
     """FastAPI dependency: the caller must be an Admin (require_admin_role)
     AND either a Super Admin or hold `permission` (not expired, not revoked).
@@ -215,11 +242,13 @@ def require_permission(permission: str, scope_param: Optional[str] = None):
 
         scope = _scope_for(admin["id"], permission)
         if scope is None:
+            _log_denied(admin, permission, request, "no active grant")
             raise HTTPException(status_code=403, detail=f"Missing permission: {permission}")
 
         if not scope.global_ and scope_param:
             requested = request.path_params.get(scope_param)
             if requested is not None and not scope.allows_resource(str(requested)):
+                _log_denied(admin, permission, request, "outside the granted scope")
                 raise HTTPException(status_code=403, detail=f"Missing permission: {permission} for this resource")
 
         return {**admin, "_scope": None if scope.global_ else scope}
@@ -227,12 +256,13 @@ def require_permission(permission: str, scope_param: Optional[str] = None):
     return _dep
 
 
-def require_super_admin(admin: dict = Depends(require_admin_role)) -> dict:
+def require_super_admin(request: Request, admin: dict = Depends(require_admin_role)) -> dict:
     """Managing OTHER admins' access is Super-Admin-exclusive — never a
     grantable permission. This is what makes 'a delegated admin can never
     grant themselves, or anyone else, a permission' true by construction:
     they cannot reach these routes at all, regardless of what they hold."""
     if not admin.get("is_super_admin"):
+        _log_denied(admin, "super_admin", request, "super admin only")
         raise HTTPException(status_code=403, detail="Super Admin access required.")
     return admin
 

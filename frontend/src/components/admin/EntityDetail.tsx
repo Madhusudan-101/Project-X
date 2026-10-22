@@ -13,6 +13,7 @@ import { fmtDate, fmtInt, fmtPct, fmtRelative, placementRate } from "./format";
 import { KpiCard, KpiGroup } from "./KpiCard";
 import { PartnershipsTable } from "./PartnershipsTable";
 import { ChartSkeleton, EmptyBlock, ErrorBlock } from "./StateViews";
+import { CollegeSuspensionControls } from "./CollegeSuspensionControls";
 
 function FunnelKpis({ r, loading }: { r?: FunnelCounts; loading: boolean }) {
   const rate = r ? placementRate(r) : null;
@@ -65,6 +66,7 @@ export function CollegeDetailPage({ collegeId }: { collegeId: string }) {
                 <span className="flex flex-wrap items-center gap-2">
                   {[c.city, c.state].filter(Boolean).join(", ") || "Location not set"}
                   {c.has_account ? <ActivityBadge active={c.is_active} /> : <StatusBadge tone="outline">No account</StatusBadge>}
+                  <CollegeSuspensionControls collegeId={collegeId} collegeName={c.name} suspension={q.data?.suspension} />
                   <span className="text-xs">
                     {c.registered_at ? `Registered ${fmtDate(c.registered_at)} · ` : ""}Last activity {fmtRelative(c.last_activity)}
                   </span>
@@ -99,7 +101,18 @@ export function CollegeDetailPage({ collegeId }: { collegeId: string }) {
           </Card>
 
           <Card className="p-5">
-            <h2 className="mb-3 font-display text-lg font-semibold">College accounts</h2>
+            <h2 className="mb-1 font-display text-lg font-semibold">College accounts</h2>
+            {q.data && (
+              <p className="mb-3 text-xs text-muted-foreground">
+                College onboarding (institute details, departments, consent):{" "}
+                <span className="font-medium text-foreground">
+                  {q.data.onboarding_completed === null ? "unknown" : q.data.onboarding_completed ? "complete" : "not completed yet"}
+                </span>
+                {q.data.accounts.some((a) => a.is_blocked && a.blocked_reason) && (
+                  <> · Block reasons: {[...new Set(q.data.accounts.filter((a) => a.is_blocked && a.blocked_reason).map((a) => a.blocked_reason))].join("; ")}</>
+                )}
+              </p>
+            )}
             {q.isLoading ? (
               <ChartSkeleton className="h-16" />
             ) : q.data?.accounts.length ? (
@@ -111,7 +124,8 @@ export function CollegeDetailPage({ collegeId }: { collegeId: string }) {
                       {a.name && <span className="ml-2 text-muted-foreground">{a.email}</span>}
                     </span>
                     <span className="text-xs text-muted-foreground">
-                      Joined {fmtDate(a.created_at)} · {a.onboarded ? "Onboarding complete" : "Onboarding pending"}
+                      {a.is_blocked && <StatusBadge tone="destructive">Blocked</StatusBadge>}{" "}
+                      Joined {fmtDate(a.created_at)} · {a.onboarded ? "Sign-in setup complete" : "Sign-in setup pending"}
                     </span>
                   </li>
                 ))}

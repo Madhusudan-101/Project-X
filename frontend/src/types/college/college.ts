@@ -73,10 +73,149 @@ export interface StudentCreateInput {
   graduationYear: number;
 }
 
+/** A note about one CSV cell: an optional value that could not be used (unknown status, a score that
+ * is not a number or outside 0-100), which is left out of the import — the stored value is kept —
+ * rather than silently replaced by a default; or a row that repeats an earlier student and was merged. */
+export interface CsvUploadWarning {
+  line: number;
+  column: string;
+  value: string;
+  reason?: string;
+}
+
+/** An email the file lists more than once. `conflicts` names the columns where the rows disagree. */
+export interface CsvUploadDuplicate {
+  email: string;
+  lines: number[];
+  conflicts: string[];
+}
+
+/** POST /api/students/upload — also the shape of the ?dryRun=true preview (`dryRun: true`, nothing saved). */
 export interface CsvUploadResult {
   message: string;
+  /** created + updated: the students written (or, in a preview, that would be). Students already up to
+   * date are in `unchanged`, not here — an older server counted every row in the file. */
   addedStudents: number;
+  created: number;
+  updated: number;
+  unchanged: number;
+  /** At most the first 20 notes; `warningsTotal` is how many there are in all. */
+  warnings: CsvUploadWarning[];
+  warningsTotal: number;
+  /** Fingerprint of what the import writes. Send it back as `expectedPlan` to import exactly what was previewed. */
+  planId: string;
+  dryRun: boolean;
   students: Student[];
+}
+
+// ── Platform drives and outcomes — GET /api/dashboard/platform (read-only) ──
+
+export type PlatformApplicationStatus =
+  "applied" | "scoring" | "scored" | "shortlisted" | "in_interview" | "hired" | "rejected";
+
+export type PlatformRoundStatus = "pending" | "shortlisted" | "rejected";
+
+export interface PlatformRound {
+  number: number;
+  type: string;
+  mode: "ai" | "live";
+}
+
+/** A drive a company opened at this college through the platform (live or closed; never a draft). */
+export interface PlatformDrive {
+  id: string;
+  jobTitle: string | null;
+  companyName: string | null;
+  location: string | null;
+  employmentType: string | null;
+  status: "live" | "closed";
+  isOnCampus: boolean;
+  applyDeadline: string | null;
+  eligibility: { minCgpa: number | null; branches: string[]; batchYears: number[] };
+  rounds: (PlatformRound & { windowStart: string | null; windowEnd: string | null })[];
+  /** Counts only students who are on THIS college's roster. */
+  funnel: {
+    applicants: number;
+    inProgress: number;
+    shortlisted: number;
+    inInterview: number;
+    selected: number;
+    rejected: number;
+  };
+}
+
+export interface PlatformApplication {
+  driveId: string;
+  jobTitle: string | null;
+  companyName: string | null;
+  status: PlatformApplicationStatus;
+  appliedAt: string | null;
+  rounds: (PlatformRound & { status: PlatformRoundStatus })[];
+}
+
+/** A roster student with at least one platform application. Statuses only — never scores or answers. */
+export interface PlatformStudent {
+  /** The roster row's id (public.students), not the platform account's. */
+  studentId: string;
+  name: string;
+  email: string;
+  branch: string;
+  graduationYear: number;
+  placementStatus: PlacementStatus | null;
+  selectedOnPlatform: boolean;
+  /** Selected on the platform while the roster does not say "placed": a prompt to review; never changed automatically. */
+  rosterNeedsReview: boolean;
+  applications: PlatformApplication[];
+}
+
+export interface PlatformOverview {
+  drives: PlatformDrive[];
+  students: PlatformStudent[];
+  studentsOnPlatform: number;
+  totals: { applications: number; selected: number; needsRosterUpdate: number };
+}
+
+// ── Onboarding — GET / PUT /api/dashboard/onboarding ──
+
+export interface CollegeOnboardingInput {
+  website?: string;
+  city: string;
+  state: string;
+  /** One of the listed types, or "Other" together with `customType`. */
+  type: string;
+  customType?: string;
+  designation: string;
+  customDesignation?: string;
+  phone?: string;
+  studentStrength: string;
+  departments: string[];
+  intents: string[];
+  tosAccepted: true;
+  dataConsentAccepted: true;
+}
+
+/** What has been saved so far. Fields that were never saved are null / empty. */
+export interface CollegeOnboardingState {
+  college: {
+    name: string | null;
+    website: string | null;
+    city: string | null;
+    state: string | null;
+    type: string | null;
+    customType: string | null;
+    studentStrength: string | null;
+    onboardingCompleted: boolean;
+  };
+  contact: {
+    designation: string | null;
+    customDesignation: string | null;
+    phone: string | null;
+  } | null;
+  departments: string[];
+  intents: string[];
+  /** Present when the current wording of the terms and the data acknowledgement has been accepted. */
+  consent: { tosVersion: string; consentVersion: string; acceptedAt: string | null } | null;
+  consentVersions: { tos: string; dataConsent: string };
 }
 
 export interface CsvUploadInvalidRow {

@@ -166,11 +166,33 @@ export interface CollegeAccount {
   name: string | null;
   created_at: string;
   onboarded: boolean;
+  /** Blocked right now (permanently, or until a time still in the future). */
+  is_blocked: boolean;
+  blocked_reason: string | null;
+}
+
+/** Computed from the TPO accounts, never stored: a suspension is the account block applied to every TPO account. */
+export interface CollegeSuspension {
+  state: "active" | "suspended" | "partial" | "no_accounts";
+  accounts_total: number;
+  accounts_suspended: number;
+  accounts_active: number;
 }
 
 export interface CollegeDetail {
   college: CollegeRow;
   accounts: CollegeAccount[];
+  suspension: CollegeSuspension;
+  /** null = unknown (the onboarding migration is not applied on this project). */
+  onboarding_completed: boolean | null;
+}
+
+export interface CollegeSuspensionResult {
+  college_id: string;
+  suspension: CollegeSuspension;
+  accounts_suspended?: number;
+  accounts_restored?: number;
+  accounts_left_blocked?: number;
 }
 
 export interface CompanyRow extends FunnelCounts {
@@ -357,7 +379,24 @@ export type EventType =
   | "csv_exported"
   | "report_generated"
   | "permission_granted"
-  | "permission_revoked";
+  | "permission_revoked"
+  | "roster_imported"
+  | "student_created"
+  | "student_updated"
+  | "student_deleted"
+  | "students_placement_updated"
+  | "students_invited"
+  | "student_access_changed"
+  | "campus_drive_created"
+  | "campus_drive_updated"
+  | "campus_drive_deleted"
+  | "department_created"
+  | "department_updated"
+  | "department_deleted"
+  | "college_onboarding_saved"
+  | "college_suspended"
+  | "college_reactivated"
+  | "access_denied";
 
 export interface EventItem {
   id: string;

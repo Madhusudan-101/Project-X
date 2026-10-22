@@ -7,6 +7,7 @@ from postgrest.exceptions import APIError
 from supabase import Client
 
 from ...deps import get_current_tpo, get_user_supabase
+from . import onboarding, platform
 
 router = APIRouter(prefix="/api/dashboard", tags=["dashboard"])
 
@@ -104,3 +105,10 @@ def score_distribution(
         else:
             buckets["80-100"] += 1
     return buckets
+
+
+# The College workspace endpoints that sit beside the dashboard share its /api/dashboard prefix and are
+# mounted from here, so the College Portal can add endpoints without touching app/main.py (shared with
+# the other portals). A tidier registration in main.py is a possible follow-up for whoever owns it.
+router.include_router(onboarding.router)
+router.include_router(platform.router)

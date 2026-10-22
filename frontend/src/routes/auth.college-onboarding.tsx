@@ -7,13 +7,11 @@ import { toast } from "sonner";
 import {
   ArrowLeft,
   ArrowRight,
-  Building2,
   CheckCircle2,
   ChevronRight,
   Globe,
   Loader2,
   Plus,
-  Upload,
   X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -30,6 +28,7 @@ import {
 } from "@/components/ui/select";
 import { useAuthStore } from "@/store/auth";
 import { authService } from "@/services/api/auth";
+import { collegeOnboardingService } from "@/services/api/college/onboarding";
 
 // ── Constants ──────────────────────────────────────────────────────────
 
@@ -53,12 +52,6 @@ const STUDENT_STRENGTH_RANGES = [
   "10,000+",
 ];
 
-const CYCLE_STATUSES: { value: string; label: string }[] = [
-  { value: "mid_cycle", label: "Mid-cycle" },
-  { value: "about_to_start", label: "About to start" },
-  { value: "off_season", label: "Off-season" },
-];
-
 const PLATFORM_INTENTS: { value: string; label: string }[] = [
   { value: "placement_mgmt", label: "Placement drive management" },
   { value: "readiness_tracking", label: "Student readiness tracking" },
@@ -77,7 +70,6 @@ const STEPS = [
 // ── Validation ─────────────────────────────────────────────────────────
 
 const schema = z.object({
-  collegeName: z.string().trim().min(1, "Enter your college name").max(120),
   website: z
     .string()
     .trim()
@@ -95,7 +87,6 @@ const schema = z.object({
   customDesignation: z.string().trim().max(60).optional(),
   phone: z.string().trim().max(20).optional(),
   studentStrength: z.string().min(1, "Select student strength"),
-  cycleStatus: z.string().min(1, "Select placement cycle status"),
   tosAccepted: z.literal(true, { errorMap: () => ({ message: "Required to continue" }) }),
   dataConsentAccepted: z.literal(true, { errorMap: () => ({ message: "Required to continue" }) }),
 });
@@ -116,11 +107,10 @@ function CollegeOnboardingPage() {
   const [submitting, setSubmitting] = useState(false);
   const [step, setStep] = useState(0);
 
-  // Logo — same as company onboarding: captured locally with a preview,
-  // not yet uploaded anywhere (needs a Storage bucket, not wired yet).
-  const [logoFile, setLogoFile] = useState<File | null>(null);
-  const [logoPreviewUrl, setLogoPreviewUrl] = useState<string | null>(null);
-  const logoInputRef = useRef<HTMLInputElement>(null);
+  // The college was added by the Mirracle team, so its name is shown, not edited. Everything else the
+  // page asks is loaded from what was saved before (see the effect below), so a refresh loses nothing.
+  const [collegeName, setCollegeName] = useState("");
+  const [loadState, setLoadState] = useState<"loading" | "ready" | "failed">("loading");
 
   // Departments — free-text tag input (no master list exists for branch
   // names), reuses the same chip pattern as skills/hiring-domains elsewhere.
@@ -143,18 +133,6 @@ function CollegeOnboardingPage() {
       navigate({ to: "/portals" });
     }
   }, [session, navigate]);
-
-  useEffect(() => {
-    return () => {
-      if (logoPreviewUrl) URL.revokeObjectURL(logoPreviewUrl);
-    };
-  }, [logoPreviewUrl]);
-
-  const handleLogoSelect = (file: File | null) => {
-    if (logoPreviewUrl) URL.revokeObjectURL(logoPreviewUrl);
-    setLogoFile(file);
-    setLogoPreviewUrl(file ? URL.createObjectURL(file) : null);
-  };
 
   const addDepartment = () => {
     const trimmed = departmentInput.trim();
@@ -185,7 +163,6 @@ function CollegeOnboardingPage() {
   const form = useForm<FormValues>({
     resolver: zodResolver(schema),
     defaultValues: {
-      collegeName: "",
       website: "",
       city: "",
       state: "",
@@ -195,17 +172,54 @@ function CollegeOnboardingPage() {
       customDesignation: "",
       phone: "",
       studentStrength: "",
-      cycleStatus: "",
     },
   });
 
   const type = form.watch("type");
   const designation = form.watch("designation");
 
+  // Load what was saved before and fill the form with it.
+  useEffect(() => {
+    let cancelled = false;
+    collegeOnboardingService
+      .get()
+      .then((saved) => {
+        if (cancelled) return;
+        setCollegeName(saved.college.name ?? "");
+        form.reset({
+          website: saved.college.website ?? "",
+          city: saved.college.city ?? "",
+          state: saved.college.state ?? "",
+          type: saved.college.type ?? "",
+          customType: saved.college.customType ?? "",
+          designation: saved.contact?.designation ?? "",
+          customDesignation: saved.contact?.customDesignation ?? "",
+          phone: saved.contact?.phone ?? "",
+          studentStrength: saved.college.studentStrength ?? "",
+          // The acceptance is pre-ticked only while it is on file for the CURRENT wording.
+          ...(saved.consent
+            ? { tosAccepted: true as const, dataConsentAccepted: true as const }
+            : {}),
+        });
+        setDepartments(saved.departments);
+        setSelectedIntents(saved.intents);
+        setLoadState("ready");
+      })
+      .catch((err: unknown) => {
+        if (cancelled) return;
+        setLoadState("failed");
+        toast.error(err instanceof Error ? err.message : "Could not load your saved details.");
+      });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- run once; `form` is stable
+  }, []);
+
   const STEP_FIELDS: Record<number, (keyof FormValues)[]> = {
-    0: ["collegeName", "website", "city", "state", "type"],
+    0: ["website", "city", "state", "type"],
     1: ["designation", "phone"],
-    2: ["studentStrength", "cycleStatus"],
+    2: ["studentStrength"],
     3: [],
     4: ["tosAccepted", "dataConsentAccepted"],
   };
@@ -226,25 +240,34 @@ function CollegeOnboardingPage() {
   const goBack = () => setStep((s) => Math.max(s - 1, 0));
 
   // ── Submit ─────────────────────────────────────────────────────────
-  const onSubmit = async (_values: FormValues) => {
-    // NOTE: fully stubbed — unlike company onboarding, no existing endpoint
-    // lets a College account update anything about its own college row today
-    // (profiles.college_id is never even set at signup). Everything above is
-    // captured and validated for review, but nothing is sent yet: this needs
-    // db/college_onboarding_migration.sql run + a new backend endpoint that
-    // creates/links the colleges row, sets profiles.college_id, and inserts
-    // college_contacts/college_platform_intent/college_consents — none of
-    // which are wired yet, pending schema approval.
+  const onSubmit = async (values: FormValues) => {
     setSubmitting(true);
     try {
-      // Mark onboarding complete so login doesn't send this account back
-      // here every time — profiles.onboarded is shared across all roles
-      // and already fully wired, independent of the college-specific
-      // fields above still being stubbed.
+      // Everything is saved on the server first; the account is only marked onboarded (so login stops
+      // sending it back here) once that has succeeded. A failure leaves the form as it is — submit again.
+      await collegeOnboardingService.save({
+        website: values.website || undefined,
+        city: values.city,
+        state: values.state,
+        type: values.type,
+        customType: values.type === "Other" ? values.customType : undefined,
+        designation: values.designation,
+        customDesignation: values.designation === "Other" ? values.customDesignation : undefined,
+        phone: values.phone || undefined,
+        studentStrength: values.studentStrength,
+        departments,
+        intents: selectedIntents,
+        tosAccepted: true,
+        dataConsentAccepted: true,
+      });
       const updatedUser = await authService.updateProfile({ onboarded: true });
       updateUser(updatedUser);
       toast.success("Workspace ready!");
-      navigate({ to: "/college/placement-cycle" });
+      navigate({ to: "/college" });
+    } catch (err: unknown) {
+      toast.error(
+        err instanceof Error ? err.message : "Could not save your details. Please try again.",
+      );
     } finally {
       setSubmitting(false);
     }
@@ -289,6 +312,22 @@ function CollegeOnboardingPage() {
         ))}
       </div>
 
+      {loadState === "loading" && (
+        <p className="mt-6 flex items-center gap-2 text-sm text-muted-foreground" role="status">
+          <Loader2 className="h-4 w-4 animate-spin" /> Loading your saved details…
+        </p>
+      )}
+      {loadState === "failed" && (
+        <p
+          className="mt-6 rounded-md border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive"
+          role="alert"
+        >
+          We couldn't load your saved details, so the form below may be missing what you entered
+          before. Reload the page to try again, or fill it in and save — saving replaces what was
+          stored.
+        </p>
+      )}
+
       <form onSubmit={form.handleSubmit(onSubmit)} className="mt-6 space-y-4">
         {/* ── Step A: Institute identity ── */}
         {step === 0 && (
@@ -297,14 +336,14 @@ function CollegeOnboardingPage() {
               <Label htmlFor="collegeName">College name</Label>
               <Input
                 id="collegeName"
-                placeholder="Enter your institution's full name"
-                {...form.register("collegeName")}
+                value={collegeName}
+                readOnly
+                disabled
+                aria-describedby="collegeNameNote"
               />
-              {form.formState.errors.collegeName && (
-                <p className="text-xs text-destructive">
-                  {form.formState.errors.collegeName.message}
-                </p>
-              )}
+              <p id="collegeNameNote" className="text-xs text-muted-foreground">
+                Set by the Mirracle team when your college was added. Contact us to change it.
+              </p>
             </div>
 
             <div className="space-y-1.5">
@@ -342,7 +381,10 @@ function CollegeOnboardingPage() {
 
             <div className="space-y-1.5">
               <Label htmlFor="type">Institution type</Label>
-              <Select onValueChange={(v) => form.setValue("type", v, { shouldValidate: true })}>
+              <Select
+                value={type}
+                onValueChange={(v) => form.setValue("type", v, { shouldValidate: true })}
+              >
                 <SelectTrigger id="type">
                   <SelectValue placeholder="Select type" />
                 </SelectTrigger>
@@ -368,44 +410,6 @@ function CollegeOnboardingPage() {
                 />
               </div>
             )}
-
-            <div className="space-y-1.5">
-              <Label>College logo</Label>
-              <div className="flex items-center gap-4">
-                <div className="grid h-16 w-16 shrink-0 place-items-center overflow-hidden rounded-xl border border-dashed border-border bg-surface">
-                  {logoPreviewUrl ? (
-                    <img
-                      src={logoPreviewUrl}
-                      alt="Logo preview"
-                      className="h-full w-full object-cover"
-                    />
-                  ) : (
-                    <Building2 className="h-6 w-6 text-muted-foreground" />
-                  )}
-                </div>
-                <div className="flex-1 space-y-1">
-                  <input
-                    ref={logoInputRef}
-                    type="file"
-                    accept="image/png,image/jpeg,image/svg+xml,image/webp"
-                    className="hidden"
-                    onChange={(e) => handleLogoSelect(e.target.files?.[0] ?? null)}
-                  />
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="outline"
-                    onClick={() => logoInputRef.current?.click()}
-                  >
-                    <Upload className="mr-2 h-3.5 w-3.5" />
-                    {logoFile ? "Change logo" : "Upload logo"}
-                  </Button>
-                  <p className="text-xs text-muted-foreground">
-                    PNG, JPG, SVG or WEBP · optional, skippable
-                  </p>
-                </div>
-              </div>
-            </div>
           </fieldset>
         )}
 
@@ -416,6 +420,7 @@ function CollegeOnboardingPage() {
               <div className="space-y-1.5">
                 <Label htmlFor="designation">Your designation</Label>
                 <Select
+                  value={designation}
                   onValueChange={(v) => form.setValue("designation", v, { shouldValidate: true })}
                 >
                   <SelectTrigger id="designation">
@@ -465,6 +470,7 @@ function CollegeOnboardingPage() {
               <div className="space-y-1.5">
                 <Label htmlFor="studentStrength">Total student strength</Label>
                 <Select
+                  value={form.watch("studentStrength")}
                   onValueChange={(v) =>
                     form.setValue("studentStrength", v, { shouldValidate: true })
                   }
@@ -483,28 +489,6 @@ function CollegeOnboardingPage() {
                 {form.formState.errors.studentStrength && (
                   <p className="text-xs text-destructive">
                     {form.formState.errors.studentStrength.message}
-                  </p>
-                )}
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="cycleStatus">Current placement cycle status</Label>
-                <Select
-                  onValueChange={(v) => form.setValue("cycleStatus", v, { shouldValidate: true })}
-                >
-                  <SelectTrigger id="cycleStatus">
-                    <SelectValue placeholder="Select status" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {CYCLE_STATUSES.map((c) => (
-                      <SelectItem key={c.value} value={c.value}>
-                        {c.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                {form.formState.errors.cycleStatus && (
-                  <p className="text-xs text-destructive">
-                    {form.formState.errors.cycleStatus.message}
                   </p>
                 )}
               </div>
@@ -602,6 +586,7 @@ function CollegeOnboardingPage() {
             <div className="flex items-start gap-2">
               <Checkbox
                 id="tosAccepted"
+                checked={form.watch("tosAccepted") === true}
                 onCheckedChange={(v) =>
                   form.setValue("tosAccepted", (v === true) as true, { shouldValidate: true })
                 }
@@ -619,6 +604,7 @@ function CollegeOnboardingPage() {
             <div className="flex items-start gap-2">
               <Checkbox
                 id="dataConsentAccepted"
+                checked={form.watch("dataConsentAccepted") === true}
                 onCheckedChange={(v) =>
                   form.setValue("dataConsentAccepted", (v === true) as true, {
                     shouldValidate: true,
@@ -659,7 +645,7 @@ function CollegeOnboardingPage() {
           ) : (
             <Button
               type="submit"
-              disabled={submitting}
+              disabled={submitting || loadState === "loading"}
               className="flex-1 bg-gradient-brand text-primary-foreground shadow-soft"
             >
               {submitting ? (

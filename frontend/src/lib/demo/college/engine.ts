@@ -12,8 +12,10 @@
  */
 
 import type {
+  CsvUploadDuplicate,
   CsvUploadInvalidRow,
   CsvUploadResult,
+  CsvUploadWarning,
   DashboardStats,
   Department,
   DepartmentDetail,
@@ -23,6 +25,10 @@ import type {
   DriveEligibleResponse,
   DriveEligibility,
   PlacementStatus,
+  PlatformApplication,
+  PlatformDrive,
+  PlatformOverview,
+  PlatformStudent,
   ScoreDistribution,
   ShortlistFilters,
   ShortlistResult,
@@ -50,10 +56,16 @@ export class DemoApiError extends Error {
 
 export class DemoCsvError extends DemoApiError {
   readonly invalidRows?: CsvUploadInvalidRow[];
-  constructor(message: string, invalidRows?: CsvUploadInvalidRow[]) {
+  readonly duplicates?: CsvUploadDuplicate[];
+  constructor(
+    message: string,
+    invalidRows?: CsvUploadInvalidRow[],
+    duplicates?: CsvUploadDuplicate[],
+  ) {
     super(message, 400);
     this.name = "DemoCsvError";
     this.invalidRows = invalidRows;
+    this.duplicates = duplicates;
   }
 }
 
@@ -649,13 +661,105 @@ export function parseCsv(text: string): string[][] {
   return rows;
 }
 
-const num = (v: string | undefined) => {
-  const n = Number(String(v ?? "").trim());
-  return Number.isFinite(n) && String(v ?? "").trim() !== "" ? n : 0;
+// ── Roster CSV import ──
+// The rules below are the ones backend/app/utils/college/csv_students.py applies to a real upload, so
+// a file behaves the same in the demo as against the live API (the demo only adds its size limits).
+
+const CSV_EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
+const NUMBER_RE = /^[+-]?(\d+(\.\d*)?|\.\d+)([eE][+-]?\d+)?$/;
+const YEAR_RE = /^\d{1,4}(\.0+)?$/;
+const CSV_MIN_YEAR = 1950;
+const CSV_MAX_YEAR = 2100;
+
+/** Column name in the file for each Student field a CSV row can carry (used to name conflicts). */
+const COLUMN_FOR_FIELD: Partial<Record<keyof Student, string>> = {
+  name: "name",
+  email: "email",
+  branch: "branch",
+  graduation_year: "graduationYear",
+  verification_status: "verificationStatus",
+  placement_status: "placementStatus",
+  employability_score: "employabilityScore",
+  resume_score: "resumeScore",
+  github_score: "githubScore",
+  leetcode_score: "leetcodeScore",
+  interview_score: "interviewScore",
+  assessment_score: "assessmentScore",
 };
 
-/** Mirrors backend parse_students_csv + upsert-by-email. Throws DemoCsvError listing rejected rows. */
-export function uploadStudentsCsv(draft: DemoState, text: string): CsvUploadResult {
+const NUMERIC_COLUMNS = [
+  ["employabilityScore", "employability_score"],
+  ["resumeScore", "resume_score"],
+  ["githubScore", "github_score"],
+  ["leetcodeScore", "leetcode_score"],
+  ["interviewScore", "interview_score"],
+  ["assessmentScore", "assessment_score"],
+] as const;
+
+/**
+ * A score cell as a number from 0 to 100 rounded half-up to two decimals (what the numeric(5,2) column
+ * stores), or the reason it cannot be used. Rounds the decimal TEXT, not a float: 77.455 must give
+ * 77.46 exactly as PostgreSQL does, and float rounding gives 77.45.
+ */
+function parseScore(cell: string): { value: number } | { reason: string } {
+  if (!NUMBER_RE.test(cell)) return { reason: "not a number" };
+  const m = /^([+-]?)(\d*)(?:\.(\d*))?(?:[eE]([+-]?\d+))?$/.exec(cell)!;
+  const negative = m[1] === "-";
+  const frac = m[3] ?? "";
+  const digits = BigInt((m[2] + frac).replace(/^0+(?=\d)/, "") || "0");
+  const exp = Number(m[4] ?? 0);
+  if (digits === 0n) return { value: 0 };
+  if (exp > 1000) return { reason: "outside 0-100" };
+  if (exp < -1000) return { value: 0 };
+  const scale = exp - frac.length + 2; // the value in hundredths is digits * 10^scale
+  let hundredths: bigint;
+  if (scale >= 0) hundredths = digits * 10n ** BigInt(scale);
+  else {
+    const divisor = 10n ** BigInt(-scale);
+    hundredths = digits / divisor + ((digits % divisor) * 2n >= divisor ? 1n : 0n);
+  }
+  if (negative && hundredths > 0n) return { reason: "outside 0-100" };
+  if (hundredths > 10000n) return { reason: "outside 0-100" };
+  return { value: Number(hundredths) / 100 };
+}
+
+/** FNV-1a: a small, stable, dependency-free hash. Not for security. */
+function fnv32(text: string): number {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < text.length; i++) {
+    h ^= text.charCodeAt(i);
+    h = Math.imul(h, 0x01000193) >>> 0;
+  }
+  return h;
+}
+
+/** Short stable fingerprint of what an import would write — the demo's counterpart of the live planId. */
+const fingerprint = (text: string): string => `demo-${fnv32(text).toString(16).padStart(8, "0")}`;
+
+export interface UploadOptions {
+  /** Check only: compute the counts and the plan, change nothing. */
+  dryRun?: boolean;
+  /** planId from the preview. A real import is refused (409, nothing written) when the plan has since changed. */
+  expectedPlan?: string;
+}
+
+type CsvPatch = Partial<Student>;
+
+/**
+ * Mirrors backend parse + upload route. Throws DemoCsvError listing rejected rows or conflicting repeats.
+ *
+ * Non-destructive, like the live import: a row carries only the columns the file supplies with a
+ * usable value. A blank cell, a missing column or an unusable value leaves a stored student's field
+ * alone (and a new student gets the shell defaults). A repeated email that supplies two different values
+ * for a field is refused; agreeing repeats merge. With `dryRun` the same comparison runs and the counts
+ * and planId are returned, but `draft` is not touched.
+ */
+export function uploadStudentsCsv(
+  draft: DemoState,
+  text: string,
+  options: UploadOptions = {},
+): CsvUploadResult {
+  const dryRun = options.dryRun === true;
   if (text.length > MAX_DEMO_CSV_BYTES)
     throw new DemoApiError("CSV too large for the demo (max 1 MB)", 413);
   const [header, ...body] = parseCsv(text.replace(/^\uFEFF/, ""));
@@ -664,59 +768,179 @@ export function uploadStudentsCsv(draft: DemoState, text: string): CsvUploadResu
     throw new DemoApiError(`The demo accepts up to ${MAX_DEMO_CSV_ROWS} rows per upload.`, 413);
   }
   const cols = header.map((h) => h.trim());
+  const repeated = [...new Set(cols.filter((c, i) => c && cols.indexOf(c) !== i))];
+  if (repeated.length) {
+    throw new DemoApiError(
+      `Each column may appear only once, but this file repeats: ${repeated.sort().join(", ")}.`,
+      400,
+    );
+  }
   const invalid: CsvUploadInvalidRow[] = [];
-  const parsed = new Map<string, Student>();
+  const warnings: CsvUploadWarning[] = [];
+  const rows: { line: number; email: string; patch: CsvPatch }[] = [];
 
   body.forEach((cells, idx) => {
+    const line = idx + 2;
     const row: Record<string, string> = {};
     cols.forEach((c, i) => (row[c] = (cells[i] ?? "").trim()));
-    const missing = ["name", "email", "branch", "graduationYear"].filter((f) => !row[f]);
-    const year = Number(row.graduationYear);
-    if (!missing.length && !Number.isInteger(year)) missing.push("graduationYear");
+    if (!Object.values(row).some((v) => v)) return; // a row with nothing in it (",,,," from a spreadsheet)
+
+    const bad = ["name", "email", "branch", "graduationYear"].filter((f) => !row[f]);
+    if (!bad.length) {
+      for (const f of ["name", "email", "branch"]) if (row[f].includes("\0")) bad.push(f);
+      if (!bad.includes("email") && !CSV_EMAIL_RE.test(row.email)) bad.push("email");
+      if (!YEAR_RE.test(row.graduationYear)) bad.push("graduationYear");
+      else {
+        const y = Number(row.graduationYear.split(".")[0]);
+        if (y < CSV_MIN_YEAR || y > CSV_MAX_YEAR) bad.push("graduationYear");
+      }
+    }
     // Validate everything up front: an upload either applies completely or not at all.
-    if (!missing.length && !EMAIL_RE.test(row.email)) missing.push("email");
-    if (missing.length) {
-      invalid.push({ line: idx + 2, missing, row });
+    if (bad.length) {
+      invalid.push({ line, missing: bad, row });
       return;
     }
-    const verification = (row.verificationStatus || "pending").toLowerCase() as VerificationStatus;
-    const placement = (row.placementStatus || "not_placed").toLowerCase() as PlacementStatus;
-    const email = row.email.toLowerCase();
-    const existing = draft.students.find((s) => s.email === email);
-    const base = existing ? clone(existing) : createStudentShell(draft, email);
-    parsed.set(email, {
-      ...base,
+
+    const patch: CsvPatch = {
       name: row.name,
       branch: row.branch,
-      graduation_year: year,
-      employability_score: num(row.employabilityScore),
-      resume_score: num(row.resumeScore),
-      github_score: num(row.githubScore),
-      leetcode_score: num(row.leetcodeScore),
-      interview_score: num(row.interviewScore),
-      assessment_score: num(row.assessmentScore),
-      verification_status: VERIFICATION_STATUSES.includes(verification) ? verification : "pending",
-      placement_status: PLACEMENT_STATUSES.includes(placement) ? placement : "not_placed",
-      updated_at: nowIso(),
-    });
+      graduation_year: Number(row.graduationYear.split(".")[0]),
+    };
+    for (const [column, field] of NUMERIC_COLUMNS) {
+      if (!row[column]) continue;
+      const score = parseScore(row[column]);
+      if ("value" in score) patch[field] = score.value;
+      else warnings.push({ line, column, value: row[column], reason: score.reason });
+    }
+    // A column that is not in the file's header is undefined here, not blank.
+    const verification = row.verificationStatus;
+    if (verification) {
+      const value = verification.toLowerCase() as VerificationStatus;
+      if (VERIFICATION_STATUSES.includes(value)) patch.verification_status = value;
+      else
+        warnings.push({
+          line,
+          column: "verificationStatus",
+          value: verification,
+          reason: `must be one of ${[...VERIFICATION_STATUSES].sort().join(", ")}`,
+        });
+    }
+    const placement = row.placementStatus;
+    if (placement) {
+      const value = placement.toLowerCase() as PlacementStatus;
+      if (PLACEMENT_STATUSES.includes(value)) patch.placement_status = value;
+      else
+        warnings.push({
+          line,
+          column: "placementStatus",
+          value: placement,
+          reason: `must be one of ${[...PLACEMENT_STATUSES].sort().join(", ")}`,
+        });
+    }
+    rows.push({ line, email: row.email.toLowerCase(), patch });
   });
 
   if (invalid.length) {
     throw new DemoCsvError("CSV file has missing or invalid required fields", invalid.slice(0, 20));
   }
-  if (!parsed.size) throw new DemoApiError("CSV contained no rows", 400);
+  if (!rows.length) throw new DemoApiError("CSV contained no rows", 400);
 
-  const added: Student[] = [];
-  for (const row of parsed.values()) {
-    const at = draft.students.findIndex((s) => s.email === row.email);
-    if (at >= 0) draft.students[at] = row;
-    else draft.students.push(row);
-    added.push(row);
+  // One row per email: agreeing repeats merge (a blank never erases), conflicting ones are refused.
+  const merged = new Map<string, CsvPatch>();
+  const repeats = new Map<string, CsvUploadDuplicate>();
+  for (const { line, email, patch } of rows) {
+    const have = merged.get(email);
+    if (!have) {
+      merged.set(email, { ...patch });
+      repeats.set(email, { email, lines: [line], conflicts: [] });
+      continue;
+    }
+    const report = repeats.get(email)!;
+    report.lines.push(line);
+    for (const key of Object.keys(patch) as (keyof Student)[]) {
+      if (key in have && have[key] !== patch[key]) {
+        const column = COLUMN_FOR_FIELD[key] ?? String(key);
+        if (!report.conflicts.includes(column)) report.conflicts.push(column);
+      } else (have as Record<string, unknown>)[key] = patch[key];
+    }
+  }
+  const duplicates = [...repeats.values()].filter((d) => d.lines.length > 1);
+  const conflicts = duplicates.filter((d) => d.conflicts.length);
+  if (conflicts.length) {
+    throw new DemoCsvError(
+      "CSV file repeats an email with different values — fix it so each student appears once",
+      undefined,
+      conflicts.slice(0, 20),
+    );
+  }
+  for (const d of duplicates) {
+    warnings.push({
+      line: d.lines[d.lines.length - 1],
+      column: "email",
+      value: d.email,
+      reason: `repeats line ${d.lines[0]} with the same values — counted once`,
+    });
+  }
+
+  let created = 0;
+  let updated = 0;
+  let unchanged = 0;
+  const plan: unknown[] = [];
+  const writes: { email: string; at: number; patch: CsvPatch }[] = [];
+  for (const [email, patch] of [...merged].sort((a, b) => (a[0] < b[0] ? -1 : 1))) {
+    const at = draft.students.findIndex((s) => s.email === email);
+    if (at < 0) {
+      created += 1;
+      plan.push([email, "created", Object.entries(patch).sort()]);
+      writes.push({ email, at, patch });
+      continue;
+    }
+    // Only fields that differ are written, so a value the file merely repeats cannot revert a newer edit.
+    const changed = Object.fromEntries(
+      Object.entries(patch).filter(([k, v]) => draft.students[at][k as keyof Student] !== v),
+    ) as CsvPatch;
+    if (!Object.keys(changed).length) {
+      unchanged += 1;
+      plan.push([email, "unchanged"]);
+    } else {
+      updated += 1;
+      plan.push([email, "updated", Object.entries(changed).sort()]);
+      writes.push({ email, at, patch: changed });
+    }
+  }
+  const planId = fingerprint(JSON.stringify(plan));
+
+  if (!dryRun && options.expectedPlan !== undefined && options.expectedPlan !== planId) {
+    throw new DemoApiError(
+      "The file or the roster has changed since the preview, so nothing was imported. Check the file again to see the current result.",
+      409,
+    );
+  }
+
+  const written: Student[] = [];
+  if (!dryRun) {
+    for (const { email, at, patch } of writes) {
+      if (at < 0) {
+        const row = { ...createStudentShell(draft, email), ...patch, updated_at: nowIso() };
+        draft.students.push(row);
+        written.push(row);
+      } else {
+        draft.students[at] = { ...draft.students[at], ...patch, updated_at: nowIso() };
+        written.push(draft.students[at]);
+      }
+    }
   }
   return {
-    message: "Students uploaded successfully",
-    addedStudents: added.length,
-    students: clone(added),
+    message: dryRun ? "Preview only — nothing was saved." : "Students uploaded successfully",
+    addedStudents: created + updated,
+    created,
+    updated,
+    unchanged,
+    warnings: warnings.slice(0, 20),
+    warningsTotal: warnings.length,
+    planId,
+    dryRun,
+    students: clone(written),
   };
 }
 
@@ -744,4 +968,196 @@ function createStudentShell(draft: DemoState, email: string): Student {
     created_at: nowIso(),
     updated_at: nowIso(),
   };
+}
+
+// ── Platform drives & outcomes (the demo's counterpart of GET /api/dashboard/platform) ──
+//
+// Fictional companies, fictional drives, and applications derived deterministically from the sample
+// roster, so the same student always has the same outcomes and a roster edit is reflected. Nothing here
+// is stored: it is recomputed from `state.students` on every call, so a preview/confirm never needs it.
+
+const DEMO_PLATFORM_DRIVES: {
+  id: string;
+  companyName: string;
+  jobTitle: string;
+  location: string;
+  employmentType: string;
+  status: "live" | "closed";
+  isOnCampus: boolean;
+  deadlineDays: number;
+  minCgpa: number | null;
+  rounds: { type: string; mode: "ai" | "live" }[];
+}[] = [
+  {
+    id: "demo-pdrive-1",
+    companyName: "Meridian Systems (sample)",
+    jobTitle: "Associate Software Engineer",
+    location: "Bengaluru",
+    employmentType: "full-time",
+    status: "live",
+    isOnCampus: true,
+    deadlineDays: 14,
+    minCgpa: 7,
+    rounds: [
+      { type: "tech", mode: "ai" },
+      { type: "hr", mode: "live" },
+    ],
+  },
+  {
+    id: "demo-pdrive-2",
+    companyName: "Lumen Analytics (sample)",
+    jobTitle: "Data Analyst",
+    location: "Remote",
+    employmentType: "full-time",
+    status: "live",
+    isOnCampus: false,
+    deadlineDays: 30,
+    minCgpa: null,
+    rounds: [{ type: "tech", mode: "ai" }],
+  },
+  {
+    id: "demo-pdrive-3",
+    companyName: "Harbor & Co (sample)",
+    jobTitle: "Graduate Trainee",
+    location: "Pune",
+    employmentType: "internship",
+    status: "closed",
+    isOnCampus: true,
+    deadlineDays: -20,
+    minCgpa: 6.5,
+    rounds: [
+      { type: "tech", mode: "ai" },
+      { type: "hr", mode: "live" },
+    ],
+  },
+];
+
+const FUNNEL_BY_HASH: PlatformApplication["status"][] = [
+  "applied",
+  "applied",
+  "applied",
+  "applied",
+  "shortlisted",
+  "shortlisted",
+  "in_interview",
+  "hired",
+  "rejected",
+  "rejected",
+  "rejected",
+  "rejected",
+];
+
+/** How far a round-by-round status has got, for a given overall application status. */
+function demoRoundStatuses(status: PlatformApplication["status"], rounds: number) {
+  const out: ("pending" | "shortlisted" | "rejected")[] = Array(rounds).fill("pending");
+  const passed =
+    status === "hired" ? rounds : status === "in_interview" ? 1 : status === "shortlisted" ? 1 : 0;
+  for (let i = 0; i < Math.min(passed, rounds); i++) out[i] = "shortlisted";
+  if (status === "rejected") out[0] = "rejected";
+  return out;
+}
+
+export function platformOverview(state: DemoState): PlatformOverview {
+  // Anchor the sample dates on the roster itself (its rows were created ~120 days before "today").
+  const base = Date.parse(state.students[0]?.created_at ?? "") + 120 * 86_400_000;
+  const anchor = Number.isFinite(base) ? base : Date.UTC(2026, 9, 11);
+  const iso = (days: number) => new Date(anchor + days * 86_400_000).toISOString();
+
+  const applicationsByStudent = new Map<string, PlatformApplication[]>();
+  for (const s of state.students) {
+    if (s.status !== "active") continue;
+    const h = fnv32(s.id);
+    DEMO_PLATFORM_DRIVES.forEach((d, k) => {
+      // about a third of the roster applies to each drive; placed students tend to have been selected
+      if ((h >>> (k * 3)) % 3 !== 0) return;
+      const pick = FUNNEL_BY_HASH[(h >>> (k * 5 + 1)) % FUNNEL_BY_HASH.length];
+      const status =
+        d.status === "closed" && (pick === "applied" || pick === "in_interview")
+          ? s.placement_status === "placed" && h % 3 === 0
+            ? "hired"
+            : "rejected"
+          : pick;
+      const statuses = demoRoundStatuses(status, d.rounds.length);
+      const list = applicationsByStudent.get(s.id) ?? [];
+      list.push({
+        driveId: d.id,
+        jobTitle: d.jobTitle,
+        companyName: d.companyName,
+        status,
+        appliedAt: iso(d.deadlineDays - 10 - (h % 5)),
+        rounds: d.rounds.map((r, i) => ({
+          number: i + 1,
+          type: r.type,
+          mode: r.mode,
+          status: statuses[i],
+        })),
+      });
+      applicationsByStudent.set(s.id, list);
+    });
+  }
+
+  const drives: PlatformDrive[] = DEMO_PLATFORM_DRIVES.map((d) => {
+    const its = [...applicationsByStudent.values()].flat().filter((a) => a.driveId === d.id);
+    const count = (...st: string[]) => its.filter((a) => st.includes(a.status)).length;
+    return {
+      id: d.id,
+      jobTitle: d.jobTitle,
+      companyName: d.companyName,
+      location: d.location,
+      employmentType: d.employmentType,
+      status: d.status,
+      isOnCampus: d.isOnCampus,
+      applyDeadline: iso(d.deadlineDays),
+      eligibility: { minCgpa: d.minCgpa, branches: [], batchYears: [] },
+      rounds: d.rounds.map((r, i) => ({
+        number: i + 1,
+        type: r.type,
+        mode: r.mode,
+        windowStart: null,
+        windowEnd: null,
+      })),
+      funnel: {
+        applicants: its.length,
+        inProgress: count("applied", "scoring", "scored"),
+        shortlisted: count("shortlisted"),
+        inInterview: count("in_interview"),
+        selected: count("hired"),
+        rejected: count("rejected"),
+      },
+    };
+  }).sort((a, b) => String(a.applyDeadline).localeCompare(String(b.applyDeadline)));
+
+  const students: PlatformStudent[] = state.students
+    .filter((s) => applicationsByStudent.has(s.id))
+    .map((s) => {
+      const applications = applicationsByStudent.get(s.id)!;
+      const selected = applications.some((a) => a.status === "hired");
+      return {
+        studentId: s.id,
+        name: s.name,
+        email: s.email,
+        branch: s.branch,
+        graduationYear: s.graduation_year,
+        placementStatus: s.placement_status,
+        selectedOnPlatform: selected,
+        rosterNeedsReview: selected && s.placement_status !== "placed",
+        applications,
+      };
+    })
+    .sort(
+      (a, b) =>
+        Number(b.selectedOnPlatform) - Number(a.selectedOnPlatform) || a.name.localeCompare(b.name),
+    );
+
+  const all = students.flatMap((s) => s.applications);
+  return clone({
+    drives,
+    students,
+    studentsOnPlatform: students.length,
+    totals: {
+      applications: all.length,
+      selected: all.filter((a) => a.status === "hired").length,
+      needsRosterUpdate: students.filter((s) => s.rosterNeedsReview).length,
+    },
+  });
 }

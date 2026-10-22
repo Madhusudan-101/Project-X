@@ -57,6 +57,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { PlatformPanel } from "@/components/college/PlatformPanel";
 import { drivesService } from "@/services/api/college/college";
 import type { Drive, DriveStatus, Student } from "@/types/college/college";
 
@@ -259,6 +260,8 @@ export function DrivesTab() {
           </Table>
         )}
       </Card>
+
+      <PlatformPanel />
 
       <EligibleStudentsDialog drive={eligibleFor} onClose={() => setEligibleFor(null)} />
     </div>

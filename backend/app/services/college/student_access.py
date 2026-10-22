@@ -29,6 +29,7 @@ from ...crud import update_profile
 from ...deps import admin_client, db_client
 from ...schemas import StudentBlockIn, StudentOnboardIn, StudentRestrictIn, StudentUnblockIn
 from ...services.admin.events import log_event
+from .audit import log_college_action
 from ...utils.email_rules import is_valid_email_format
 
 _DURATIONS = {"1h": timedelta(hours=1), "24h": timedelta(hours=24), "7d": timedelta(days=7), "30d": timedelta(days=30)}
@@ -123,6 +124,9 @@ def block_student(sb: Client, tpo: dict, student_id: str, payload: StudentBlockI
             metadata={"permanent": False, "until": until_iso, "reason": reason},
         )
 
+    log_college_action("student_access_changed", tpo, target_type="student", target_id=student_id,
+                       target_label=student["email"], metadata={"status": "temporarily_blocked", "until": until_iso,
+                                                                "account_restricted": bool(profile)})
     return {"message": "Student temporarily blocked.", "student": row, "accountRestricted": bool(profile)}
 
 
@@ -148,6 +152,8 @@ def restrict_student(sb: Client, tpo: dict, student_id: str, payload: StudentRes
             metadata={"permanent": True, "reason": reason},
         )
 
+    log_college_action("student_access_changed", tpo, target_type="student", target_id=student_id,
+                       target_label=student["email"], metadata={"status": "restricted", "account_restricted": bool(profile)})
     return {"message": "Student restricted.", "student": row, "accountRestricted": bool(profile)}
 
 
@@ -171,6 +177,8 @@ def unblock_student(sb: Client, tpo: dict, student_id: str, payload: StudentUnbl
             metadata={"reason": (payload.reason or "").strip() or None},
         )
 
+    log_college_action("student_access_changed", tpo, target_type="student", target_id=student_id,
+                       target_label=student["email"], metadata={"status": "active", "account_restricted": bool(profile)})
     return {"message": "Student access restored.", "student": row, "accountRestricted": bool(profile)}
 
 

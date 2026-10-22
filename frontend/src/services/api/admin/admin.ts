@@ -17,6 +17,7 @@ import type {
   CollegeDetail,
   CollegeProvisionInput,
   CollegeProvisionResult,
+  CollegeSuspensionResult,
   CollegeRow,
   CompanyRow,
   CreateDelegatedAdminInput,
@@ -130,6 +131,12 @@ export const adminService = {
     export: (range: AdminRange, p: Partial<ListParams> & CollegeFilters) => exportCsv("colleges", range, p),
     provision: (body: CollegeProvisionInput) =>
       request<CollegeProvisionResult>("/admin/colleges", { method: "POST", body }),
+    /** Blocks every TPO account of the college (nothing is deleted). Needs `colleges.suspend`. */
+    suspend: (id: string, reason: string) =>
+      request<CollegeSuspensionResult>(`/admin/colleges/${id}/suspend`, { method: "POST", body: { reason } }),
+    /** Restores the TPO accounts that a suspension blocked — and only those. */
+    reactivate: (id: string, reason?: string) =>
+      request<CollegeSuspensionResult>(`/admin/colleges/${id}/reactivate`, { method: "POST", body: { reason } }),
   },
 
   companies: {

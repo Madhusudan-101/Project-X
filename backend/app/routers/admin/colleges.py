@@ -14,11 +14,14 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from postgrest.exceptions import APIError
 
 from ...crud import create_college, find_college_id_by_name
-from ...deps import db_client, require_admin_role
+from ...deps import db_client, is_currently_blocked, require_admin_role
 from ...schemas import CollegeProvisionIn
 from ...services.admin.common import (
     DateRange, Page, clean_search, clean_sort, csv_response, date_range, one_of,
     page_params, rpc_all, rpc_one, rpc_page,
+)
+from ...services.admin.college_lifecycle import (
+    CollegeReactivateIn, CollegeSuspendIn, reactivate_college, suspend_college, suspension_state, tpo_accounts,
 )
 from ...services.admin.events import log_event
 from ...services.admin.permissions import require_permission, scope_college_ids
@@ -114,17 +117,41 @@ def college_detail(
     })
     if not row:
         raise HTTPException(status_code=404, detail="College not found.")
+    accounts = tpo_accounts(str(college_id))
     try:
-        accounts = (
-            db_client.table("profiles")
-            .select("id, email, name, created_at, onboarded")
-            .eq("role", "college").eq("college_id", str(college_id))
-            .order("created_at").execute()
-        ).data or []
-    except APIError as e:
-        log.error("College accounts lookup failed for %s: %s", college_id, e)
-        raise HTTPException(status_code=500, detail="Failed to load college accounts.")
-    return {"college": row, "accounts": accounts}
+        profile = db_client.table("colleges").select("onboarding_completed").eq("id", str(college_id)).limit(1).execute().data
+        onboarding_completed = bool(profile[0].get("onboarding_completed")) if profile else None
+    except APIError:
+        onboarding_completed = None  # the onboarding migration is not applied on this project: say "unknown", not "no"
+    return {
+        "college": row,
+        "accounts": [
+            {**{k: a.get(k) for k in ("id", "email", "name", "created_at", "onboarded")},
+             "is_blocked": is_currently_blocked(a), "blocked_reason": a.get("blocked_reason") if is_currently_blocked(a) else None}
+            for a in accounts
+        ],
+        "suspension": suspension_state(accounts),
+        "onboarding_completed": onboarding_completed,
+    }
+
+
+@router.post("/{college_id}/suspend")
+def suspend(
+    college_id: UUID, payload: CollegeSuspendIn,
+    admin: dict = Depends(require_permission("colleges.suspend", scope_param="college_id")),
+):
+    """Block every TPO account of the college (see services/admin/college_lifecycle.py for exactly what
+    that does and does not do). 409 when it is already suspended or has no TPO account."""
+    return suspend_college(str(college_id), payload.reason, admin)
+
+
+@router.post("/{college_id}/reactivate")
+def reactivate(
+    college_id: UUID, payload: CollegeReactivateIn,
+    admin: dict = Depends(require_permission("colleges.suspend", scope_param="college_id")),
+):
+    """Restore the TPO accounts that a suspension blocked — and only those. 409 when not suspended."""
+    return reactivate_college(str(college_id), payload.reason, admin)
 
 
 def _resolve_college(payload: CollegeProvisionIn, allowed_ids: Optional[List[str]] = None) -> Tuple[str, bool]:

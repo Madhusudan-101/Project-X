@@ -7,6 +7,7 @@ from postgrest.exceptions import APIError
 from supabase import Client
 
 from ...deps import get_current_tpo, get_user_supabase
+from ...services.college.audit import log_college_action
 from ...schemas import DriveIn, DriveUpdateIn
 from ...utils.college.branch import branch_matches
 
@@ -65,6 +66,8 @@ def create_drive(
     row = (res.data or [None])[0]
     if not row:
         raise HTTPException(status_code=500, detail="Insert returned no row")
+    log_college_action("campus_drive_created", tpo, target_type="campus_drive", target_id=row["id"],
+                       target_label=row["company_name"])
     return {"message": "Company drive created successfully", "drive": _drive_to_out(row)}
 
 
@@ -122,6 +125,8 @@ def update_drive(
     row = (res.data or [None])[0]
     if not row:
         raise HTTPException(status_code=404, detail="Drive not found")
+    log_college_action("campus_drive_updated", tpo, target_type="campus_drive", target_id=row["id"],
+                       target_label=row["company_name"], metadata={"fields": sorted(patch)})
     return {"message": "Company drive updated successfully", "drive": _drive_to_out(row)}
 
 
@@ -144,6 +149,8 @@ def delete_drive(
 
     if not res.data:
         raise HTTPException(status_code=404, detail="Drive not found")
+    log_college_action("campus_drive_deleted", tpo, target_type="campus_drive", target_id=res.data[0]["id"],
+                       target_label=res.data[0].get("company_name"))
     return {"message": "Company drive deleted successfully"}
 
 

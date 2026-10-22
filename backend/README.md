@@ -130,6 +130,72 @@ Admin Portal
   `extract_problems.mjs` (handler → plain tests) then `build_seed.py` (sanitise + validate against
   the independent solutions in `scripts/oa_import/solutions/`). See the docstrings there.
 
+
+College Portal & Admin Portal — roster import, onboarding, platform view, suspension, audit
+-------------------------------------------------------------------------------------------
+
+None of this needs a new table or column that the repo's migrations do not already define, except the one
+prepared (NOT applied) policy migration below.
+
+- **Roster CSV import** — `POST /api/students/upload`. Never overwrites what a file does not say: a missing
+  column, a blank cell or an unusable value leaves the stored field alone (a new student gets the database
+  default). Rules (the demo engine, `frontend/src/lib/demo/college/engine.ts`, applies the same ones; both test
+  suites carry the same contract table): name/email/branch/graduationYear required, no NUL byte, the email must
+  look like an email, the year a whole year 1950-2100; scores plain decimals 0-100, rounded half-up to two
+  places (what `numeric(5,2)` stores, so re-uploading the same file is "unchanged", not "updated" forever); rows
+  with nothing in them are skipped; a repeated column name is refused; a repeated EMAIL that agrees merges (and
+  is reported), one that disagrees refuses the file naming the lines and columns.
+  - `?dryRun=true` returns created / updated / unchanged, warnings and a `planId` without writing anything
+    (200, not 201). `?expectedPlan=<planId>` on the real import is refused with 409 — nothing written — if the
+    file or the roster no longer produces that plan, so a stale preview can never be confirmed.
+  - For an existing student only the fields that DIFFER are written, so a value an old export merely repeats
+    cannot revert a newer edit. Rows are written in groups that share one column set (PostgREST NULL-fills a
+    column a bulk row omits); each group is one request, i.e. one transaction. A failure after the first group
+    says exactly how many students were saved ("1 of 2 changed students were saved…") and re-uploading the same
+    file finishes the job; an unconfirmed write (dropped connection) is reported as an unknown outcome (502).
+  - `addedStudents` = created + updated (it used to count every row the upsert returned, including unchanged
+    ones). Nothing in this repo reads it besides the upload dialog, which now uses `created/updated/unchanged`.
+  - Limits that cannot be checked locally: the real PostgREST/PostgreSQL behaviour of the grouped upsert, and
+    concurrent imports (no duplicates are possible — `unique (college_id, email)` — but the last writer wins).
+- **College onboarding** — `GET`/`PUT /api/dashboard/onboarding`. Persists to `colleges` (website, city, state,
+  type, student_strength, onboarding_completed), `college_contacts`, `college_platform_intent`, `departments`
+  (names are only ever added) and `college_consents` (one row per accepted TOS/data-consent version). Needs
+  `db/college_onboarding_migration.sql` applied. Saving is idempotent and ordered so completion and consent come
+  last; a failed step never marks the college complete. The consent wording the page shows is identified by
+  `TOS_VERSION` / `DATA_CONSENT_VERSION` in `app/routers/college/onboarding.py` — bump them when the wording
+  changes (the wording itself still needs the owner's/legal sign-off). No column stores a "placement cycle
+  status" or a logo, so the page no longer asks for them. `college_consents` has no "accepted by" column; the
+  `college_onboarding_saved` audit event records who.
+- **Platform drives and outcomes (read-only)** — `GET /api/dashboard/platform`. A college's live/closed platform
+  drives and how its ROSTER students did. A student appears only if their account is at this college AND their
+  email is on this college's roster. Statuses only: never scores, analyses, resumes, answers or compensation.
+  Read with the service-role client under explicit tenant scoping (no College RLS policy exists on those
+  tables, and adding one would change tables owned by the Company/Candidate portals). Open product question:
+  students are not told their placement cell can see their application status — that notice belongs to the
+  Candidate Portal.
+- **Suspend / reactivate a college** — `POST /admin/colleges/{id}/suspend` (reason required) and `/reactivate`,
+  permission `colleges.suspend` (global, or scoped to a college). A suspension is the account block applied to
+  every TPO account of the college, so it is enforced exactly as every other block (every request, refresh and
+  sign-in; `current_college_id()` for direct Supabase access). Nothing is deleted. Reactivation restores only the
+  accounts the suspension blocked (recognised by the "College suspended: " reason prefix). All-or-nothing:
+  a failure while suspending rolls back. It does NOT hide the college from students, stop companies publishing
+  drives, or touch student/company accounts.
+- **Audit trail** — College actions (roster import, student create/update/delete/access change, bulk placement
+  update, invites, campus drives, departments, onboarding), `college_suspended` / `college_reactivated`, and
+  `access_denied` (a signed-in admin asked for something their grants do not cover; throttled to one per admin
+  and permission per minute per process) now go to `admin_events`, one event per action, never per row, with
+  counts and field names rather than values. Not tamper-proof: anyone holding the service-role key can alter it.
+- **Prepared, NOT applied: `db/college_rls_admin_hardening_migration.sql`.** Removes the `public.is_admin() or`
+  clause from the College tenant policies (students, company_drives, departments, score_verifications,
+  colleges, college_contacts / platform_intent / consents) so an admin with no grants can no longer read or
+  write every college's data straight through PostgREST. The file's header lists the compatibility reasoning,
+  the read-only checks to run against the live project first, and the rollback. Exercised by
+  `tests/test_college_student_access_sql.py` (needs a scratch PostgreSQL via `ADMIN_TEST_DATABASE_URL`; it
+  was not runnable where this was written).
+- **Registration note.** The new College endpoints are mounted from `app/routers/college/dashboard.py`
+  (`router.include_router(...)`) so `app/main.py`, shared with the other portals, stays untouched. Moving them
+  to their own `include_router` lines in `main.py` is a possible tidy-up for whoever owns that file.
+
 Frontend
 --------
 

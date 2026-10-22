@@ -49,24 +49,38 @@ test.describe("college / TPO portal", () => {
     expect(state.students_rows.map((x: any) => x.email)).not.toContain("not-an-email");
   });
 
-  test("CSV upload adds students; a bad CSV is rejected", async ({ page, request }, info) => {
+  test("CSV upload: a bad CSV is rejected at the preview; a good one is previewed, saves nothing, then imports on confirm", async ({ page, request }, info) => {
     const good = path.join(info.outputDir, "good.csv");
     const bad = path.join(info.outputDir, "bad.csv");
     fs.mkdirSync(info.outputDir, { recursive: true });
     fs.writeFileSync(good, "name,email,branch,graduationYear,employabilityScore\nUma Upload,uma@x.com,IT,2026,64\nVic Upload,vic@x.com,CSE,2027,88\n");
     fs.writeFileSync(bad, "name,email,branch,graduationYear\nNo Email,,CSE,2026\n");
+    const rosterEmails = async () =>
+      ((await (await request.get(`${API}/__e2e/state`)).json()).students_rows as { email: string }[]).map((s) => s.email).sort();
+
     await signedIn(page, request, "college", "/college/students");
     await page.getByRole("button", { name: "Upload CSV" }).click();
+
+    // A rejected file shows the row errors at the check step and offers no way to import.
     await page.locator("input[type=file]").setInputFiles(bad);
-    await page.getByRole("button", { name: "Upload", exact: true }).click();
-    await expect(page.getByText("Some rows were rejected:")).toBeVisible({ timeout: 10_000 });
-    await expect(page.getByText(/Line 2: missing email/)).toBeVisible();
+    await page.getByRole("button", { name: "Check file" }).click();
+    await expect(page.getByText("CSV file has missing or invalid required fields")).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByText(/Line 2: missing or invalid email/)).toBeVisible();
+    await expect(page.getByRole("button", { name: /Confirm import/ })).toHaveCount(0);
+    expect(await rosterEmails()).toEqual(["sam@e2e.dev"]);
+
+    // A good file is previewed first: counts shown, nothing saved yet.
     await page.locator("input[type=file]").setInputFiles(good);
-    await page.getByRole("button", { name: "Upload", exact: true }).click();
+    await page.getByRole("button", { name: "Check file" }).click();
+    await expect(page.getByText("Will be added")).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByText(/nothing has been saved/i)).toBeVisible();
+    expect(await rosterEmails()).toEqual(["sam@e2e.dev"]);
+
+    // Only the explicit confirmation imports.
+    await page.getByRole("button", { name: /Confirm import \(2 students\)/ }).click();
     await expect(page.getByRole("cell", { name: "Uma Upload", exact: true }).first()).toBeVisible({ timeout: 10_000 });
     await expect(page.getByRole("cell", { name: "Vic Upload", exact: true }).first()).toBeVisible();
-    const state = await (await request.get(`${API}/__e2e/state`)).json();
-    expect(state.students_rows.map((s: any) => s.email).sort()).toEqual(["sam@e2e.dev", "uma@x.com", "vic@x.com"]);
+    expect(await rosterEmails()).toEqual(["sam@e2e.dev", "uma@x.com", "vic@x.com"]);
   });
 
   test("search narrows the roster", async ({ page, request }) => {

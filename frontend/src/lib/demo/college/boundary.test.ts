@@ -153,6 +153,7 @@ describe("every College Portal service is demo-aware", () => {
       "drivesService",
       "shortlistService",
       "departmentsService",
+      "platformService",
     ]) {
       assert.match(code, new RegExp(`export const ${name} = withDemo\\(`), name);
     }

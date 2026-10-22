@@ -13,7 +13,6 @@ import {
   ShieldCheck,
   ShieldOff,
   Trash2,
-  Upload,
   UserRoundPlus,
 } from "lucide-react";
 import {
@@ -73,10 +72,10 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { CsvUploadError, downloadCsvBlob, studentsService } from "@/services/api/college/college";
+import { UploadCsvDialog } from "@/components/college/UploadCsvDialog";
+import { downloadCsvBlob, studentsService } from "@/services/api/college/college";
 import type {
   BlockDuration,
-  CsvUploadInvalidRow,
   PlacementStatus,
   Student,
   StudentAccessStatus,
@@ -1369,75 +1368,6 @@ function AddStudentDialog({ onAdded }: { onAdded: () => void }) {
             className="bg-gradient-brand text-primary-foreground"
           >
             <Plus className="mr-2 h-4 w-4" /> {submitting ? "Adding…" : "Add student"}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-function UploadCsvDialog({ onUploaded }: { onUploaded: () => void }) {
-  const [open, setOpen] = useState(false);
-  const [file, setFile] = useState<File | null>(null);
-  const [uploading, setUploading] = useState(false);
-  const [invalidRows, setInvalidRows] = useState<CsvUploadInvalidRow[] | null>(null);
-
-  const handleUpload = async () => {
-    if (!file) return;
-    setUploading(true);
-    setInvalidRows(null);
-    try {
-      const result = await studentsService.uploadCsv(file);
-      toast.success(result.message, {
-        description: `${result.addedStudents} student${result.addedStudents === 1 ? "" : "s"} added/updated.`,
-      });
-      setOpen(false);
-      setFile(null);
-      onUploaded();
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : "CSV upload failed";
-      toast.error(message);
-      if (err instanceof CsvUploadError && err.invalidRows) {
-        setInvalidRows(err.invalidRows);
-      }
-    } finally {
-      setUploading(false);
-    }
-  };
-
-  return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <Button variant="outline">
-          <Upload className="mr-2 h-4 w-4" /> Upload CSV
-        </Button>
-      </DialogTrigger>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>Upload student roster</DialogTitle>
-          <DialogDescription>
-            CSV must include name, email, branch, graduationYear columns (optional score columns and
-            verificationStatus). Existing students are matched and updated by email.
-          </DialogDescription>
-        </DialogHeader>
-        <Input type="file" accept=".csv" onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
-        {invalidRows && invalidRows.length > 0 && (
-          <div className="max-h-40 overflow-auto rounded-md border border-destructive/30 bg-destructive/5 p-3 text-xs text-destructive">
-            <div className="mb-1 font-medium">Some rows were rejected:</div>
-            {invalidRows.map((r) => (
-              <div key={r.line}>
-                Line {r.line}: missing {r.missing.join(", ")}
-              </div>
-            ))}
-          </div>
-        )}
-        <DialogFooter>
-          <Button
-            onClick={handleUpload}
-            disabled={!file || uploading}
-            className="bg-gradient-brand text-primary-foreground"
-          >
-            {uploading ? "Uploading…" : "Upload"}
           </Button>
         </DialogFooter>
       </DialogContent>

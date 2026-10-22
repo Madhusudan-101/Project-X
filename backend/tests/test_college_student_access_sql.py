@@ -42,9 +42,23 @@ SERVER_URL = URL
 TEST_URL = urlunparse(_parsed._replace(path=f"/{DB}"))
 
 MIGRATIONS = BASE_MIGRATIONS + ["db/student_access_and_onboarding_migration.sql"]
+# Prepared, not applied to any real project: removes the "any admin" clause from the College tenant policies.
+HARDENING = "db/college_rls_admin_hardening_migration.sql"
 
 C1, C2 = "c1000000-0000-0000-0000-000000000001", "c2000000-0000-0000-0000-000000000002"
 T1, T2 = "00000000-0000-0000-0000-000000000001", "00000000-0000-0000-0000-000000000002"
+ADM = "00000000-0000-0000-0000-000000000003"   # a DELEGATED admin: role 'admin', is_super_admin false, no grants at all
+
+TENANT_TABLES = ["students", "company_drives", "departments", "college_consents", "score_verifications"]
+FIXTURE_ADMIN_AND_TENANT_ROWS = f"""
+insert into auth.users (id, email) values ('{ADM}', 'adm@x.test');
+insert into public.profiles (id, email, role) values ('{ADM}', 'adm@x.test', 'admin');
+insert into public.company_drives (college_id, company_name, role, drive_date) values ('{C1}', 'Acme', 'SDE', '2030-01-01');
+insert into public.departments (college_id, name) values ('{C1}', 'Computer Science');
+insert into public.college_consents (college_id, tos_version, consent_version) values ('{C1}', 'v1', 'v1');
+insert into public.score_verifications (college_id, student_id, score_type)
+  select '{C1}', id, 'resume' from public.students where college_id = '{C1}';
+"""
 
 FIXTURE = f"""
 insert into auth.users (id, email) values ('{T1}', 't1@x.test'), ('{T2}', 't2@x.test');
@@ -144,6 +158,67 @@ def main() -> int:
     cur.execute(f"select plan from public.colleges where id = '{C1}'")
     check("...and the plan is unchanged (still 'pro', set earlier as a direct DB session)", cur.fetchone()["plan"] == "pro")
     cur.execute(f"select set_config('request.jwt.claim.sub', '', false)")
+
+    # ──────────────────────────────────────────────────────────────────────────────────────────
+    # The delegated-admin hole, and the prepared migration that closes it.
+    # ──────────────────────────────────────────────────────────────────────────────────────────
+    def as_user(uid):
+        cur.execute(f"select set_config('request.jwt.claim.sub', '{uid}', false)")
+        cur.execute("set role authenticated")
+
+    def visible(table):
+        cur.execute(f"select count(*) as n from public.{table}")
+        return cur.fetchone()["n"]
+
+    cur.execute(FIXTURE_ADMIN_AND_TENANT_ROWS)
+    cur.execute(f"update public.students set status = 'active', blocked_reason = null where college_id = '{C1}'")
+
+    print("\n== BEFORE hardening: a delegated admin with no grants sees every college's data through RLS ==")
+    as_user(ADM)
+    exposed = {t: visible(t) for t in TENANT_TABLES}
+    check("(documents the exposure) the existing policies let an admin with no grants read all tenant tables",
+          all(n >= 1 for n in exposed.values()), exposed)
+    check("(documents the exposure) ...and read colleges", visible("colleges") == 2)
+    cur.execute("reset role")
+
+    print("\n== Apply the prepared hardening migration (twice: it must be idempotent) ==")
+    for _ in range(2):
+        with open(os.path.join(BACKEND, HARDENING), encoding="utf-8") as f:
+            cur.execute(f.read())
+    check("hardening migration applies and is idempotent", True)
+
+    print("\n== AFTER hardening: the delegated admin has no access of any kind ==")
+    as_user(ADM)
+    check("reads no rows from any tenant table", all(visible(t) == 0 for t in TENANT_TABLES),
+          {t: visible(t) for t in TENANT_TABLES})
+    check("reads no colleges", visible("colleges") == 0)
+    check("cannot insert a student into any college",
+          attempt(cur, f"insert into public.students (college_id, name, email, branch, graduation_year) values ('{C1}', 'X', 'x@x.test', 'CSE', 2026)") == "42501")
+    check("cannot insert a campus drive",
+          attempt(cur, f"insert into public.company_drives (college_id, company_name, role, drive_date) values ('{C1}', 'X', 'Y', '2030-01-01')") == "42501")
+    for t in TENANT_TABLES:
+        res = attempt(cur, f"update public.{t} set college_id = college_id")
+        check(f"update on {t} matches no rows", res == "ok" and cur.rowcount == 0, (res, cur.rowcount))
+        res = attempt(cur, f"delete from public.{t}")
+        check(f"delete on {t} removes no rows", res == "ok" and cur.rowcount == 0, (res, cur.rowcount))
+    cur.execute("reset role")
+    check("...and nothing was removed (checked as the database owner)",
+          all(visible(t) >= 1 for t in TENANT_TABLES), {t: visible(t) for t in TENANT_TABLES})
+
+    print("\n== AFTER hardening: a College user keeps exactly their own college ==")
+    as_user(T1)
+    own = {t: visible(t) for t in TENANT_TABLES}
+    check("college 1 still reads its own rows in every tenant table", all(n >= 1 for n in own.values()), own)
+    check("college 1 reads only its own college row", visible("colleges") == 1)
+    check("college 1 can still write its own roster",
+          attempt(cur, f"update public.students set name = 'Stu One B' where college_id = '{C1}'") == "ok" and cur.rowcount == 1)
+    check("college 1 cannot write into another college",
+          attempt(cur, f"insert into public.students (college_id, name, email, branch, graduation_year) values ('{C2}', 'X', 'y@x.test', 'CSE', 2026)") == "42501")
+    as_user(T2)
+    check("college 2 still sees none of college 1's tenant rows",
+          all(visible(t) == 0 for t in TENANT_TABLES), {t: visible(t) for t in TENANT_TABLES})
+    cur.execute("reset role")
+    cur.execute("select set_config('request.jwt.claim.sub', '', false)")
 
     conn.close()
     with admin.cursor() as cur2:

@@ -5,7 +5,9 @@ import pytest
 from app.utils.email_rules import is_valid_email_format
 from app.utils.html_sanitize import sanitize_html
 from app.utils.college.branch import branch_matches, normalize_branch
-from app.utils.college.csv_students import dedupe_by_email, parse_students_csv
+from app.utils.college.csv_students import (
+    CsvFormatError, merge_duplicate_rows, parse_students_csv, parse_students_csv_with_warnings,
+)
 from app.services.candidate.link_extraction import (
     detect_profile_links,
     extract_codeforces_handle,
@@ -110,7 +112,7 @@ def test_branch_mismatch():
 HEADER = "name,email,branch,graduationYear,employabilityScore,verificationStatus,placementStatus\n"
 
 
-def test_csv_happy_path_and_defaults():
+def test_csv_happy_path_carries_only_supplied_fields():
     rows, bad = parse_students_csv((HEADER + "Ann,ANN@X.COM,CSE,2026,77.5,VERIFIED,placed\n").encode())
     assert bad == []
     r = rows[0]
@@ -119,13 +121,28 @@ def test_csv_happy_path_and_defaults():
     assert r["employability_score"] == 77.5
     assert r["verification_status"] == "verified"
     assert r["placement_status"] == "placed"
-    assert r["github_score"] == 0.0
+    assert "github_score" not in r  # not in the file -> never written, so never reset
 
 
-def test_csv_invalid_enums_fall_back():
-    rows, _ = parse_students_csv((HEADER + "A,a@x.com,CSE,2026,1,weird,nope\n").encode())
-    assert rows[0]["verification_status"] == "pending"
-    assert rows[0]["placement_status"] == "not_placed"
+def test_csv_without_optional_columns_yields_only_required_fields():
+    rows, bad = parse_students_csv(b"name,email,branch,graduationYear\nAnn,ann@x.com,CSE,2026\n")
+    assert bad == []
+    assert set(rows[0]) == {"name", "email", "branch", "graduation_year"}
+
+
+def test_csv_blank_optional_cells_are_left_out():
+    rows, _ = parse_students_csv((HEADER + "A,a@x.com,CSE,2026,,,\nB,b@x.com,CSE,2026,0,pending,not_placed\n").encode())
+    assert set(rows[0]) == {"name", "email", "branch", "graduation_year"}
+    assert rows[1]["employability_score"] == 0.0           # an explicit 0 is a value, not a blank
+    assert rows[1]["verification_status"] == "pending" and rows[1]["placement_status"] == "not_placed"
+
+
+def test_csv_unusable_optional_values_are_left_out_and_reported():
+    rows, _, warnings = parse_students_csv_with_warnings(
+        (HEADER + "A,a@x.com,CSE,2026,high,weird,nope\n").encode())
+    assert set(rows[0]) == {"name", "email", "branch", "graduation_year"}
+    assert [(w["line"], w["column"], w["value"]) for w in warnings] == [
+        (2, "employabilityScore", "high"), (2, "verificationStatus", "weird"), (2, "placementStatus", "nope")]
 
 
 def test_csv_missing_required_reports_line_numbers():
@@ -136,23 +153,114 @@ def test_csv_missing_required_reports_line_numbers():
     assert bad[1]["missing"] == ["email"]
 
 
-@pytest.mark.parametrize("year", ["soon", "0", "-5", "99999", "inf", "-inf", "nan", "1e999"])
+@pytest.mark.parametrize("year", ["soon", "0", "-5", "99999", "inf", "-inf", "nan", "1e999", "2026.9", "1949", "2101", "+2026", "0x7EA"])
 def test_csv_bad_graduation_year_is_an_invalid_row_never_a_crash(year):
     rows, bad = parse_students_csv((HEADER + f"A,a@x.com,CSE,{year}\n").encode())
     assert rows == []
     assert bad[0]["missing"] == ["graduationYear"]
 
 
-def test_csv_float_year_is_truncated():
-    rows, _ = parse_students_csv((HEADER + "A,a@x.com,CSE,2026.0\n").encode())
-    assert rows[0]["graduation_year"] == 2026
+def test_csv_whole_number_year_written_with_a_zero_fraction_is_accepted_but_a_real_fraction_is_not():
+    rows, bad = parse_students_csv((HEADER + "A,a@x.com,CSE,2026.0\nB,b@x.com,CSE,2026.5\n").encode())
+    assert [r["graduation_year"] for r in rows] == [2026]
+    assert [b["line"] for b in bad] == [3]   # never silently truncated to 2026
 
 
 @pytest.mark.parametrize("val", ["inf", "nan", "-inf"])
 def test_csv_non_finite_scores_are_neutralised(val):
-    import math
-    rows, _ = parse_students_csv((HEADER + f"A,a@x.com,CSE,2026,{val}\n").encode())
-    assert math.isfinite(rows[0]["employability_score"])
+    rows, _, warnings = parse_students_csv_with_warnings((HEADER + f"A,a@x.com,CSE,2026,{val}\n").encode())
+    assert "employability_score" not in rows[0]
+    assert warnings[0]["column"] == "employabilityScore"
+
+
+def test_csv_scores_are_rounded_half_up_to_two_decimals_like_the_numeric_column():
+    rows, _, warnings = parse_students_csv_with_warnings(
+        (HEADER + "A,a@x.com,CSE,2026,77.456\nB,b@x.com,CSE,2026,77.455\nC,c@x.com,CSE,2026,0.004\nD,d@x.com,CSE,2026,99.999\n").encode())
+    assert [r["employability_score"] for r in rows] == [77.46, 77.46, 0.0, 100.0]   # 77.455 -> 77.46 (float rounding would give 77.45)
+    assert warnings == []                                                          # 99.999 rounds to the allowed maximum
+
+@pytest.mark.parametrize("val,reason", [
+    ("1000", "outside 0-100"), ("100.005", "outside 0-100"), ("-0.006", "outside 0-100"), ("-5", "outside 0-100"),
+    ("1e308", "outside 0-100"), ("1e999999999999", "outside 0-100"),
+    ("0x10", "not a number"), ("1_000", "not a number"), ("12abc", "not a number"), ("1,5", "not a number"),
+])
+def test_csv_scores_that_the_database_would_refuse_are_ignored_and_reported_at_preview(val, reason):
+    rows, _, warnings = parse_students_csv_with_warnings((HEADER + f'A,a@x.com,CSE,2026,"{val}"\n').encode())
+    assert "employability_score" not in rows[0]
+    assert [(w["column"], w["value"], w["reason"]) for w in warnings] == [("employabilityScore", val, reason)]
+
+
+def test_csv_score_boundaries_are_accepted():
+    rows, bad = parse_students_csv((HEADER + "A,a@x.com,CSE,2026,0\nB,b@x.com,CSE,2026,100\nC,c@x.com,CSE,2026,-0.004\nD,d@x.com,CSE,2026,.5\n").encode())
+    assert bad == [] and [r["employability_score"] for r in rows] == [0.0, 100.0, 0.0, 0.5]
+
+
+def test_csv_a_nul_byte_in_a_text_column_makes_the_row_invalid_because_postgres_cannot_store_it():
+    rows, bad = parse_students_csv(("name,email,branch,graduationYear\nA\x00,a@x.com,CSE\x00,2026\nB,b@x.com,CSE,2026\n").encode())
+    assert [r["email"] for r in rows] == ["b@x.com"]
+    assert bad[0]["line"] == 2 and bad[0]["missing"] == ["name", "branch"]
+
+
+@pytest.mark.parametrize("email", ["nope", "a@b", "a b@x.com", "@x.com", "a@@x.com"])
+def test_csv_an_email_that_is_not_an_email_makes_the_row_invalid(email):
+    rows, bad = parse_students_csv(f'name,email,branch,graduationYear\nA,"{email}",CSE,2026\n'.encode())
+    assert rows == [] and bad[0]["missing"] == ["email"]
+
+
+def test_csv_rows_with_nothing_in_them_are_skipped_not_fatal():
+    rows, bad = parse_students_csv((HEADER + "A,a@x.com,CSE,2026,,,\n,,,,,,\n   ,  ,,,,,\n").encode())
+    assert [r["email"] for r in rows] == ["a@x.com"] and bad == []
+
+
+def test_csv_a_header_that_repeats_a_column_is_refused_rather_than_guessing_which_one_counts():
+    with pytest.raises(CsvFormatError, match="email"):
+        parse_students_csv(b"name,email,email,branch,graduationYear\nA,a@x.com,z@x.com,CSE,2026\n")
+
+
+def test_csv_rows_remember_their_line_number():
+    rows, _ = parse_students_csv((HEADER + "A,a@x.com,CSE,2026\n,x@x.com,CSE,2026\nC,c@x.com,CSE,2026\n").encode())
+    assert [(r["email"], r.line) for r in rows] == [("a@x.com", 2), ("c@x.com", 4)]
+
+
+# The validation contract below is the same table as in frontend/src/lib/demo/college/engine.test.ts
+# ("scores follow the live contract" / "graduation years and emails follow the live contract").
+# Keep the two in step: it is what makes a file behave identically in the College Portal demo and live.
+CONTRACT_SCORES = [
+    ("77.456", 77.46), ("77.455", 77.46), ("0.004", 0.0), ("99.999", 100.0), ("100", 100.0), ("0", 0.0),
+    (".5", 0.5), ("-0.004", 0.0),
+    ("1000", "outside 0-100"), ("100.005", "outside 0-100"), ("-0.006", "outside 0-100"),
+    ("-5", "outside 0-100"), ("1e308", "outside 0-100"),
+    ("0x10", "not a number"), ("1_000", "not a number"), ("12abc", "not a number"), ("1,5", "not a number"),
+]
+CONTRACT_YEARS = {
+    True: ["2026", "2026.0", "1950", "2100"],
+    False: ["2026.5", "1949", "2101", "+2026", "soon", "0x7EA", "99999", "-5", "1e3"],
+}
+CONTRACT_EMAILS = {True: ["a@b.co", "a.b+c@x.com"], False: ["nope", "a@b", "a b@x.com", "@x.com", "a@@x.com"]}
+
+
+@pytest.mark.parametrize("cell,expected", CONTRACT_SCORES)
+def test_contract_scores(cell, expected):
+    rows, _, warnings = parse_students_csv_with_warnings(
+        f'name,email,branch,graduationYear,employabilityScore\nA,a@x.com,CSE,2027,"{cell}"\n'.encode())
+    if isinstance(expected, float):
+        assert rows[0]["employability_score"] == expected and warnings == []
+    else:
+        assert "employability_score" not in rows[0] and warnings[0]["reason"] == expected
+
+
+@pytest.mark.parametrize("valid,cells", CONTRACT_YEARS.items())
+def test_contract_years(valid, cells):
+    for cell in cells:
+        rows, bad = parse_students_csv(f'name,email,branch,graduationYear\nA,a@x.com,CSE,"{cell}"\n'.encode())
+        assert bool(rows) is valid and bool(bad) is not valid, cell
+
+
+@pytest.mark.parametrize("valid,cells", CONTRACT_EMAILS.items())
+def test_contract_emails(valid, cells):
+    for cell in cells:
+        rows, bad = parse_students_csv(f'name,email,branch,graduationYear\nA,"{cell}",CSE,2027\n'.encode())
+        assert bool(rows) is valid and bool(bad) is not valid, cell
 
 
 def test_csv_bom_and_latin1():
@@ -167,13 +275,36 @@ def test_csv_extra_columns_and_short_rows_do_not_crash():
     assert len(rows) == 1 and len(bad) == 1
 
 
+def test_csv_unreadable_bytes_raise_a_format_error_not_a_raw_csv_error():
+    with pytest.raises(CsvFormatError):
+        parse_students_csv(bytes(range(256)) * 20)
+
+
 def test_csv_empty_file():
     assert parse_students_csv(b"") == ([], [])
 
 
-def test_dedupe_by_email_last_wins():
-    out = dedupe_by_email([{"email": "a", "v": 1}, {"email": "b", "v": 1}, {"email": "a", "v": 2}])
-    assert {r["email"]: r["v"] for r in out} == {"a": 2, "b": 1}
+def _rows(text):
+    return parse_students_csv((HEADER + text).encode())[0]
+
+
+def test_duplicates_that_agree_or_only_fill_blanks_merge_and_are_reported():
+    merged, dups = merge_duplicate_rows(_rows(
+        "Ann,a@x.com,CSE,2026,70,,\nBob,b@x.com,IT,2027,,,\nAnn,A@x.com,CSE,2026,,verified,\n"))
+    assert [m["email"] for m in merged] == ["a@x.com", "b@x.com"]       # first-seen order
+    assert merged[0]["employability_score"] == 70 and merged[0]["verification_status"] == "verified"  # a blank never erases
+    assert dups == [{"email": "a@x.com", "lines": [2, 4], "conflicts": []}]
+
+
+def test_duplicates_that_disagree_are_reported_as_conflicts_with_every_line_and_column():
+    merged, dups = merge_duplicate_rows(_rows(
+        "Ann,a@x.com,CSE,2026,70,,\nAnn K,a@x.com,CSE,2027,80,,\nAnn,a@x.com,CSE,2026,70,,\n"))
+    assert len(merged) == 1
+    assert dups == [{"email": "a@x.com", "lines": [2, 3, 4], "conflicts": ["name", "graduationYear", "employabilityScore"]}]
+
+
+def test_a_file_without_repeated_emails_reports_no_duplicates():
+    assert merge_duplicate_rows(_rows("A,a@x.com,CSE,2026,,,\nB,b@x.com,CSE,2026,,,\n"))[1] == []
 
 
 # ── profile links ───────────────────────────────────────────────────

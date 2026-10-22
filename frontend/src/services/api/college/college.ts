@@ -17,10 +17,12 @@ import {
   demoDashboardService,
   demoDepartmentsService,
   demoDrivesService,
+  demoPlatformService,
   demoShortlistService,
   demoStudentsService,
 } from "@/services/demo/collegeDemoService";
 import type {
+  CsvUploadDuplicate,
   CsvUploadInvalidRow,
   CsvUploadResult,
   DashboardStats,
@@ -31,6 +33,7 @@ import type {
   DriveCreateInput,
   DriveEligibleResponse,
   PlacementStatus,
+  PlatformOverview,
   ScoreDistribution,
   ShortlistFilters,
   ShortlistResult,
@@ -42,13 +45,50 @@ import type {
   StudentOnboardResult,
 } from "@/types/college/college";
 
-/** Thrown by uploadCsv when the backend rejects rows for missing required fields. */
+/** Thrown by uploadCsv when the backend rejects the file (invalid rows, conflicting repeats) or the import fails. */
 export class CsvUploadError extends ApiClientError {
   invalidRows?: CsvUploadInvalidRow[];
-  constructor(message: string, status: number, invalidRows?: CsvUploadInvalidRow[]) {
+  duplicates?: CsvUploadDuplicate[];
+  constructor(
+    message: string,
+    status: number,
+    invalidRows?: CsvUploadInvalidRow[],
+    duplicates?: CsvUploadDuplicate[],
+  ) {
     super(message, status);
     this.invalidRows = invalidRows;
+    this.duplicates = duplicates;
   }
+}
+
+const isCount = (v: unknown): v is number => typeof v === "number" && Number.isInteger(v) && v >= 0;
+
+/** Checks an upload response before the UI trusts it. A server that predates the preview
+ * (no created/updated/unchanged counts) must read as a failure, never as a clean import.
+ * The wording depends on the mode: a preview saves nothing, but a real import that came back
+ * unreadable may well have been applied. */
+export function assertCsvUploadResult(body: unknown, expectDryRun: boolean): CsvUploadResult {
+  const r = body as Partial<CsvUploadResult> | null;
+  if (
+    !r ||
+    typeof r !== "object" ||
+    !isCount(r.created) ||
+    !isCount(r.updated) ||
+    !isCount(r.unchanged) ||
+    !isCount(r.warningsTotal) ||
+    !Array.isArray(r.warnings) ||
+    typeof r.planId !== "string" ||
+    !r.planId ||
+    r.dryRun !== expectDryRun
+  ) {
+    throw new CsvUploadError(
+      expectDryRun
+        ? "The server sent an unexpected response, so nothing can be confirmed. No students were changed by this preview."
+        : "The server's reply to the import could not be understood, so the result is unknown. Some or all of the file may have been saved — check the roster before uploading again.",
+      502,
+    );
+  }
+  return r as CsvUploadResult;
 }
 
 // ── Dashboard — GET /api/dashboard/stats, GET /api/dashboard/score-distribution ──
@@ -96,12 +136,20 @@ const liveStudentsService = {
       method: "DELETE",
     }),
 
-  /** POST /api/students/upload — multipart CSV bulk upload. Bypasses request() because it needs FormData. */
-  uploadCsv: async (file: File): Promise<CsvUploadResult> => {
+  /** POST /api/students/upload — multipart CSV bulk upload. Bypasses request() because it needs FormData.
+   * With `dryRun` the file is checked and the created / updated / unchanged counts are returned
+   * without saving anything. `expectedPlan` (the preview's planId) makes the server refuse the import,
+   * with nothing written, if the file or the roster no longer produces that same result. */
+  uploadCsv: async (
+    file: File,
+    options: { dryRun?: boolean; expectedPlan?: string } = {},
+  ): Promise<CsvUploadResult> => {
+    const dryRun = options.dryRun === true;
     const formData = new FormData();
     formData.append("file", file);
 
-    const res = await fetch(`${getApiBaseUrl()}/api/students/upload`, {
+    const query = buildQuery({ dryRun: dryRun || undefined, expectedPlan: dryRun ? undefined : options.expectedPlan });
+    const res = await fetch(`${getApiBaseUrl()}/api/students/upload${query}`, {
       method: "POST",
       headers: { ...(await getAuthHeader()) },
       body: formData,
@@ -112,9 +160,9 @@ const liveStudentsService = {
       const detail = body?.detail;
       const message =
         typeof detail === "string" ? detail : (detail?.message ?? body?.message ?? res.statusText);
-      throw new CsvUploadError(message, res.status, detail?.invalidRows);
+      throw new CsvUploadError(message, res.status, detail?.invalidRows, detail?.duplicates);
     }
-    return res.json() as Promise<CsvUploadResult>;
+    return assertCsvUploadResult(await res.json().catch(() => null), dryRun);
   },
 
   /** GET /api/students/export — roster CSV, optionally scoped by the same filters as list(). Bypasses request() because the response isn't JSON. */
@@ -241,14 +289,22 @@ const liveDepartmentsService = {
 // type (it must not import this module); convert it here so the UI sees the usual CsvUploadError.
 const demoStudentsWithCsvError: typeof liveStudentsService = {
   ...demoStudentsService,
-  uploadCsv: async (file) => {
+  uploadCsv: async (file, options) => {
     try {
-      return await demoStudentsService.uploadCsv(file);
+      return await demoStudentsService.uploadCsv(file, options);
     } catch (err) {
-      if (err instanceof DemoCsvError) throw new CsvUploadError(err.message, err.status, err.invalidRows);
+      if (err instanceof DemoCsvError)
+        throw new CsvUploadError(err.message, err.status, err.invalidRows, err.duplicates);
+      // Like the live client, every failure the server reports (413, 409, ...) is a CsvUploadError.
+      if (err instanceof ApiClientError) throw new CsvUploadError(err.message, err.status);
       throw err;
     }
   },
+};
+
+// ── Platform drives & outcomes — GET /api/dashboard/platform (read-only) ──
+const livePlatformService = {
+  overview: () => request<PlatformOverview>("/api/dashboard/platform"),
 };
 
 export const dashboardService = withDemo(liveDashboardService, demoDashboardService, isDemoLocation);
@@ -256,3 +312,4 @@ export const studentsService = withDemo(liveStudentsService, demoStudentsWithCsv
 export const drivesService = withDemo(liveDrivesService, demoDrivesService, isDemoLocation);
 export const shortlistService = withDemo(liveShortlistService, demoShortlistService, isDemoLocation);
 export const departmentsService = withDemo(liveDepartmentsService, demoDepartmentsService, isDemoLocation);
+export const platformService = withDemo(livePlatformService, demoPlatformService, isDemoLocation);
