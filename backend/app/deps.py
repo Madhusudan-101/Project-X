@@ -210,15 +210,23 @@ def require_admin_role(current_user: dict = Depends(get_current_user)) -> dict:
     """
     try:
         res = db_client.table("profiles").select(
-            "id, role, is_super_admin"
+            "id, role, is_super_admin, blocked_permanent, blocked_until, blocked_reason"
         ).eq("id", current_user["id"]).single().execute()
     except APIError as e:
-        raise HTTPException(status_code=403, detail=f"Profile lookup failed: {e.message}")
+        if getattr(e, "code", None) == "PGRST116":  # no profile row: not an admin
+            raise HTTPException(status_code=403, detail="Admin role required")
+        # Anything else is the database failing, not the caller being refused. It
+        # stays denied, but main.py's handler names the cause (e.g. a migration
+        # that wasn't run) instead of a 403 that looks like a permissions problem.
+        raise
 
     row = res.data or {}
     role = row.get("role")
     if role != "admin":
         raise HTTPException(status_code=403, detail="Admin role required")
+    # get_current_user's own block lookup fails open on a database hiccup; this
+    # one row is already in hand, so an admin route never depends on that.
+    _reject_if_blocked(row)
 
     return {**current_user, "profile_role": role, "is_super_admin": bool(row.get("is_super_admin"))}
 

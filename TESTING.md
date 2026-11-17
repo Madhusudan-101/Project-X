@@ -16,7 +16,8 @@ dependencies and schemas are exercised.
 | PeerMeet signaling integration (real socket.io) | `PeerMeet/server/tests/peermeet-integration.test.js` | `cd PeerMeet/server && npm test` (needs `npm i` in `PeerMeet/client` too) |
 | AI interviewer report client | `ai-interviewer/tests/` | `cd ai-interviewer && python -m pytest tests` |
 | **Browser end-to-end** (frontend + backend + PeerMeet, real Chromium) | `e2e/specs/` | `cd e2e && npm install && npx playwright test` — see `e2e/README.md` |
-| SQL migrations against real Postgres | `backend/tests/test_*_sql.py` | `ADMIN_TEST_DATABASE_URL=postgresql://postgres@localhost:5432/postgres python tests/test_admin_portal_sql.py` (same for `test_college_student_access_sql.py`; `OA_TEST_DATABASE_URL=… python tests/test_oa_sql.py`) |
+| Backend Admin / Super Admin (login routing, every /admin route against every kind of caller, escalation, logout, seed script) | `backend/tests/integration/test_admin_portals.py`, `test_seed_admin_accounts.py` | `cd backend && python -m pytest tests/integration` |
+| SQL migrations against real Postgres | `backend/tests/test_*_sql.py` | `ADMIN_TEST_DATABASE_URL=postgresql://postgres@localhost:5432/postgres python tests/test_admin_portal_sql.py` (same for `test_college_student_access_sql.py`; `OA_TEST_DATABASE_URL=… python tests/test_oa_sql.py`). The time-bucket checks assume a UTC session: set `PGTZ=UTC` on a machine in another time zone. On Windows also set `PGCLIENTENCODING=UTF8`. |
 
 Install: `pip install -r backend/requirements.txt pytest` · `npm install` in `frontend/`, `PeerMeet/client`, `PeerMeet/server`.
 

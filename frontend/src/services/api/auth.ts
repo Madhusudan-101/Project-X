@@ -70,12 +70,20 @@ export const authService = {
   updateProfile: (patch: Partial<User>) =>
     request<User>("/auth/profile", { method: "PATCH", body: patch }),
 
+  /** Clears this browser at once, then asks the backend to revoke the session.
+   * The clearing can't depend on that call: signing out must work offline too. */
   logout: async () => {
-    await request<{ ok: true }>("/auth/logout", { method: "POST" });
+    const token = useAuthStore.getState().session?.token;
     useAuthStore.getState().logout();
     // Account-scoped client caches must not survive a logout — otherwise
     // the next login on this browser (any account) can see stale data.
     useResumeAnalysisStore.getState().clear();
     useCompanyStore.getState().clearCompany();
+    if (token) {
+      await request<{ ok: true }>("/auth/logout", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+      }).catch(() => undefined);
+    }
   },
 };

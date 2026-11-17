@@ -11,7 +11,7 @@ import logging
 import time
 from typing import Optional
 
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, Header, HTTPException, Depends
 from supabase_auth.errors import AuthApiError, AuthWeakPasswordError
 from postgrest.exceptions import APIError
 
@@ -37,6 +37,8 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 # user_metadata on its Supabase user) supplies.
 PUBLIC_SIGNUP_ROLES = ("candidate", "company")
 
+INVALID_ADMIN_LOGIN = "Invalid email or password."
+
 
 def _reject_non_public_role(role: str) -> None:
     if role not in PUBLIC_SIGNUP_ROLES:
@@ -49,12 +51,20 @@ def _reject_non_public_role(role: str) -> None:
 
 # ── Helpers ────────────────────────────────────────────────────────────
 
+def portal_for(row: dict) -> str:
+    """The portal an account belongs in. `is_super_admin` only means anything on
+    an Admin profile, matching require_admin_role."""
+    role = row.get("role", "candidate")
+    return "super_admin" if role == "admin" and row.get("is_super_admin") else role
+
+
 def map_profile(row: dict) -> dict:
     """Convert a DB profiles row (snake_case) to the UserOut shape (camelCase)."""
     return {
         "id": row.get("id", ""),
         "email": row.get("email", ""),
         "role": row.get("role", "candidate"),
+        "portal": portal_for(row),
         "name": row.get("name") or "",
         "firstName": row.get("first_name") or "",
         "lastName": row.get("last_name") or "",
@@ -85,6 +95,10 @@ def _check_signup_conflict(email: str, role: str) -> None:
         log.warning("Profile lookup by email failed for %s: %s", email, e)
         return
     if existing and existing.get("role") and existing["role"] != role:
+        # Naming the role helps someone at the wrong signup page, but this is
+        # unauthenticated: it must not confirm which addresses are privileged.
+        if existing["role"] not in PUBLIC_SIGNUP_ROLES:
+            raise HTTPException(status_code=409, detail="This email is already registered.")
         raise HTTPException(
             status_code=409,
             detail=f"This email is already registered as a {existing['role']} account.",
@@ -226,7 +240,7 @@ def signup(payload: SignupIn):
 
     return {
         "user": map_profile(profile) if profile else {
-            "id": user.id, "email": payload.email, "role": payload.role,
+            "id": user.id, "email": payload.email, "role": payload.role, "portal": payload.role,
             "name": payload.name or "", "firstName": first, "lastName": last,
             "onboarded": False,
         },
@@ -312,7 +326,7 @@ def company_signup(payload: CompanySignupIn):
 
     return {
         "user": map_profile(profile) if profile else {
-            "id": user.id, "email": payload.email, "role": "company",
+            "id": user.id, "email": payload.email, "role": "company", "portal": "company",
             "name": f"{payload.first_name} {payload.last_name}".strip(),
             "firstName": payload.first_name, "lastName": payload.last_name,
             "onboarded": False,
@@ -334,6 +348,10 @@ def login(payload: AuthIn):
             "password": payload.password,
         })
     except AuthApiError as e:
+        # Every failure at the Admin sign-in reads the same: Supabase's own text
+        # can distinguish a real account ("Email not confirmed") from a wrong guess.
+        if payload.role == "admin":
+            raise HTTPException(status_code=401, detail=INVALID_ADMIN_LOGIN)
         raise HTTPException(status_code=400, detail=e.message)
 
     session = res.session
@@ -353,6 +371,8 @@ def login(payload: AuthIn):
         log.warning("Profile lookup/create failed for %s: %s", user.id, e)
         profile = None
 
+    if payload.role == "admin" and (not profile or profile.get("role") != "admin"):
+        raise HTTPException(status_code=403, detail="This account does not have access to the Admin Portal.")
     if profile and profile.get("role") and profile["role"] != payload.role:
         raise HTTPException(
             status_code=403,
@@ -364,7 +384,7 @@ def login(payload: AuthIn):
     return {
         "user": map_profile(profile) if profile else {
             "id": user.id, "email": user.email or payload.email,
-            "role": payload.role, "name": "", "firstName": "",
+            "role": payload.role, "portal": payload.role, "name": "", "firstName": "",
             "lastName": "", "onboarded": False,
         },
         "token": session.access_token,
@@ -406,7 +426,7 @@ def refresh_session_route(payload: RefreshIn):
 
     return {
         "user": map_profile(profile) if profile else {
-            "id": user.id, "email": user.email or "", "role": role,
+            "id": user.id, "email": user.email or "", "role": role, "portal": role,
             "name": "", "firstName": "", "lastName": "", "onboarded": False,
         },
         "token": session.access_token,
@@ -464,7 +484,7 @@ def oauth_session_route(payload: OAuthSessionIn):
 
     return {
         "user": map_profile(profile) if profile else {
-            "id": user.id, "email": user.email, "role": payload.role,
+            "id": user.id, "email": user.email, "role": payload.role, "portal": payload.role,
             "name": full_name, "firstName": first, "lastName": last,
             "onboarded": False,
         },
@@ -477,7 +497,18 @@ def oauth_session_route(payload: OAuthSessionIn):
 # ── POST /auth/logout ─────────────────────────────────────────────────
 
 @router.post("/logout")
-def logout():
+def logout(authorization: Optional[str] = Header(None)):
+    """Revoke this session at Supabase, so neither its refresh token nor (once
+    get_current_user next checks it) its access token works any more. Clearing
+    the browser's copy alone would leave a copied token usable until it expired.
+
+    Always answers ok: an already-dead token has nothing left to revoke, and the
+    client clears its own session regardless."""
+    if authorization and authorization.startswith("Bearer "):
+        try:
+            admin_client.auth.admin.sign_out(authorization.split(" ", 1)[1], "local")
+        except Exception as e:
+            log.warning("Session revocation failed at logout (%s)", type(e).__name__)
     return {"ok": True}
 
 
@@ -523,7 +554,7 @@ def verify_otp(payload: VerifyOtpIn):
     session = res.session
     if not session:
         return {
-            "user": {"id": "", "email": payload.email, "role": "candidate",
+            "user": {"id": "", "email": payload.email, "role": "candidate", "portal": "candidate",
                       "name": "", "firstName": "", "lastName": "", "onboarded": False},
             "token": "", "refreshToken": "", "expiresAt": "",
         }
@@ -539,7 +570,7 @@ def verify_otp(payload: VerifyOtpIn):
 
     return {
         "user": map_profile(profile) if profile else {
-            "id": user.id, "email": user.email or payload.email, "role": role,
+            "id": user.id, "email": user.email or payload.email, "role": role, "portal": role,
             "name": "", "firstName": "", "lastName": "", "onboarded": False,
         },
         "token": session.access_token,

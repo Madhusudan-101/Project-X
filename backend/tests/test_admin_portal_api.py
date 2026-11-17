@@ -835,7 +835,7 @@ def main() -> int:
     from app.schemas import BlockUserIn
     from app.services.admin.blocking import block_user
     db.tables["profiles"].append({"id": "u-admin2", "email": "admin2@t.test", "role": "admin"})
-    ok = block_user("u-admin2", BlockUserIn(permanent=True, reason="test"), {"id": "u-admin", "profile_role": "admin", "email": "u-admin@t.test"})
+    ok = block_user("u-admin2", BlockUserIn(permanent=True, reason="test"), {"id": "u-admin", "profile_role": "admin", "email": "u-admin@t.test", "is_super_admin": True})
     check("blocking one of TWO active admins is fine (one remains active)", ok["is_blocked"] is True)
     try:
         # is_super_admin=True on the actor so this exercises the "last active

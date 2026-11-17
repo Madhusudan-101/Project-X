@@ -174,6 +174,27 @@ create index if not exists idx_job_drives_created_at           on public.job_dri
 create index if not exists idx_ai_interview_sessions_created_at on public.ai_interview_sessions(created_at);
 
 
+-- Re-runs: every admin_* function lives in this file and is recreated below, so
+-- clear the old ones first. CREATE OR REPLACE alone is not enough on a database
+-- that already has them: a changed parameter list adds a second overload, which
+-- PostgREST then refuses to choose between (PGRST203), and a changed result
+-- shape is an error. The SQL Editor runs this file as one transaction, so callers
+-- never see the functions missing.
+do $$
+declare
+  f regprocedure;
+begin
+  for f in
+    select p.oid::regprocedure
+    from pg_proc p
+    join pg_namespace n on n.oid = p.pronamespace
+    where n.nspname = 'public' and p.proname like 'admin\_%'
+  loop
+    execute format('drop function %s', f);
+  end loop;
+end $$;
+
+
 -- ═════════════════════════════════════════════════════════════════════
 -- 3. Building blocks. SECURITY INVOKER with no SET clause so the planner can
 --    inline them into the calling query (a function with proconfig is an opaque
@@ -1077,6 +1098,9 @@ alter table public.profiles add column if not exists blocked_until     timestamp
 alter table public.profiles add column if not exists blocked_at        timestamptz;
 alter table public.profiles add column if not exists blocked_by        uuid references public.profiles(id) on delete set null;
 alter table public.profiles add column if not exists blocked_reason    text;
+-- Owned by admin_permissions_migration.sql; declared here too because the guard
+-- below must cover it, so that re-running this file can't remove that protection.
+alter table public.profiles add column if not exists is_super_admin    boolean not null default false;
 
 create index if not exists idx_profiles_blocked
   on public.profiles(blocked_permanent, blocked_until)
@@ -1105,6 +1129,10 @@ begin
       raise exception 'An account cannot set its own block state.'
         using errcode = '42501';
     end if;
+    if coalesce(new.is_super_admin, false) then
+      raise exception 'Super Admin status cannot be self-assigned.'
+        using errcode = '42501';
+    end if;
   else
     if new.role is distinct from old.role then
       raise exception 'Profile role cannot be changed by the account holder.'
@@ -1122,6 +1150,10 @@ begin
        or new.blocked_reason is distinct from old.blocked_reason
        or new.blocked_at     is distinct from old.blocked_at then
       raise exception 'Block state can only be changed by an Admin.'
+        using errcode = '42501';
+    end if;
+    if new.is_super_admin is distinct from old.is_super_admin then
+      raise exception 'Super Admin status can only be changed by a direct database session.'
         using errcode = '42501';
     end if;
   end if;

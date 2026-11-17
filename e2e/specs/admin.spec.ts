@@ -3,7 +3,7 @@ import { expect, test, signedIn } from "./helpers";
 const PAGES: [string, RegExp][] = [
   ["Colleges", /\/admin\/colleges/], ["Companies", /\/admin\/companies/], ["Partnerships", /\/admin\/partnerships/],
   ["Candidates", /\/admin\/candidates/], ["Departments", /\/admin\/departments/], ["Placement analytics", /\/admin\/placements/],
-  ["Users & Access", /\/admin\/users/], ["Admin Management", /\/admin\/admin-users/], ["Live Activity", /\/admin\/activity/],
+  ["Users & Access", /\/admin\/users/], ["My permissions", /\/admin\/admin-users/], ["Live Activity", /\/admin\/activity/],
   ["Audit Log", /\/admin\/audit-log/], ["Alerts", /\/admin\/alerts/], ["System Health", /\/admin\/system-health/],
   ["Financial overview", /\/admin\/finance/], ["Reports", /\/admin\/reports/],
 ];

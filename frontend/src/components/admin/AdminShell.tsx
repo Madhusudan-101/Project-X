@@ -1,11 +1,13 @@
+import { useEffect } from "react";
 import { Link, Outlet, useNavigate, useRouterState } from "@tanstack/react-router";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   Activity,
   AlertTriangle,
   BarChart3,
   Building2,
   ClipboardList,
+  Crown,
   FileBarChart,
   GraduationCap,
   Handshake,
@@ -35,8 +37,9 @@ import {
   SidebarTrigger,
 } from "@/components/ui/sidebar";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { adminService } from "@/services/api/admin/admin";
-import { useAuthStore } from "@/store/auth";
+import { AdminPortalContext, toSuperAdminPath, type AdminPortal } from "@/hooks/admin/use-admin-portal";
+import { authService } from "@/services/api/auth";
+import type { AdminMe } from "@/types/admin/admin";
 import type { Session } from "@/types";
 import { DateRangeFilter } from "./DateRangeFilter";
 import { GlobalSearch } from "./GlobalSearch";
@@ -49,12 +52,12 @@ interface NavItem {
   /** Any ONE of these makes the item visible to a delegated admin. Omitted
    * = always visible (an unscoped endpoint, or Admin Management itself,
    * which every admin can open to see at least their own permissions).
-   * A Super Admin always sees everything regardless of this list — and so
-   * does anyone while their own permissions are still loading, so the nav
-   * never flickers empty on first paint. This is UX only: the backend is
-   * the real gate, via require_permission (see services/admin/permissions.py) — hiding
-   * a link here never substitutes for that. */
+   * A Super Admin always sees everything regardless of this list. This is UX
+   * only: the backend is the real gate, via require_permission (see
+   * services/admin/permissions.py) — hiding a link here never substitutes for that. */
   anyOf?: string[];
+  /** Shown instead of `label` to a delegated admin. */
+  delegatedLabel?: string;
 }
 
 const NAV: { label?: string; items: NavItem[] }[] = [
@@ -79,7 +82,7 @@ const NAV: { label?: string; items: NavItem[] }[] = [
     label: "Platform control",
     items: [
       { to: "/admin/users", label: "Users & Access", icon: ShieldCheck, anyOf: ["users.view"] },
-      { to: "/admin/admin-users", label: "Admin Management", icon: KeyRound },
+      { to: "/admin/admin-users", label: "Admin Management", delegatedLabel: "My permissions", icon: KeyRound },
       { to: "/admin/activity", label: "Live Activity", icon: Activity, anyOf: ["audit.view"] },
       { to: "/admin/audit-log", label: "Audit Log", icon: ClipboardList, anyOf: ["audit.view"] },
       { to: "/admin/alerts", label: "Alerts", icon: AlertTriangle, anyOf: ["alerts.view"] },
@@ -96,39 +99,52 @@ const NAV: { label?: string; items: NavItem[] }[] = [
   },
 ];
 
-export function AdminShell({ session }: { session: Session }) {
+export function AdminShell({ session, me, portal }: { session: Session; me: AdminMe; portal: AdminPortal }) {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const logout = useAuthStore((s) => s.logout);
   const pathname = useRouterState({ select: (s) => s.location.pathname });
+  const superPortal = portal === "super-admin";
+  const portalTo = (to: string) => (superPortal ? toSuperAdminPath(to) : to);
+
+  // On <html>, not a wrapper: dialogs and menus render in a portal under <body>
+  // and need the same gold theme. Removed the moment this portal is left.
+  useEffect(() => {
+    if (!superPortal) return;
+    document.documentElement.classList.add("super-admin-portal");
+    return () => document.documentElement.classList.remove("super-admin-portal");
+  }, [superPortal]);
 
   const name =
     [session.user.firstName, session.user.lastName].filter(Boolean).join(" ") || session.user.name || "Admin";
 
   const signOut = () => {
-    logout();
+    void authService.logout();
     // Platform-wide data must not linger in memory for the next sign-in on this browser.
     queryClient.clear();
     navigate({ to: "/" });
   };
 
-  const me = useQuery({ queryKey: ["admin", "me"], queryFn: () => adminService.me(), staleTime: 60_000 });
-  const isSuperAdmin = me.data?.is_super_admin ?? true; // default open while loading — see NavItem.anyOf docs
-  const held = new Set((me.data?.permissions ?? []).filter((g) => g.is_active).map((g) => g.permission));
-  const visible = (item: NavItem) => isSuperAdmin || !item.anyOf || item.anyOf.some((p) => held.has(p));
+  const held = new Set(me.permissions.filter((g) => g.is_active).map((g) => g.permission));
+  const visible = (item: NavItem) => me.is_super_admin || !item.anyOf || item.anyOf.some((p) => held.has(p));
 
   return (
+    <AdminPortalContext.Provider value={portal}>
     <TooltipProvider>
+      {superPortal && <div className="super-admin-frame" aria-hidden />}
       <SidebarProvider>
         <Sidebar>
           <SidebarHeader>
-            <Link to="/admin" className="flex items-center gap-2 px-2 py-1.5">
+            <Link to={portalTo("/admin")} className="flex items-center gap-2 px-2 py-1.5">
               <div className="grid h-8 w-8 place-items-center rounded-lg bg-gradient-brand">
-                <ShieldCheck className="h-4 w-4 text-primary-foreground" />
+                {superPortal ? (
+                  <Crown className="h-4 w-4 text-primary-foreground" />
+                ) : (
+                  <ShieldCheck className="h-4 w-4 text-primary-foreground" />
+                )}
               </div>
               <div className="leading-tight">
                 <div className="font-display text-sm font-semibold">Mirracle</div>
-                <div className="text-[11px] text-muted-foreground">Admin console</div>
+                <div className="text-[11px] text-muted-foreground">{superPortal ? "Super Admin console" : "Admin console"}</div>
               </div>
             </Link>
           </SidebarHeader>
@@ -142,13 +158,14 @@ export function AdminShell({ session }: { session: Session }) {
                 <SidebarGroupContent>
                   <SidebarMenu>
                     {items.map((item) => {
-                      const active = item.exact ? pathname === item.to : pathname.startsWith(item.to);
+                      const to = portalTo(item.to);
+                      const active = item.exact ? pathname === to : pathname.startsWith(to);
                       return (
                         <SidebarMenuItem key={item.to}>
                           <SidebarMenuButton asChild isActive={active}>
-                            <Link to={item.to} aria-current={active ? "page" : undefined}>
+                            <Link to={to} aria-current={active ? "page" : undefined}>
                               <item.icon />
-                              <span>{item.label}</span>
+                              <span>{(!me.is_super_admin && item.delegatedLabel) || item.label}</span>
                             </Link>
                           </SidebarMenuButton>
                         </SidebarMenuItem>
@@ -172,20 +189,29 @@ export function AdminShell({ session }: { session: Session }) {
         </Sidebar>
 
         <SidebarInset className="min-w-0 bg-surface-2">
-          <header className="sticky top-0 z-20 flex items-center gap-3 border-b border-border bg-background/85 px-4 py-2.5 backdrop-blur md:px-6">
-            <SidebarTrigger aria-label="Toggle navigation" />
-            <div className="min-w-0 flex-1 sm:max-w-xs">
-              <GlobalSearch />
-            </div>
-            <div className="ml-auto flex items-center gap-2">
-              <DateRangeFilter />
-            </div>
-          </header>
+          <div className="sticky top-0 z-20">
+            {superPortal && (
+              <div className="super-admin-banner">
+                <Crown className="h-3.5 w-3.5" aria-hidden />
+                SUPER ADMIN PORTAL
+              </div>
+            )}
+            <header className="flex items-center gap-3 border-b border-border bg-background/85 px-4 py-2.5 backdrop-blur md:px-6">
+              <SidebarTrigger aria-label="Toggle navigation" />
+              <div className="min-w-0 flex-1 sm:max-w-xs">
+                <GlobalSearch />
+              </div>
+              <div className="ml-auto flex items-center gap-2">
+                <DateRangeFilter />
+              </div>
+            </header>
+          </div>
           <div className="mx-auto w-full max-w-7xl space-y-6 px-4 py-6 pb-12 md:px-6">
             <Outlet />
           </div>
         </SidebarInset>
       </SidebarProvider>
     </TooltipProvider>
+    </AdminPortalContext.Provider>
   );
 }

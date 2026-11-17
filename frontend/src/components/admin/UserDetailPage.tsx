@@ -15,6 +15,7 @@ import { CollegeLink, CompanyLink } from "./EntityLinks";
 import { DrivesTable } from "./DrivesTable";
 import { PageHeader, StatusBadge } from "./controls";
 import { fmtDate, fmtRelative } from "./format";
+import { usePortalTo } from "@/hooks/admin/use-admin-portal";
 import { KpiCard, KpiGroup } from "./KpiCard";
 import { EVENT_TYPE_LABEL, RESULT_TONE, USER_ROLE_LABEL } from "./status";
 import { EmptyBlock, ErrorBlock } from "./StateViews";
@@ -177,8 +178,9 @@ export function UserDetailPage({ userId }: { userId: string }) {
 }
 
 function BackLink() {
+  const to = usePortalTo();
   return (
-    <Link to="/admin/users" className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground">
+    <Link to={to("/admin/users")} className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground">
       <ArrowLeft className="h-4 w-4" /> All users
     </Link>
   );

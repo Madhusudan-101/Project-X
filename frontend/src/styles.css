@@ -219,3 +219,66 @@
     background: var(--gradient-brand);
   }
 }
+
+/* Super Admin Portal identity. The class sits on <html> only while that portal is
+   mounted (AdminShell), so nothing here can reach the Admin Portal or the rest of
+   the app. Everything below is a token override: pages are not restyled one by one. */
+html.super-admin-portal {
+  --background: oklch(0.15 0.012 85);
+  --surface: oklch(0.19 0.016 85);
+  --surface-2: oklch(0.17 0.014 85);
+  --card: oklch(0.2 0.017 85);
+  --popover: oklch(0.2 0.017 85);
+  --primary: oklch(0.82 0.13 88);
+  --primary-foreground: oklch(0.18 0.03 85);
+  --primary-soft: oklch(0.3 0.06 85);
+  --secondary: oklch(0.72 0.12 70);
+  --secondary-foreground: oklch(0.18 0.03 85);
+  --muted: oklch(0.24 0.016 85);
+  --border: oklch(0.34 0.04 85);
+  --input: oklch(0.3 0.03 85);
+  --ring: oklch(0.82 0.13 88);
+  --chart-1: oklch(0.82 0.13 88);
+  --sidebar: oklch(0.13 0.012 85);
+  --sidebar-primary: oklch(0.82 0.13 88);
+  --sidebar-primary-foreground: oklch(0.18 0.03 85);
+  --sidebar-accent: oklch(0.26 0.05 85);
+  --sidebar-border: oklch(0.34 0.05 85);
+  --sidebar-ring: oklch(0.82 0.13 88);
+  --gradient-brand: linear-gradient(135deg, oklch(0.88 0.12 92) 0%, oklch(0.7 0.13 75) 100%);
+  --gradient-brand-soft: linear-gradient(135deg, oklch(0.88 0.12 92 / 0.2) 0%, oklch(0.7 0.13 75 / 0.2) 100%);
+  --super-admin-gold: linear-gradient(135deg, oklch(0.9 0.11 95), oklch(0.74 0.14 78) 45%, oklch(0.88 0.12 92) 75%, oklch(0.68 0.13 72));
+}
+
+/* Fixed and click-through: it takes no layout space and can't block anything, so
+   scrolling, the sidebar and responsive layouts behave exactly as in the Admin
+   Portal. Above dialogs (z-50), below toasts, so it stays visible over a modal. */
+.super-admin-frame {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  pointer-events: none;
+  border: 4px solid transparent;
+  border-image: var(--super-admin-gold) 1;
+  box-shadow: inset 0 0 18px oklch(0.82 0.13 88 / 0.3);
+}
+
+.super-admin-banner {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.3rem 1rem;
+  background: var(--super-admin-gold);
+  color: oklch(0.18 0.03 85);
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  white-space: nowrap;
+}
+
+@media (max-width: 640px) {
+  .super-admin-frame {
+    border-width: 3px;
+  }
+}

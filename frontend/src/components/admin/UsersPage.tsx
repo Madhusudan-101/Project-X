@@ -12,6 +12,7 @@ import type { UserRole, UserRow } from "@/types/admin/admin";
 import { BlockUserDialog } from "./BlockUserDialog";
 import { DataTable, type Column } from "./DataTable";
 import { ExportButton, FilterSelect, PageHeader, SearchBox, StatusBadge, Toolbar } from "./controls";
+import { usePortalTo } from "@/hooks/admin/use-admin-portal";
 import { fmtDate, fmtInt, fmtRelative } from "./format";
 import { KpiCard, KpiGroup } from "./KpiCard";
 import { USER_ROLE_LABEL } from "./status";
@@ -33,6 +34,7 @@ const STATUS_OPTIONS = [
  * provisioning and never edited. See BlockUserDialog for what a block does
  * and how it's enforced. */
 export function UsersPage() {
+  const to = usePortalTo();
   const { range, label } = useAdminRange();
   const [role, setRole] = useState<UserRole>();
   const [status, setStatus] = useState<"active" | "blocked">();
@@ -88,7 +90,7 @@ export function UsersPage() {
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
             <DropdownMenuItem asChild>
-              <Link to="/admin/users/$userId" params={{ userId: r.user_id }}>
+              <Link to={to("/admin/users/$userId")} params={{ userId: r.user_id }}>
                 <Eye className="mr-2 h-4 w-4" /> View
               </Link>
             </DropdownMenuItem>

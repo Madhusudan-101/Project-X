@@ -10,7 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { authService } from "@/services/api/auth";
 import { useAuthStore } from "@/store/auth";
-import { dashboardPathForRole, onboardingPathForRole } from "@/lib/roles";
+import { dashboardPathForUser, onboardingPathForRole } from "@/lib/roles";
 import { GoogleSignInButton } from "@/components/auth/GoogleSignInButton";
 import { ExploreDemoCard } from "@/components/college/ExploreDemoCard";
 import type { UserRole } from "@/types";
@@ -30,6 +30,7 @@ function LoginPage() {
   const { role } = Route.useSearch() as { role?: UserRole };
   const setSession = useAuthStore((s) => s.setSession);
   const [submitting, setSubmitting] = useState(false);
+  const provisionedOnly = role === "college" || role === "admin";
 
   const form = useForm<FormValues>({
     resolver: zodResolver(schema),
@@ -46,7 +47,7 @@ function LoginPage() {
       if (!session.user.firstName || !session.user.onboarded) {
         navigate({ to: onboardingPathForRole(session.user.role) });
       } else {
-        navigate({ to: dashboardPathForRole(session.user.role) });
+        navigate({ to: dashboardPathForUser(session.user) });
       }
     } catch (err: any) {
       toast.error(err.message || "Invalid credentials");
@@ -57,13 +58,15 @@ function LoginPage() {
 
   return (
     <div>
-      <h1 className="font-display text-3xl font-bold">Welcome back</h1>
-      <p className="mt-2 text-sm text-muted-foreground">Sign in to continue to Mirracle.</p>
+      <h1 className="font-display text-3xl font-bold">{role === "admin" ? "Admin Portal" : "Welcome back"}</h1>
+      <p className="mt-2 text-sm text-muted-foreground">
+        {role === "admin" ? "Sign in with your Admin or Super Admin account." : "Sign in to continue to Mirracle."}
+      </p>
 
-      {/* College (TPO) accounts are provisioned by an Admin and signed into with the
-          email + password set from the invitation link — no Google/social option, so
-          this page can never create an account for an unknown visitor. */}
-      {role !== "college" && (
+      {/* College (TPO) and Admin accounts are provisioned by the Mirracle team and signed
+          into with the email + password set from the invitation link — no Google/social
+          option, so this page can never create an account for an unknown visitor. */}
+      {!provisionedOnly && (
         <>
           <div className="mt-6">
             <GoogleSignInButton role={role ?? "candidate"} />
@@ -77,7 +80,7 @@ function LoginPage() {
         </>
       )}
 
-      <form method="post" onSubmit={form.handleSubmit(onSubmit)} className={role === "college" ? "mt-6 space-y-4" : "space-y-4"}>
+      <form method="post" onSubmit={form.handleSubmit(onSubmit)} className={provisionedOnly ? "mt-6 space-y-4" : "space-y-4"}>
         <div className="space-y-2">
           <Label htmlFor="email">Email</Label>
           <Input id="email" type="email" placeholder="you@work.com" {...form.register("email")} />

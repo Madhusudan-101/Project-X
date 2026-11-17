@@ -29,7 +29,8 @@ export function UnblockUserDialog({
     },
     onSuccess: () => {
       toast.success(`${user?.name ?? "User"} has been unblocked.`);
-      queryClient.invalidateQueries({ queryKey: ["admin", "users"] });
+      // Every list showing this account, including Admin Management's own.
+      queryClient.invalidateQueries({ queryKey: ["admin"] });
       setReason("");
       onOpenChange(false);
     },
@@ -38,8 +39,14 @@ export function UnblockUserDialog({
 
   if (!user) return null;
 
+  const handleOpenChange = (o: boolean) => {
+    if (unblock.isPending) return;
+    if (!o) setReason("");
+    onOpenChange(o);
+  };
+
   return (
-    <Dialog open={open} onOpenChange={(o) => { if (!unblock.isPending) { if (!o) setReason(""); onOpenChange(o); } }}>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className="max-w-md">
         <DialogHeader>
           <DialogTitle>Unblock {user.name}</DialogTitle>
@@ -53,7 +60,7 @@ export function UnblockUserDialog({
           <Textarea id="unblock-reason" value={reason} onChange={(e) => setReason(e.target.value)} maxLength={500} rows={2} placeholder="Recorded in the audit log." />
         </div>
         <DialogFooter>
-          <Button type="button" variant="ghost" disabled={unblock.isPending} onClick={() => onOpenChange(false)}>
+          <Button type="button" variant="ghost" disabled={unblock.isPending} onClick={() => handleOpenChange(false)}>
             Cancel
           </Button>
           <Button type="button" disabled={unblock.isPending} onClick={() => unblock.mutate()}>

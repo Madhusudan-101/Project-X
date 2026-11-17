@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { cn } from "@/lib/utils";
-import { dashboardPathForRole, onboardingPathForRole } from "@/lib/roles";
+import { dashboardPathForRole, dashboardPathForUser, onboardingPathForRole } from "@/lib/roles";
+import { toSuperAdminPath } from "@/hooks/admin/use-admin-portal";
 import { computeDnaBreakdown, computeDnaScore, computeSkillDna } from "@/lib/skillDna";
 import { ROLES_MASTER_LIST } from "@/lib/rolesMasterList";
 import { SKILLS_MASTER_LIST } from "@/lib/skillsMasterList";
@@ -194,5 +195,26 @@ describe("admin errorMessage", () => {
   it("handles plain errors and unknowns", () => {
     expect(errorMessage(new Error("plain"))).toBe("plain");
     expect(errorMessage("weird")).toBe("Something went wrong.");
+  });
+});
+
+describe("admin portal routing", () => {
+  it("sends a Super Admin to their own portal, from the backend's answer", () => {
+    expect(dashboardPathForUser({ role: "admin", portal: "super_admin" })).toBe("/super-admin");
+    expect(dashboardPathForUser({ role: "admin", portal: "admin" })).toBe("/admin");
+  });
+
+  it("sends everyone else to their role's dashboard, with or without a portal value", () => {
+    expect(dashboardPathForUser({ role: "college", portal: "college" })).toBe("/college");
+    expect(dashboardPathForUser({ role: "admin" })).toBe("/admin");
+  });
+
+  it.each([
+    ["/admin", "/super-admin"],
+    ["/admin/colleges/$collegeId", "/super-admin/colleges/$collegeId"],
+    ["/admin/admin-users", "/super-admin/admin-users"],
+    ["/administer", "/administer"],
+  ])("maps %s to %s", (from, to) => {
+    expect(toSuperAdminPath(from)).toBe(to);
   });
 });

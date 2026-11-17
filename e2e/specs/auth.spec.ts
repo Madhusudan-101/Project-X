@@ -64,8 +64,11 @@ test.describe("authentication & route protection", () => {
 
   test("sign out clears the session and re-protects the portal", async ({ page, request }) => {
     await signedIn(page, request, "candidate");
-    await page.getByRole("button", { name: "Sign out" }).click();
-    await expect(page).not.toHaveURL(/\/candidate$/);
+    // The candidate page rebuilds itself after a hydration mismatch, which can swallow an early click.
+    await expect(async () => {
+      await page.getByRole("button", { name: "Sign out" }).click({ timeout: 1000 });
+      await expect(page).not.toHaveURL(/\/candidate$/, { timeout: 1000 });
+    }).toPass();
     await page.goto("/candidate");
     await expect(page).toHaveURL(/\/auth\/login/);
   });

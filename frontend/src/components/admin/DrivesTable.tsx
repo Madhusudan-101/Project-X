@@ -7,6 +7,7 @@ import { useTableState } from "@/hooks/admin/use-table-state";
 import { adminService, type DriveFilters } from "@/services/api/admin/admin";
 import type { DriveRow } from "@/types/admin/admin";
 import { ExportButton, FilterSelect, SearchBox, StatusBadge, Toolbar } from "./controls";
+import { usePortalTo } from "@/hooks/admin/use-admin-portal";
 import { DRIVE_STATUS } from "./status";
 import { CollegeLink, CompanyLink } from "./EntityLinks";
 import { DataTable, type Column } from "./DataTable";
@@ -17,6 +18,7 @@ const STATUS_OPTIONS = Object.entries(DRIVE_STATUS).map(([value, s]) => ({ value
 /** Drive-wise performance. A drive is one company's job at one college; it is
  * listed if created in the date range or if it received applications in it. */
 export function DrivesTable({ companyId, collegeId }: { companyId?: string; collegeId?: string }) {
+  const to = usePortalTo();
   const { range } = useAdminRange();
   const [status, setStatus] = useState<string>();
   const t = useTableState({ sort: "applications", dir: "desc" }, [range, status, companyId, collegeId]);
@@ -48,7 +50,7 @@ export function DrivesTable({ companyId, collegeId }: { companyId?: string; coll
       align: "right",
       cell: (r) =>
         r.applications > 0 ? (
-          <Link to="/admin/candidates" search={{ drive: r.drive_id }} className="text-xs text-primary hover:underline">
+          <Link to={to("/admin/candidates")} search={{ drive: r.drive_id }} className="text-xs text-primary hover:underline">
             View candidates
           </Link>
         ) : null,

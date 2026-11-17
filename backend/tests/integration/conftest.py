@@ -47,6 +47,7 @@ def env(monkeypatch):
                  "resend", "reset_password_for_email"):
         monkeypatch.setattr(deps.auth_client.auth, name, getattr(auth, name))
     monkeypatch.setattr(deps.admin_client.auth.admin, "update_user_by_id", auth.update_user_by_id)
+    monkeypatch.setattr(deps.admin_client.auth.admin, "sign_out", auth.sign_out)
 
     # RLS-bound per-request client used by the college routers: same data, same fake.
     def fake_create_client(*_a, **_k):

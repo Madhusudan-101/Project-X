@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { useAdminMe } from "@/hooks/admin/use-admin-me";
 import { adminService } from "@/services/api/admin/admin";
 import { ApiClientError } from "@/services/api/client";
 import type { CollegeSuspension } from "@/types/admin/admin";
@@ -31,11 +32,7 @@ const STATE_BADGE: Record<
 /** Whether the signed-in admin may suspend THIS college. A convenience only — the API is the real gate
  * (POST /admin/colleges/{id}/suspend needs `colleges.suspend`, global or scoped to this college). */
 function useCanSuspendCollege(collegeId: string): boolean {
-  const me = useQuery({
-    queryKey: ["admin", "me"],
-    queryFn: () => adminService.me(),
-    staleTime: 60_000,
-  });
+  const me = useAdminMe();
   if (!me.data) return false;
   if (me.data.is_super_admin) return true;
   return me.data.permissions.some(
@@ -129,7 +126,7 @@ function ActionDialog({
           : "That did not work. Nothing was changed — please try again.",
       ),
     // Whatever happened (even a conflict because someone else got there first), show the truth.
-    onSettled: () => queryClient.invalidateQueries({ queryKey: ["admin", "college", collegeId] }),
+    onSettled: () => queryClient.invalidateQueries({ queryKey: ["admin"] }),
   });
 
   const open = kind !== null;

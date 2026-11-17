@@ -46,12 +46,20 @@ def _get_target(user_id: str) -> Dict[str, Any]:
     return profile
 
 
+def _require_super_admin_for_admin_target(target: Dict[str, Any], admin: Dict[str, Any]) -> None:
+    """users.block / users.unblock cover ordinary accounts. Disabling or re-enabling
+    an ADMIN is managing another admin's access, which is Super-Admin-exclusive
+    (see require_super_admin). Otherwise a delegated admin could lock out a peer,
+    or switch back on an admin a Super Admin had just disabled."""
+    if target.get("role") == "admin" and not admin.get("is_super_admin"):
+        raise HTTPException(status_code=403, detail="Only a Super Admin can disable or re-enable an Admin account.")
+
+
 def block_user(user_id: str, payload: BlockUserIn, admin: Dict[str, Any]) -> Dict[str, Any]:
     if user_id == admin["id"]:
         raise HTTPException(status_code=409, detail="You cannot block your own account.")
     target = _get_target(user_id)
-    if target.get("role") == "admin" and target.get("is_super_admin") and not admin.get("is_super_admin"):
-        raise HTTPException(status_code=403, detail="Only a Super Admin can disable another Super Admin.")
+    _require_super_admin_for_admin_target(target, admin)
     if target.get("role") == "admin" and _other_active_admins(user_id) == 0:
         raise HTTPException(
             status_code=409,
@@ -97,6 +105,7 @@ def block_user(user_id: str, payload: BlockUserIn, admin: Dict[str, Any]) -> Dic
 
 def unblock_user(user_id: str, payload: UnblockUserIn, admin: Dict[str, Any]) -> Dict[str, Any]:
     target = _get_target(user_id)
+    _require_super_admin_for_admin_target(target, admin)
     was_blocked = is_currently_blocked(target)
 
     updated = update_profile(user_id, {

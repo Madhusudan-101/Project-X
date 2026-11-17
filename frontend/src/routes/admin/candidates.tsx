@@ -1,15 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { z } from "zod";
-import { CandidatesPage } from "@/components/admin/CandidatesPage";
-
-const searchSchema = z.object({
-  college: z.string().optional(),
-  company: z.string().optional(),
-  drive: z.string().optional(),
-});
+import { CandidatesPage, candidatesSearchSchema } from "@/components/admin/CandidatesPage";
 
 export const Route = createFileRoute("/admin/candidates")({
-  validateSearch: (search) => searchSchema.parse(search),
+  validateSearch: (search) => candidatesSearchSchema.parse(search),
   component: CandidatesRoute,
 });
 

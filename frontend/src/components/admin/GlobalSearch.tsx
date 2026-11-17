@@ -4,6 +4,7 @@ import { useNavigate } from "@tanstack/react-router";
 import { Building2, GraduationCap, Search, Users, Briefcase } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { CommandDialog, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
+import { usePortalTo } from "@/hooks/admin/use-admin-portal";
 import { useDebouncedValue } from "@/hooks/use-debounced-value";
 import { adminService } from "@/services/api/admin/admin";
 import type { SearchEntityType } from "@/types/admin/admin";
@@ -24,6 +25,7 @@ export function GlobalSearch() {
   const [query, setQuery] = useState("");
   const debounced = useDebouncedValue(query, 250);
   const navigate = useNavigate();
+  const to = usePortalTo();
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -46,10 +48,10 @@ export function GlobalSearch() {
   const go = (type: SearchEntityType, id: string) => {
     setOpen(false);
     setQuery("");
-    if (type === "college") navigate({ to: "/admin/colleges/$collegeId", params: { collegeId: id } });
-    else if (type === "company") navigate({ to: "/admin/companies/$companyId", params: { companyId: id } });
-    else if (type === "candidate") navigate({ to: "/admin/candidates" });
-    else navigate({ to: "/admin/placements" });
+    if (type === "college") navigate({ to: to("/admin/colleges/$collegeId"), params: { collegeId: id } });
+    else if (type === "company") navigate({ to: to("/admin/companies/$companyId"), params: { companyId: id } });
+    else if (type === "candidate") navigate({ to: to("/admin/candidates") });
+    else navigate({ to: to("/admin/placements") });
   };
 
   const groups = Object.entries(q.data?.groups ?? {}) as [SearchEntityType, { id: string; title: string; subtitle: string }[]][];

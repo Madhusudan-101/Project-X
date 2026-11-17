@@ -114,13 +114,20 @@ export function AdminPermissionsDialog({
 
   if (!user) return null;
 
+  // A half-filled grant must not carry over to the next admin this dialog opens for.
+  const handleOpenChange = (o: boolean) => {
+    if (grant.isPending || revokeAll.isPending) return;
+    if (!o) resetForm();
+    onOpenChange(o);
+  };
+
   const activeGrants = (detail.data?.permissions ?? []).filter((g) => g.is_active);
   const selectedModule = catalog.data?.modules.find((m) => m.permissions.includes(permission));
   const scopeOptions: ScopeType[] = ["global", ...(selectedModule?.scopable_as ?? [])];
   const canGrant = !!permission && (scopeType === "global" || !!scopeId);
 
   return (
-    <Dialog open={open} onOpenChange={(o) => !grant.isPending && !revokeAll.isPending && onOpenChange(o)}>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className="max-w-2xl">
         <DialogHeader>
           <DialogTitle>Permissions — {user.name}</DialogTitle>
@@ -249,7 +256,7 @@ export function AdminPermissionsDialog({
               <ShieldAlert className="mr-2 h-4 w-4" /> Revoke all
             </Button>
           ) : <span />}
-          <Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>Close</Button>
+          <Button type="button" variant="ghost" onClick={() => handleOpenChange(false)}>Close</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

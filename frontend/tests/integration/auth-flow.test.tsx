@@ -35,6 +35,40 @@ beforeEach(() => {
   useAuthStore.setState({ session: null });
 });
 
+describe("logout", () => {
+  const session = { user: { id: "u1", email: "a@b.c", name: "A", role: "admin" as const }, token: "at-1", refreshToken: "rt-1", expiresAt: "" };
+
+  it("clears this browser before the network answers, and revokes with the session's own token", async () => {
+    useAuthStore.getState().setSession(session);
+    let release: (r: Response) => void = () => undefined;
+    const fetchMock = vi.fn(() => new Promise<Response>((r) => { release = r; }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const done = authService.logout();
+    expect(useAuthStore.getState().session).toBeNull();
+    expect(fetchMock.mock.calls[0][0]).toContain("/auth/logout");
+    expect(fetchMock.mock.calls[0][1].headers.Authorization).toBe("Bearer at-1");
+
+    release(json({ ok: true }));
+    await done;
+  });
+
+  it("still signs out when the backend can't be reached", async () => {
+    useAuthStore.getState().setSession(session);
+    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new TypeError("Failed to fetch")));
+    await expect(authService.logout()).resolves.toBeUndefined();
+    expect(useAuthStore.getState().session).toBeNull();
+  });
+
+  it("does not try to renew a session it is ending", async () => {
+    useAuthStore.getState().setSession(session);
+    const fetchMock = vi.fn().mockResolvedValue(json({ detail: "expired" }, 401));
+    vi.stubGlobal("fetch", fetchMock);
+    await authService.logout();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+});
+
 describe("login → authenticated call → token expiry → logout", () => {
   it("full lifecycle keeps stores consistent and wipes account-scoped caches", async () => {
     const calls: string[] = [];

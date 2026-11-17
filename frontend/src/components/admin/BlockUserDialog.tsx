@@ -59,7 +59,8 @@ export function BlockUserDialog({
     },
     onSuccess: () => {
       toast.success(permanent ? `${user?.name ?? "User"} has been permanently blocked.` : `${user?.name ?? "User"} has been temporarily blocked.`);
-      queryClient.invalidateQueries({ queryKey: ["admin", "users"] });
+      // Every list showing this account, including Admin Management's own.
+      queryClient.invalidateQueries({ queryKey: ["admin"] });
       reset();
       onOpenChange(false);
     },
@@ -148,7 +149,7 @@ export function BlockUserDialog({
         </div>
 
         <DialogFooter>
-          <Button type="button" variant="ghost" disabled={block.isPending} onClick={() => onOpenChange(false)}>
+          <Button type="button" variant="ghost" disabled={block.isPending} onClick={() => handleOpenChange(false)}>
             Cancel
           </Button>
           <Button

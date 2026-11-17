@@ -11,7 +11,7 @@ const BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "/api";
 
 // Paths that must never trigger a refresh-and-retry (avoids infinite loops
 // and refreshing on the very endpoints that establish/replace the session).
-const NO_REFRESH_PATHS = new Set(["/auth/refresh", "/auth/login", "/auth/signup"]);
+const NO_REFRESH_PATHS = new Set(["/auth/refresh", "/auth/login", "/auth/signup", "/auth/logout"]);
 
 // Dedupes concurrent 401s into a single in-flight refresh call.
 let refreshPromise: Promise<string | null> | null = null;

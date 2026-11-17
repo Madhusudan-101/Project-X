@@ -18,6 +18,7 @@ import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
+import { authService } from "@/services/api/auth";
 import { useAuthStore } from "@/store/auth";
 
 export interface DashboardStat {
@@ -97,10 +98,9 @@ export function EngagingDashboard({
 }: Props) {
   const navigate = useNavigate();
   const session = useAuthStore((s) => s.session);
-  const logout = useAuthStore((s) => s.logout);
 
   const signOut = () => {
-    logout();
+    void authService.logout();
     navigate({ to: "/" });
   };
 

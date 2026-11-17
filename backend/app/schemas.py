@@ -47,6 +47,10 @@ class UserOut(BaseModel):
     id: str
     email: str
     role: str = "candidate"
+    # Which portal this account belongs in, decided here from the profiles row:
+    # 'super_admin' for a Super Admin, otherwise the role. Tells the login page
+    # where to go; it grants nothing (see require_admin_role / GET /admin/me).
+    portal: str = "candidate"
     name: Optional[str] = None
     firstName: Optional[str] = None
     lastName: Optional[str] = None

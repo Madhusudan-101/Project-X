@@ -3,7 +3,8 @@ import { useQuery } from "@tanstack/react-query";
 import { Key, MoreHorizontal, ShieldCheck as ShieldCheckIcon, ShieldOff, UserPlus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { adminQueryOptions, adminTableQueryOptions } from "@/hooks/admin/query";
+import { adminTableQueryOptions } from "@/hooks/admin/query";
+import { useAdminMe } from "@/hooks/admin/use-admin-me";
 import { useAdminRange } from "@/hooks/admin/use-admin-range";
 import { useTableState } from "@/hooks/admin/use-table-state";
 import { adminService } from "@/services/api/admin/admin";
@@ -30,7 +31,7 @@ export function AdminManagementPage() {
   const [unblockTarget, setUnblockTarget] = useState<UserRow | null>(null);
   const t = useTableState({ sort: "created_at", dir: "desc" }, [range]);
 
-  const me = useQuery({ queryKey: ["admin", "me"], queryFn: () => adminService.me(), ...adminQueryOptions });
+  const me = useAdminMe();
   const isSuperAdmin = !!me.data?.is_super_admin;
 
   const q = useQuery({

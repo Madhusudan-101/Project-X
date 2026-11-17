@@ -10,6 +10,7 @@ import type { CollegeRow, CompanyRow, FunnelCounts } from "@/types/admin/admin";
 import { ActivityBadge, PageHeader, StatusBadge } from "./controls";
 import { DrivesTable } from "./DrivesTable";
 import { fmtDate, fmtInt, fmtPct, fmtRelative, placementRate } from "./format";
+import { usePortalTo } from "@/hooks/admin/use-admin-portal";
 import { KpiCard, KpiGroup } from "./KpiCard";
 import { PartnershipsTable } from "./PartnershipsTable";
 import { ChartSkeleton, EmptyBlock, ErrorBlock } from "./StateViews";
@@ -28,8 +29,9 @@ function FunnelKpis({ r, loading }: { r?: FunnelCounts; loading: boolean }) {
 }
 
 function BackLink({ to, label }: { to: "/admin/colleges" | "/admin/companies"; label: string }) {
+  const portalTo = usePortalTo();
   return (
-    <Link to={to} className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground">
+    <Link to={portalTo(to)} className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground">
       <ArrowLeft className="h-4 w-4" /> {label}
     </Link>
   );

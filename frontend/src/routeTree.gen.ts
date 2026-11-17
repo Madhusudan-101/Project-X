@@ -9,98 +9,93 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
-import { Route as SitemapDotxmlRouteImport } from './routes/sitemap[.]xml'
-import { Route as PortalsRouteImport } from './routes/portals'
-import { Route as CompanyRouteImport } from './routes/company'
-import { Route as CollegeRouteImport } from './routes/college'
-import { Route as CandidateRouteImport } from './routes/candidate'
-import { Route as AuthRouteImport } from './routes/auth'
-import { Route as AdminRouteImport } from './routes/admin'
 import { Route as IndexRouteImport } from './routes/index'
-import { Route as CompanyRolesIndexRouteImport } from './routes/company-roles/index'
-import { Route as CompanyJobsIndexRouteImport } from './routes/company-jobs/index'
-import { Route as CollegeIndexRouteImport } from './routes/college/index'
+import { Route as AdminRouteImport } from './routes/admin'
+import { Route as AuthRouteImport } from './routes/auth'
+import { Route as CandidateRouteImport } from './routes/candidate'
+import { Route as CollegeRouteImport } from './routes/college'
+import { Route as CompanyRouteImport } from './routes/company'
+import { Route as PortalsRouteImport } from './routes/portals'
+import { Route as SitemapDotxmlRouteImport } from './routes/sitemap[.]xml'
+import { Route as SuperAdminRouteImport } from './routes/super-admin'
 import { Route as AdminIndexRouteImport } from './routes/admin/index'
-import { Route as ResumeTailorApplicationIdRouteImport } from './routes/resume-tailor/$applicationId'
-import { Route as DemoCollegeRouteImport } from './routes/demo.college'
-import { Route as CompanyRolesRoleIdRouteImport } from './routes/company-roles/$roleId'
-import { Route as CompanyJobsJobIdRouteImport } from './routes/company-jobs/$jobId'
-import { Route as CollegeStudentsRouteImport } from './routes/college/students'
-import { Route as CollegeShortlistRouteImport } from './routes/college/shortlist'
-import { Route as CollegeReportsRouteImport } from './routes/college/reports'
-import { Route as CollegePlacementCycleRouteImport } from './routes/college/placement-cycle'
-import { Route as CollegeDrivesRouteImport } from './routes/college/drives'
-import { Route as CollegeDepartmentsRouteImport } from './routes/college/departments'
-import { Route as CollegeAnalyticsRouteImport } from './routes/college/analytics'
-import { Route as CandidateJobsJobIdRouteImport } from './routes/candidate-jobs/$jobId'
-import { Route as AuthSignupRouteImport } from './routes/auth.signup'
-import { Route as AuthSetPasswordRouteImport } from './routes/auth.set-password'
-import { Route as AuthResetPasswordRouteImport } from './routes/auth.reset-password'
-import { Route as AuthProfileSetupRouteImport } from './routes/auth.profile-setup'
-import { Route as AuthOtpRouteImport } from './routes/auth.otp'
-import { Route as AuthOauthCallbackRouteImport } from './routes/auth.oauth-callback'
-import { Route as AuthLoginRouteImport } from './routes/auth.login'
-import { Route as AuthForgotPasswordRouteImport } from './routes/auth.forgot-password'
-import { Route as AuthConfirmRouteImport } from './routes/auth.confirm'
-import { Route as AuthCompanySignupRouteImport } from './routes/auth.company-signup'
-import { Route as AuthCompanyOnboardingRouteImport } from './routes/auth.company-onboarding'
-import { Route as AuthCollegeOnboardingRouteImport } from './routes/auth.college-onboarding'
-import { Route as AdminSystemHealthRouteImport } from './routes/admin/system-health'
-import { Route as AdminReportsRouteImport } from './routes/admin/reports'
-import { Route as AdminPlacementsRouteImport } from './routes/admin/placements'
-import { Route as AdminPeerSafetyRouteImport } from './routes/admin/peer-safety'
-import { Route as AdminPartnershipsRouteImport } from './routes/admin/partnerships'
-import { Route as AdminFinanceRouteImport } from './routes/admin/finance'
-import { Route as AdminDepartmentsRouteImport } from './routes/admin/departments'
-import { Route as AdminCandidatesRouteImport } from './routes/admin/candidates'
-import { Route as AdminAuditLogRouteImport } from './routes/admin/audit-log'
-import { Route as AdminAlertsRouteImport } from './routes/admin/alerts'
 import { Route as AdminActivityRouteImport } from './routes/admin/activity'
-import { Route as DemoCollegeIndexRouteImport } from './routes/demo.college.index'
-import { Route as CandidateOaApplicationIdIndexRouteImport } from './routes/candidate-oa/$applicationId/index'
-import { Route as AdminUsersIndexRouteImport } from './routes/admin/users/index'
-import { Route as AdminCompaniesIndexRouteImport } from './routes/admin/companies/index'
-import { Route as AdminCollegesIndexRouteImport } from './routes/admin/colleges/index'
+import { Route as AdminAlertsRouteImport } from './routes/admin/alerts'
+import { Route as AdminAuditLogRouteImport } from './routes/admin/audit-log'
+import { Route as AdminCandidatesRouteImport } from './routes/admin/candidates'
+import { Route as AdminDepartmentsRouteImport } from './routes/admin/departments'
+import { Route as AdminFinanceRouteImport } from './routes/admin/finance'
+import { Route as AdminPartnershipsRouteImport } from './routes/admin/partnerships'
+import { Route as AdminPeerSafetyRouteImport } from './routes/admin/peer-safety'
+import { Route as AdminPlacementsRouteImport } from './routes/admin/placements'
+import { Route as AdminReportsRouteImport } from './routes/admin/reports'
+import { Route as AdminSystemHealthRouteImport } from './routes/admin/system-health'
+import { Route as AuthCollegeOnboardingRouteImport } from './routes/auth.college-onboarding'
+import { Route as AuthCompanyOnboardingRouteImport } from './routes/auth.company-onboarding'
+import { Route as AuthCompanySignupRouteImport } from './routes/auth.company-signup'
+import { Route as AuthConfirmRouteImport } from './routes/auth.confirm'
+import { Route as AuthForgotPasswordRouteImport } from './routes/auth.forgot-password'
+import { Route as AuthLoginRouteImport } from './routes/auth.login'
+import { Route as AuthOauthCallbackRouteImport } from './routes/auth.oauth-callback'
+import { Route as AuthOtpRouteImport } from './routes/auth.otp'
+import { Route as AuthProfileSetupRouteImport } from './routes/auth.profile-setup'
+import { Route as AuthResetPasswordRouteImport } from './routes/auth.reset-password'
+import { Route as AuthSetPasswordRouteImport } from './routes/auth.set-password'
+import { Route as AuthSignupRouteImport } from './routes/auth.signup'
+import { Route as CandidateJobsJobIdRouteImport } from './routes/candidate-jobs/$jobId'
+import { Route as CollegeIndexRouteImport } from './routes/college/index'
+import { Route as CollegeAnalyticsRouteImport } from './routes/college/analytics'
+import { Route as CollegeDepartmentsRouteImport } from './routes/college/departments'
+import { Route as CollegeDrivesRouteImport } from './routes/college/drives'
+import { Route as CollegePlacementCycleRouteImport } from './routes/college/placement-cycle'
+import { Route as CollegeReportsRouteImport } from './routes/college/reports'
+import { Route as CollegeShortlistRouteImport } from './routes/college/shortlist'
+import { Route as CollegeStudentsRouteImport } from './routes/college/students'
+import { Route as CompanyJobsIndexRouteImport } from './routes/company-jobs/index'
+import { Route as CompanyJobsJobIdRouteImport } from './routes/company-jobs/$jobId'
+import { Route as CompanyRolesIndexRouteImport } from './routes/company-roles/index'
+import { Route as CompanyRolesRoleIdRouteImport } from './routes/company-roles/$roleId'
+import { Route as DemoCollegeRouteImport } from './routes/demo.college'
+import { Route as ResumeTailorApplicationIdRouteImport } from './routes/resume-tailor/$applicationId'
+import { Route as SuperAdminIndexRouteImport } from './routes/super-admin/index'
+import { Route as SuperAdminActivityRouteImport } from './routes/super-admin/activity'
+import { Route as SuperAdminAlertsRouteImport } from './routes/super-admin/alerts'
+import { Route as SuperAdminAuditLogRouteImport } from './routes/super-admin/audit-log'
+import { Route as SuperAdminCandidatesRouteImport } from './routes/super-admin/candidates'
+import { Route as SuperAdminDepartmentsRouteImport } from './routes/super-admin/departments'
+import { Route as SuperAdminFinanceRouteImport } from './routes/super-admin/finance'
+import { Route as SuperAdminPartnershipsRouteImport } from './routes/super-admin/partnerships'
+import { Route as SuperAdminPeerSafetyRouteImport } from './routes/super-admin/peer-safety'
+import { Route as SuperAdminPlacementsRouteImport } from './routes/super-admin/placements'
+import { Route as SuperAdminReportsRouteImport } from './routes/super-admin/reports'
+import { Route as SuperAdminSystemHealthRouteImport } from './routes/super-admin/system-health'
 import { Route as AdminAdminUsersIndexRouteImport } from './routes/admin/admin-users/index'
-import { Route as DemoCollegeStudentsRouteImport } from './routes/demo.college.students'
-import { Route as DemoCollegeShortlistRouteImport } from './routes/demo.college.shortlist'
-import { Route as DemoCollegeReportsRouteImport } from './routes/demo.college.reports'
-import { Route as DemoCollegeDrivesRouteImport } from './routes/demo.college.drives'
-import { Route as DemoCollegeDepartmentsRouteImport } from './routes/demo.college.departments'
-import { Route as DemoCollegeAnalyticsRouteImport } from './routes/demo.college.analytics'
-import { Route as CandidateOaApplicationIdTestRouteImport } from './routes/candidate-oa/$applicationId/test'
-import { Route as AdminUsersUserIdRouteImport } from './routes/admin/users/$userId'
-import { Route as AdminCompaniesCompanyIdRouteImport } from './routes/admin/companies/$companyId'
+import { Route as AdminCollegesIndexRouteImport } from './routes/admin/colleges/index'
 import { Route as AdminCollegesCollegeIdRouteImport } from './routes/admin/colleges/$collegeId'
+import { Route as AdminCompaniesIndexRouteImport } from './routes/admin/companies/index'
+import { Route as AdminCompaniesCompanyIdRouteImport } from './routes/admin/companies/$companyId'
+import { Route as AdminUsersIndexRouteImport } from './routes/admin/users/index'
+import { Route as AdminUsersUserIdRouteImport } from './routes/admin/users/$userId'
+import { Route as CandidateOaApplicationIdIndexRouteImport } from './routes/candidate-oa/$applicationId/index'
+import { Route as CandidateOaApplicationIdTestRouteImport } from './routes/candidate-oa/$applicationId/test'
+import { Route as DemoCollegeIndexRouteImport } from './routes/demo.college.index'
+import { Route as DemoCollegeAnalyticsRouteImport } from './routes/demo.college.analytics'
+import { Route as DemoCollegeDepartmentsRouteImport } from './routes/demo.college.departments'
+import { Route as DemoCollegeDrivesRouteImport } from './routes/demo.college.drives'
+import { Route as DemoCollegeReportsRouteImport } from './routes/demo.college.reports'
+import { Route as DemoCollegeShortlistRouteImport } from './routes/demo.college.shortlist'
+import { Route as DemoCollegeStudentsRouteImport } from './routes/demo.college.students'
+import { Route as SuperAdminAdminUsersIndexRouteImport } from './routes/super-admin/admin-users/index'
+import { Route as SuperAdminCollegesIndexRouteImport } from './routes/super-admin/colleges/index'
+import { Route as SuperAdminCollegesCollegeIdRouteImport } from './routes/super-admin/colleges/$collegeId'
+import { Route as SuperAdminCompaniesIndexRouteImport } from './routes/super-admin/companies/index'
+import { Route as SuperAdminCompaniesCompanyIdRouteImport } from './routes/super-admin/companies/$companyId'
+import { Route as SuperAdminUsersIndexRouteImport } from './routes/super-admin/users/index'
+import { Route as SuperAdminUsersUserIdRouteImport } from './routes/super-admin/users/$userId'
 
-const SitemapDotxmlRoute = SitemapDotxmlRouteImport.update({
-  id: '/sitemap.xml',
-  path: '/sitemap.xml',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const PortalsRoute = PortalsRouteImport.update({
-  id: '/portals',
-  path: '/portals',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const CompanyRoute = CompanyRouteImport.update({
-  id: '/company',
-  path: '/company',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const CollegeRoute = CollegeRouteImport.update({
-  id: '/college',
-  path: '/college',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const CandidateRoute = CandidateRouteImport.update({
-  id: '/candidate',
-  path: '/candidate',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const AuthRoute = AuthRouteImport.update({
-  id: '/auth',
-  path: '/auth',
+const IndexRoute = IndexRouteImport.update({
+  id: '/',
+  path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AdminRoute = AdminRouteImport.update({
@@ -108,200 +103,44 @@ const AdminRoute = AdminRouteImport.update({
   path: '/admin',
   getParentRoute: () => rootRouteImport,
 } as any)
-const IndexRoute = IndexRouteImport.update({
-  id: '/',
-  path: '/',
+const AuthRoute = AuthRouteImport.update({
+  id: '/auth',
+  path: '/auth',
   getParentRoute: () => rootRouteImport,
 } as any)
-const CompanyRolesIndexRoute = CompanyRolesIndexRouteImport.update({
-  id: '/company-roles/',
-  path: '/company-roles/',
+const CandidateRoute = CandidateRouteImport.update({
+  id: '/candidate',
+  path: '/candidate',
   getParentRoute: () => rootRouteImport,
 } as any)
-const CompanyJobsIndexRoute = CompanyJobsIndexRouteImport.update({
-  id: '/company-jobs/',
-  path: '/company-jobs/',
+const CollegeRoute = CollegeRouteImport.update({
+  id: '/college',
+  path: '/college',
   getParentRoute: () => rootRouteImport,
 } as any)
-const CollegeIndexRoute = CollegeIndexRouteImport.update({
-  id: '/',
-  path: '/',
-  getParentRoute: () => CollegeRoute,
+const CompanyRoute = CompanyRouteImport.update({
+  id: '/company',
+  path: '/company',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PortalsRoute = PortalsRouteImport.update({
+  id: '/portals',
+  path: '/portals',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SitemapDotxmlRoute = SitemapDotxmlRouteImport.update({
+  id: '/sitemap.xml',
+  path: '/sitemap.xml',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SuperAdminRoute = SuperAdminRouteImport.update({
+  id: '/super-admin',
+  path: '/super-admin',
+  getParentRoute: () => rootRouteImport,
 } as any)
 const AdminIndexRoute = AdminIndexRouteImport.update({
   id: '/',
   path: '/',
-  getParentRoute: () => AdminRoute,
-} as any)
-const ResumeTailorApplicationIdRoute =
-  ResumeTailorApplicationIdRouteImport.update({
-    id: '/resume-tailor/$applicationId',
-    path: '/resume-tailor/$applicationId',
-    getParentRoute: () => rootRouteImport,
-  } as any)
-const DemoCollegeRoute = DemoCollegeRouteImport.update({
-  id: '/demo/college',
-  path: '/demo/college',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const CompanyRolesRoleIdRoute = CompanyRolesRoleIdRouteImport.update({
-  id: '/company-roles/$roleId',
-  path: '/company-roles/$roleId',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const CompanyJobsJobIdRoute = CompanyJobsJobIdRouteImport.update({
-  id: '/company-jobs/$jobId',
-  path: '/company-jobs/$jobId',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const CollegeStudentsRoute = CollegeStudentsRouteImport.update({
-  id: '/students',
-  path: '/students',
-  getParentRoute: () => CollegeRoute,
-} as any)
-const CollegeShortlistRoute = CollegeShortlistRouteImport.update({
-  id: '/shortlist',
-  path: '/shortlist',
-  getParentRoute: () => CollegeRoute,
-} as any)
-const CollegeReportsRoute = CollegeReportsRouteImport.update({
-  id: '/reports',
-  path: '/reports',
-  getParentRoute: () => CollegeRoute,
-} as any)
-const CollegePlacementCycleRoute = CollegePlacementCycleRouteImport.update({
-  id: '/placement-cycle',
-  path: '/placement-cycle',
-  getParentRoute: () => CollegeRoute,
-} as any)
-const CollegeDrivesRoute = CollegeDrivesRouteImport.update({
-  id: '/drives',
-  path: '/drives',
-  getParentRoute: () => CollegeRoute,
-} as any)
-const CollegeDepartmentsRoute = CollegeDepartmentsRouteImport.update({
-  id: '/departments',
-  path: '/departments',
-  getParentRoute: () => CollegeRoute,
-} as any)
-const CollegeAnalyticsRoute = CollegeAnalyticsRouteImport.update({
-  id: '/analytics',
-  path: '/analytics',
-  getParentRoute: () => CollegeRoute,
-} as any)
-const CandidateJobsJobIdRoute = CandidateJobsJobIdRouteImport.update({
-  id: '/candidate-jobs/$jobId',
-  path: '/candidate-jobs/$jobId',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const AuthSignupRoute = AuthSignupRouteImport.update({
-  id: '/signup',
-  path: '/signup',
-  getParentRoute: () => AuthRoute,
-} as any)
-const AuthSetPasswordRoute = AuthSetPasswordRouteImport.update({
-  id: '/set-password',
-  path: '/set-password',
-  getParentRoute: () => AuthRoute,
-} as any)
-const AuthResetPasswordRoute = AuthResetPasswordRouteImport.update({
-  id: '/reset-password',
-  path: '/reset-password',
-  getParentRoute: () => AuthRoute,
-} as any)
-const AuthProfileSetupRoute = AuthProfileSetupRouteImport.update({
-  id: '/profile-setup',
-  path: '/profile-setup',
-  getParentRoute: () => AuthRoute,
-} as any)
-const AuthOtpRoute = AuthOtpRouteImport.update({
-  id: '/otp',
-  path: '/otp',
-  getParentRoute: () => AuthRoute,
-} as any)
-const AuthOauthCallbackRoute = AuthOauthCallbackRouteImport.update({
-  id: '/oauth-callback',
-  path: '/oauth-callback',
-  getParentRoute: () => AuthRoute,
-} as any)
-const AuthLoginRoute = AuthLoginRouteImport.update({
-  id: '/login',
-  path: '/login',
-  getParentRoute: () => AuthRoute,
-} as any)
-const AuthForgotPasswordRoute = AuthForgotPasswordRouteImport.update({
-  id: '/forgot-password',
-  path: '/forgot-password',
-  getParentRoute: () => AuthRoute,
-} as any)
-const AuthConfirmRoute = AuthConfirmRouteImport.update({
-  id: '/confirm',
-  path: '/confirm',
-  getParentRoute: () => AuthRoute,
-} as any)
-const AuthCompanySignupRoute = AuthCompanySignupRouteImport.update({
-  id: '/company-signup',
-  path: '/company-signup',
-  getParentRoute: () => AuthRoute,
-} as any)
-const AuthCompanyOnboardingRoute = AuthCompanyOnboardingRouteImport.update({
-  id: '/company-onboarding',
-  path: '/company-onboarding',
-  getParentRoute: () => AuthRoute,
-} as any)
-const AuthCollegeOnboardingRoute = AuthCollegeOnboardingRouteImport.update({
-  id: '/college-onboarding',
-  path: '/college-onboarding',
-  getParentRoute: () => AuthRoute,
-} as any)
-const AdminSystemHealthRoute = AdminSystemHealthRouteImport.update({
-  id: '/system-health',
-  path: '/system-health',
-  getParentRoute: () => AdminRoute,
-} as any)
-const AdminReportsRoute = AdminReportsRouteImport.update({
-  id: '/reports',
-  path: '/reports',
-  getParentRoute: () => AdminRoute,
-} as any)
-const AdminPlacementsRoute = AdminPlacementsRouteImport.update({
-  id: '/placements',
-  path: '/placements',
-  getParentRoute: () => AdminRoute,
-} as any)
-const AdminPeerSafetyRoute = AdminPeerSafetyRouteImport.update({
-  id: '/peer-safety',
-  path: '/peer-safety',
-  getParentRoute: () => AdminRoute,
-} as any)
-const AdminPartnershipsRoute = AdminPartnershipsRouteImport.update({
-  id: '/partnerships',
-  path: '/partnerships',
-  getParentRoute: () => AdminRoute,
-} as any)
-const AdminFinanceRoute = AdminFinanceRouteImport.update({
-  id: '/finance',
-  path: '/finance',
-  getParentRoute: () => AdminRoute,
-} as any)
-const AdminDepartmentsRoute = AdminDepartmentsRouteImport.update({
-  id: '/departments',
-  path: '/departments',
-  getParentRoute: () => AdminRoute,
-} as any)
-const AdminCandidatesRoute = AdminCandidatesRouteImport.update({
-  id: '/candidates',
-  path: '/candidates',
-  getParentRoute: () => AdminRoute,
-} as any)
-const AdminAuditLogRoute = AdminAuditLogRouteImport.update({
-  id: '/audit-log',
-  path: '/audit-log',
-  getParentRoute: () => AdminRoute,
-} as any)
-const AdminAlertsRoute = AdminAlertsRouteImport.update({
-  id: '/alerts',
-  path: '/alerts',
   getParentRoute: () => AdminRoute,
 } as any)
 const AdminActivityRoute = AdminActivityRouteImport.update({
@@ -309,25 +148,255 @@ const AdminActivityRoute = AdminActivityRouteImport.update({
   path: '/activity',
   getParentRoute: () => AdminRoute,
 } as any)
-const DemoCollegeIndexRoute = DemoCollegeIndexRouteImport.update({
-  id: '/',
-  path: '/',
-  getParentRoute: () => DemoCollegeRoute,
-} as any)
-const CandidateOaApplicationIdIndexRoute =
-  CandidateOaApplicationIdIndexRouteImport.update({
-    id: '/candidate-oa/$applicationId/',
-    path: '/candidate-oa/$applicationId/',
-    getParentRoute: () => rootRouteImport,
-  } as any)
-const AdminUsersIndexRoute = AdminUsersIndexRouteImport.update({
-  id: '/users/',
-  path: '/users/',
+const AdminAlertsRoute = AdminAlertsRouteImport.update({
+  id: '/alerts',
+  path: '/alerts',
   getParentRoute: () => AdminRoute,
 } as any)
-const AdminCompaniesIndexRoute = AdminCompaniesIndexRouteImport.update({
-  id: '/companies/',
-  path: '/companies/',
+const AdminAuditLogRoute = AdminAuditLogRouteImport.update({
+  id: '/audit-log',
+  path: '/audit-log',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminCandidatesRoute = AdminCandidatesRouteImport.update({
+  id: '/candidates',
+  path: '/candidates',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminDepartmentsRoute = AdminDepartmentsRouteImport.update({
+  id: '/departments',
+  path: '/departments',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminFinanceRoute = AdminFinanceRouteImport.update({
+  id: '/finance',
+  path: '/finance',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminPartnershipsRoute = AdminPartnershipsRouteImport.update({
+  id: '/partnerships',
+  path: '/partnerships',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminPeerSafetyRoute = AdminPeerSafetyRouteImport.update({
+  id: '/peer-safety',
+  path: '/peer-safety',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminPlacementsRoute = AdminPlacementsRouteImport.update({
+  id: '/placements',
+  path: '/placements',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminReportsRoute = AdminReportsRouteImport.update({
+  id: '/reports',
+  path: '/reports',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminSystemHealthRoute = AdminSystemHealthRouteImport.update({
+  id: '/system-health',
+  path: '/system-health',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AuthCollegeOnboardingRoute = AuthCollegeOnboardingRouteImport.update({
+  id: '/college-onboarding',
+  path: '/college-onboarding',
+  getParentRoute: () => AuthRoute,
+} as any)
+const AuthCompanyOnboardingRoute = AuthCompanyOnboardingRouteImport.update({
+  id: '/company-onboarding',
+  path: '/company-onboarding',
+  getParentRoute: () => AuthRoute,
+} as any)
+const AuthCompanySignupRoute = AuthCompanySignupRouteImport.update({
+  id: '/company-signup',
+  path: '/company-signup',
+  getParentRoute: () => AuthRoute,
+} as any)
+const AuthConfirmRoute = AuthConfirmRouteImport.update({
+  id: '/confirm',
+  path: '/confirm',
+  getParentRoute: () => AuthRoute,
+} as any)
+const AuthForgotPasswordRoute = AuthForgotPasswordRouteImport.update({
+  id: '/forgot-password',
+  path: '/forgot-password',
+  getParentRoute: () => AuthRoute,
+} as any)
+const AuthLoginRoute = AuthLoginRouteImport.update({
+  id: '/login',
+  path: '/login',
+  getParentRoute: () => AuthRoute,
+} as any)
+const AuthOauthCallbackRoute = AuthOauthCallbackRouteImport.update({
+  id: '/oauth-callback',
+  path: '/oauth-callback',
+  getParentRoute: () => AuthRoute,
+} as any)
+const AuthOtpRoute = AuthOtpRouteImport.update({
+  id: '/otp',
+  path: '/otp',
+  getParentRoute: () => AuthRoute,
+} as any)
+const AuthProfileSetupRoute = AuthProfileSetupRouteImport.update({
+  id: '/profile-setup',
+  path: '/profile-setup',
+  getParentRoute: () => AuthRoute,
+} as any)
+const AuthResetPasswordRoute = AuthResetPasswordRouteImport.update({
+  id: '/reset-password',
+  path: '/reset-password',
+  getParentRoute: () => AuthRoute,
+} as any)
+const AuthSetPasswordRoute = AuthSetPasswordRouteImport.update({
+  id: '/set-password',
+  path: '/set-password',
+  getParentRoute: () => AuthRoute,
+} as any)
+const AuthSignupRoute = AuthSignupRouteImport.update({
+  id: '/signup',
+  path: '/signup',
+  getParentRoute: () => AuthRoute,
+} as any)
+const CandidateJobsJobIdRoute = CandidateJobsJobIdRouteImport.update({
+  id: '/candidate-jobs/$jobId',
+  path: '/candidate-jobs/$jobId',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const CollegeIndexRoute = CollegeIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => CollegeRoute,
+} as any)
+const CollegeAnalyticsRoute = CollegeAnalyticsRouteImport.update({
+  id: '/analytics',
+  path: '/analytics',
+  getParentRoute: () => CollegeRoute,
+} as any)
+const CollegeDepartmentsRoute = CollegeDepartmentsRouteImport.update({
+  id: '/departments',
+  path: '/departments',
+  getParentRoute: () => CollegeRoute,
+} as any)
+const CollegeDrivesRoute = CollegeDrivesRouteImport.update({
+  id: '/drives',
+  path: '/drives',
+  getParentRoute: () => CollegeRoute,
+} as any)
+const CollegePlacementCycleRoute = CollegePlacementCycleRouteImport.update({
+  id: '/placement-cycle',
+  path: '/placement-cycle',
+  getParentRoute: () => CollegeRoute,
+} as any)
+const CollegeReportsRoute = CollegeReportsRouteImport.update({
+  id: '/reports',
+  path: '/reports',
+  getParentRoute: () => CollegeRoute,
+} as any)
+const CollegeShortlistRoute = CollegeShortlistRouteImport.update({
+  id: '/shortlist',
+  path: '/shortlist',
+  getParentRoute: () => CollegeRoute,
+} as any)
+const CollegeStudentsRoute = CollegeStudentsRouteImport.update({
+  id: '/students',
+  path: '/students',
+  getParentRoute: () => CollegeRoute,
+} as any)
+const CompanyJobsIndexRoute = CompanyJobsIndexRouteImport.update({
+  id: '/company-jobs/',
+  path: '/company-jobs/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const CompanyJobsJobIdRoute = CompanyJobsJobIdRouteImport.update({
+  id: '/company-jobs/$jobId',
+  path: '/company-jobs/$jobId',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const CompanyRolesIndexRoute = CompanyRolesIndexRouteImport.update({
+  id: '/company-roles/',
+  path: '/company-roles/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const CompanyRolesRoleIdRoute = CompanyRolesRoleIdRouteImport.update({
+  id: '/company-roles/$roleId',
+  path: '/company-roles/$roleId',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DemoCollegeRoute = DemoCollegeRouteImport.update({
+  id: '/demo/college',
+  path: '/demo/college',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ResumeTailorApplicationIdRoute =
+  ResumeTailorApplicationIdRouteImport.update({
+    id: '/resume-tailor/$applicationId',
+    path: '/resume-tailor/$applicationId',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const SuperAdminIndexRoute = SuperAdminIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => SuperAdminRoute,
+} as any)
+const SuperAdminActivityRoute = SuperAdminActivityRouteImport.update({
+  id: '/activity',
+  path: '/activity',
+  getParentRoute: () => SuperAdminRoute,
+} as any)
+const SuperAdminAlertsRoute = SuperAdminAlertsRouteImport.update({
+  id: '/alerts',
+  path: '/alerts',
+  getParentRoute: () => SuperAdminRoute,
+} as any)
+const SuperAdminAuditLogRoute = SuperAdminAuditLogRouteImport.update({
+  id: '/audit-log',
+  path: '/audit-log',
+  getParentRoute: () => SuperAdminRoute,
+} as any)
+const SuperAdminCandidatesRoute = SuperAdminCandidatesRouteImport.update({
+  id: '/candidates',
+  path: '/candidates',
+  getParentRoute: () => SuperAdminRoute,
+} as any)
+const SuperAdminDepartmentsRoute = SuperAdminDepartmentsRouteImport.update({
+  id: '/departments',
+  path: '/departments',
+  getParentRoute: () => SuperAdminRoute,
+} as any)
+const SuperAdminFinanceRoute = SuperAdminFinanceRouteImport.update({
+  id: '/finance',
+  path: '/finance',
+  getParentRoute: () => SuperAdminRoute,
+} as any)
+const SuperAdminPartnershipsRoute = SuperAdminPartnershipsRouteImport.update({
+  id: '/partnerships',
+  path: '/partnerships',
+  getParentRoute: () => SuperAdminRoute,
+} as any)
+const SuperAdminPeerSafetyRoute = SuperAdminPeerSafetyRouteImport.update({
+  id: '/peer-safety',
+  path: '/peer-safety',
+  getParentRoute: () => SuperAdminRoute,
+} as any)
+const SuperAdminPlacementsRoute = SuperAdminPlacementsRouteImport.update({
+  id: '/placements',
+  path: '/placements',
+  getParentRoute: () => SuperAdminRoute,
+} as any)
+const SuperAdminReportsRoute = SuperAdminReportsRouteImport.update({
+  id: '/reports',
+  path: '/reports',
+  getParentRoute: () => SuperAdminRoute,
+} as any)
+const SuperAdminSystemHealthRoute = SuperAdminSystemHealthRouteImport.update({
+  id: '/system-health',
+  path: '/system-health',
+  getParentRoute: () => SuperAdminRoute,
+} as any)
+const AdminAdminUsersIndexRoute = AdminAdminUsersIndexRouteImport.update({
+  id: '/admin-users/',
+  path: '/admin-users/',
   getParentRoute: () => AdminRoute,
 } as any)
 const AdminCollegesIndexRoute = AdminCollegesIndexRouteImport.update({
@@ -335,50 +404,14 @@ const AdminCollegesIndexRoute = AdminCollegesIndexRouteImport.update({
   path: '/colleges/',
   getParentRoute: () => AdminRoute,
 } as any)
-const AdminAdminUsersIndexRoute = AdminAdminUsersIndexRouteImport.update({
-  id: '/admin-users/',
-  path: '/admin-users/',
+const AdminCollegesCollegeIdRoute = AdminCollegesCollegeIdRouteImport.update({
+  id: '/colleges/$collegeId',
+  path: '/colleges/$collegeId',
   getParentRoute: () => AdminRoute,
 } as any)
-const DemoCollegeStudentsRoute = DemoCollegeStudentsRouteImport.update({
-  id: '/students',
-  path: '/students',
-  getParentRoute: () => DemoCollegeRoute,
-} as any)
-const DemoCollegeShortlistRoute = DemoCollegeShortlistRouteImport.update({
-  id: '/shortlist',
-  path: '/shortlist',
-  getParentRoute: () => DemoCollegeRoute,
-} as any)
-const DemoCollegeReportsRoute = DemoCollegeReportsRouteImport.update({
-  id: '/reports',
-  path: '/reports',
-  getParentRoute: () => DemoCollegeRoute,
-} as any)
-const DemoCollegeDrivesRoute = DemoCollegeDrivesRouteImport.update({
-  id: '/drives',
-  path: '/drives',
-  getParentRoute: () => DemoCollegeRoute,
-} as any)
-const DemoCollegeDepartmentsRoute = DemoCollegeDepartmentsRouteImport.update({
-  id: '/departments',
-  path: '/departments',
-  getParentRoute: () => DemoCollegeRoute,
-} as any)
-const DemoCollegeAnalyticsRoute = DemoCollegeAnalyticsRouteImport.update({
-  id: '/analytics',
-  path: '/analytics',
-  getParentRoute: () => DemoCollegeRoute,
-} as any)
-const CandidateOaApplicationIdTestRoute =
-  CandidateOaApplicationIdTestRouteImport.update({
-    id: '/candidate-oa/$applicationId/test',
-    path: '/candidate-oa/$applicationId/test',
-    getParentRoute: () => rootRouteImport,
-  } as any)
-const AdminUsersUserIdRoute = AdminUsersUserIdRouteImport.update({
-  id: '/users/$userId',
-  path: '/users/$userId',
+const AdminCompaniesIndexRoute = AdminCompaniesIndexRouteImport.update({
+  id: '/companies/',
+  path: '/companies/',
   getParentRoute: () => AdminRoute,
 } as any)
 const AdminCompaniesCompanyIdRoute = AdminCompaniesCompanyIdRouteImport.update({
@@ -386,10 +419,101 @@ const AdminCompaniesCompanyIdRoute = AdminCompaniesCompanyIdRouteImport.update({
   path: '/companies/$companyId',
   getParentRoute: () => AdminRoute,
 } as any)
-const AdminCollegesCollegeIdRoute = AdminCollegesCollegeIdRouteImport.update({
-  id: '/colleges/$collegeId',
-  path: '/colleges/$collegeId',
+const AdminUsersIndexRoute = AdminUsersIndexRouteImport.update({
+  id: '/users/',
+  path: '/users/',
   getParentRoute: () => AdminRoute,
+} as any)
+const AdminUsersUserIdRoute = AdminUsersUserIdRouteImport.update({
+  id: '/users/$userId',
+  path: '/users/$userId',
+  getParentRoute: () => AdminRoute,
+} as any)
+const CandidateOaApplicationIdIndexRoute =
+  CandidateOaApplicationIdIndexRouteImport.update({
+    id: '/candidate-oa/$applicationId/',
+    path: '/candidate-oa/$applicationId/',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const CandidateOaApplicationIdTestRoute =
+  CandidateOaApplicationIdTestRouteImport.update({
+    id: '/candidate-oa/$applicationId/test',
+    path: '/candidate-oa/$applicationId/test',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const DemoCollegeIndexRoute = DemoCollegeIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => DemoCollegeRoute,
+} as any)
+const DemoCollegeAnalyticsRoute = DemoCollegeAnalyticsRouteImport.update({
+  id: '/analytics',
+  path: '/analytics',
+  getParentRoute: () => DemoCollegeRoute,
+} as any)
+const DemoCollegeDepartmentsRoute = DemoCollegeDepartmentsRouteImport.update({
+  id: '/departments',
+  path: '/departments',
+  getParentRoute: () => DemoCollegeRoute,
+} as any)
+const DemoCollegeDrivesRoute = DemoCollegeDrivesRouteImport.update({
+  id: '/drives',
+  path: '/drives',
+  getParentRoute: () => DemoCollegeRoute,
+} as any)
+const DemoCollegeReportsRoute = DemoCollegeReportsRouteImport.update({
+  id: '/reports',
+  path: '/reports',
+  getParentRoute: () => DemoCollegeRoute,
+} as any)
+const DemoCollegeShortlistRoute = DemoCollegeShortlistRouteImport.update({
+  id: '/shortlist',
+  path: '/shortlist',
+  getParentRoute: () => DemoCollegeRoute,
+} as any)
+const DemoCollegeStudentsRoute = DemoCollegeStudentsRouteImport.update({
+  id: '/students',
+  path: '/students',
+  getParentRoute: () => DemoCollegeRoute,
+} as any)
+const SuperAdminAdminUsersIndexRoute =
+  SuperAdminAdminUsersIndexRouteImport.update({
+    id: '/admin-users/',
+    path: '/admin-users/',
+    getParentRoute: () => SuperAdminRoute,
+  } as any)
+const SuperAdminCollegesIndexRoute = SuperAdminCollegesIndexRouteImport.update({
+  id: '/colleges/',
+  path: '/colleges/',
+  getParentRoute: () => SuperAdminRoute,
+} as any)
+const SuperAdminCollegesCollegeIdRoute =
+  SuperAdminCollegesCollegeIdRouteImport.update({
+    id: '/colleges/$collegeId',
+    path: '/colleges/$collegeId',
+    getParentRoute: () => SuperAdminRoute,
+  } as any)
+const SuperAdminCompaniesIndexRoute =
+  SuperAdminCompaniesIndexRouteImport.update({
+    id: '/companies/',
+    path: '/companies/',
+    getParentRoute: () => SuperAdminRoute,
+  } as any)
+const SuperAdminCompaniesCompanyIdRoute =
+  SuperAdminCompaniesCompanyIdRouteImport.update({
+    id: '/companies/$companyId',
+    path: '/companies/$companyId',
+    getParentRoute: () => SuperAdminRoute,
+  } as any)
+const SuperAdminUsersIndexRoute = SuperAdminUsersIndexRouteImport.update({
+  id: '/users/',
+  path: '/users/',
+  getParentRoute: () => SuperAdminRoute,
+} as any)
+const SuperAdminUsersUserIdRoute = SuperAdminUsersUserIdRouteImport.update({
+  id: '/users/$userId',
+  path: '/users/$userId',
+  getParentRoute: () => SuperAdminRoute,
 } as any)
 
 export interface FileRoutesByFullPath {
@@ -401,6 +525,7 @@ export interface FileRoutesByFullPath {
   '/company': typeof CompanyRoute
   '/portals': typeof PortalsRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
+  '/super-admin': typeof SuperAdminRouteWithChildren
   '/admin/activity': typeof AdminActivityRoute
   '/admin/alerts': typeof AdminAlertsRoute
   '/admin/audit-log': typeof AdminAuditLogRoute
@@ -436,10 +561,22 @@ export interface FileRoutesByFullPath {
   '/company-roles/$roleId': typeof CompanyRolesRoleIdRoute
   '/demo/college': typeof DemoCollegeRouteWithChildren
   '/resume-tailor/$applicationId': typeof ResumeTailorApplicationIdRoute
+  '/super-admin/activity': typeof SuperAdminActivityRoute
+  '/super-admin/alerts': typeof SuperAdminAlertsRoute
+  '/super-admin/audit-log': typeof SuperAdminAuditLogRoute
+  '/super-admin/candidates': typeof SuperAdminCandidatesRoute
+  '/super-admin/departments': typeof SuperAdminDepartmentsRoute
+  '/super-admin/finance': typeof SuperAdminFinanceRoute
+  '/super-admin/partnerships': typeof SuperAdminPartnershipsRoute
+  '/super-admin/peer-safety': typeof SuperAdminPeerSafetyRoute
+  '/super-admin/placements': typeof SuperAdminPlacementsRoute
+  '/super-admin/reports': typeof SuperAdminReportsRoute
+  '/super-admin/system-health': typeof SuperAdminSystemHealthRoute
   '/admin/': typeof AdminIndexRoute
   '/college/': typeof CollegeIndexRoute
   '/company-jobs/': typeof CompanyJobsIndexRoute
   '/company-roles/': typeof CompanyRolesIndexRoute
+  '/super-admin/': typeof SuperAdminIndexRoute
   '/admin/colleges/$collegeId': typeof AdminCollegesCollegeIdRoute
   '/admin/companies/$companyId': typeof AdminCompaniesCompanyIdRoute
   '/admin/users/$userId': typeof AdminUsersUserIdRoute
@@ -450,12 +587,19 @@ export interface FileRoutesByFullPath {
   '/demo/college/reports': typeof DemoCollegeReportsRoute
   '/demo/college/shortlist': typeof DemoCollegeShortlistRoute
   '/demo/college/students': typeof DemoCollegeStudentsRoute
+  '/super-admin/colleges/$collegeId': typeof SuperAdminCollegesCollegeIdRoute
+  '/super-admin/companies/$companyId': typeof SuperAdminCompaniesCompanyIdRoute
+  '/super-admin/users/$userId': typeof SuperAdminUsersUserIdRoute
   '/admin/admin-users/': typeof AdminAdminUsersIndexRoute
   '/admin/colleges/': typeof AdminCollegesIndexRoute
   '/admin/companies/': typeof AdminCompaniesIndexRoute
   '/admin/users/': typeof AdminUsersIndexRoute
   '/candidate-oa/$applicationId/': typeof CandidateOaApplicationIdIndexRoute
   '/demo/college/': typeof DemoCollegeIndexRoute
+  '/super-admin/admin-users/': typeof SuperAdminAdminUsersIndexRoute
+  '/super-admin/colleges/': typeof SuperAdminCollegesIndexRoute
+  '/super-admin/companies/': typeof SuperAdminCompaniesIndexRoute
+  '/super-admin/users/': typeof SuperAdminUsersIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -498,10 +642,22 @@ export interface FileRoutesByTo {
   '/company-jobs/$jobId': typeof CompanyJobsJobIdRoute
   '/company-roles/$roleId': typeof CompanyRolesRoleIdRoute
   '/resume-tailor/$applicationId': typeof ResumeTailorApplicationIdRoute
+  '/super-admin/activity': typeof SuperAdminActivityRoute
+  '/super-admin/alerts': typeof SuperAdminAlertsRoute
+  '/super-admin/audit-log': typeof SuperAdminAuditLogRoute
+  '/super-admin/candidates': typeof SuperAdminCandidatesRoute
+  '/super-admin/departments': typeof SuperAdminDepartmentsRoute
+  '/super-admin/finance': typeof SuperAdminFinanceRoute
+  '/super-admin/partnerships': typeof SuperAdminPartnershipsRoute
+  '/super-admin/peer-safety': typeof SuperAdminPeerSafetyRoute
+  '/super-admin/placements': typeof SuperAdminPlacementsRoute
+  '/super-admin/reports': typeof SuperAdminReportsRoute
+  '/super-admin/system-health': typeof SuperAdminSystemHealthRoute
   '/admin': typeof AdminIndexRoute
   '/college': typeof CollegeIndexRoute
   '/company-jobs': typeof CompanyJobsIndexRoute
   '/company-roles': typeof CompanyRolesIndexRoute
+  '/super-admin': typeof SuperAdminIndexRoute
   '/admin/colleges/$collegeId': typeof AdminCollegesCollegeIdRoute
   '/admin/companies/$companyId': typeof AdminCompaniesCompanyIdRoute
   '/admin/users/$userId': typeof AdminUsersUserIdRoute
@@ -512,12 +668,19 @@ export interface FileRoutesByTo {
   '/demo/college/reports': typeof DemoCollegeReportsRoute
   '/demo/college/shortlist': typeof DemoCollegeShortlistRoute
   '/demo/college/students': typeof DemoCollegeStudentsRoute
+  '/super-admin/colleges/$collegeId': typeof SuperAdminCollegesCollegeIdRoute
+  '/super-admin/companies/$companyId': typeof SuperAdminCompaniesCompanyIdRoute
+  '/super-admin/users/$userId': typeof SuperAdminUsersUserIdRoute
   '/admin/admin-users': typeof AdminAdminUsersIndexRoute
   '/admin/colleges': typeof AdminCollegesIndexRoute
   '/admin/companies': typeof AdminCompaniesIndexRoute
   '/admin/users': typeof AdminUsersIndexRoute
   '/candidate-oa/$applicationId': typeof CandidateOaApplicationIdIndexRoute
   '/demo/college': typeof DemoCollegeIndexRoute
+  '/super-admin/admin-users': typeof SuperAdminAdminUsersIndexRoute
+  '/super-admin/colleges': typeof SuperAdminCollegesIndexRoute
+  '/super-admin/companies': typeof SuperAdminCompaniesIndexRoute
+  '/super-admin/users': typeof SuperAdminUsersIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -529,6 +692,7 @@ export interface FileRoutesById {
   '/company': typeof CompanyRoute
   '/portals': typeof PortalsRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
+  '/super-admin': typeof SuperAdminRouteWithChildren
   '/admin/activity': typeof AdminActivityRoute
   '/admin/alerts': typeof AdminAlertsRoute
   '/admin/audit-log': typeof AdminAuditLogRoute
@@ -564,10 +728,22 @@ export interface FileRoutesById {
   '/company-roles/$roleId': typeof CompanyRolesRoleIdRoute
   '/demo/college': typeof DemoCollegeRouteWithChildren
   '/resume-tailor/$applicationId': typeof ResumeTailorApplicationIdRoute
+  '/super-admin/activity': typeof SuperAdminActivityRoute
+  '/super-admin/alerts': typeof SuperAdminAlertsRoute
+  '/super-admin/audit-log': typeof SuperAdminAuditLogRoute
+  '/super-admin/candidates': typeof SuperAdminCandidatesRoute
+  '/super-admin/departments': typeof SuperAdminDepartmentsRoute
+  '/super-admin/finance': typeof SuperAdminFinanceRoute
+  '/super-admin/partnerships': typeof SuperAdminPartnershipsRoute
+  '/super-admin/peer-safety': typeof SuperAdminPeerSafetyRoute
+  '/super-admin/placements': typeof SuperAdminPlacementsRoute
+  '/super-admin/reports': typeof SuperAdminReportsRoute
+  '/super-admin/system-health': typeof SuperAdminSystemHealthRoute
   '/admin/': typeof AdminIndexRoute
   '/college/': typeof CollegeIndexRoute
   '/company-jobs/': typeof CompanyJobsIndexRoute
   '/company-roles/': typeof CompanyRolesIndexRoute
+  '/super-admin/': typeof SuperAdminIndexRoute
   '/admin/colleges/$collegeId': typeof AdminCollegesCollegeIdRoute
   '/admin/companies/$companyId': typeof AdminCompaniesCompanyIdRoute
   '/admin/users/$userId': typeof AdminUsersUserIdRoute
@@ -578,12 +754,19 @@ export interface FileRoutesById {
   '/demo/college/reports': typeof DemoCollegeReportsRoute
   '/demo/college/shortlist': typeof DemoCollegeShortlistRoute
   '/demo/college/students': typeof DemoCollegeStudentsRoute
+  '/super-admin/colleges/$collegeId': typeof SuperAdminCollegesCollegeIdRoute
+  '/super-admin/companies/$companyId': typeof SuperAdminCompaniesCompanyIdRoute
+  '/super-admin/users/$userId': typeof SuperAdminUsersUserIdRoute
   '/admin/admin-users/': typeof AdminAdminUsersIndexRoute
   '/admin/colleges/': typeof AdminCollegesIndexRoute
   '/admin/companies/': typeof AdminCompaniesIndexRoute
   '/admin/users/': typeof AdminUsersIndexRoute
   '/candidate-oa/$applicationId/': typeof CandidateOaApplicationIdIndexRoute
   '/demo/college/': typeof DemoCollegeIndexRoute
+  '/super-admin/admin-users/': typeof SuperAdminAdminUsersIndexRoute
+  '/super-admin/colleges/': typeof SuperAdminCollegesIndexRoute
+  '/super-admin/companies/': typeof SuperAdminCompaniesIndexRoute
+  '/super-admin/users/': typeof SuperAdminUsersIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -596,6 +779,7 @@ export interface FileRouteTypes {
     | '/company'
     | '/portals'
     | '/sitemap.xml'
+    | '/super-admin'
     | '/admin/activity'
     | '/admin/alerts'
     | '/admin/audit-log'
@@ -631,10 +815,22 @@ export interface FileRouteTypes {
     | '/company-roles/$roleId'
     | '/demo/college'
     | '/resume-tailor/$applicationId'
+    | '/super-admin/activity'
+    | '/super-admin/alerts'
+    | '/super-admin/audit-log'
+    | '/super-admin/candidates'
+    | '/super-admin/departments'
+    | '/super-admin/finance'
+    | '/super-admin/partnerships'
+    | '/super-admin/peer-safety'
+    | '/super-admin/placements'
+    | '/super-admin/reports'
+    | '/super-admin/system-health'
     | '/admin/'
     | '/college/'
     | '/company-jobs/'
     | '/company-roles/'
+    | '/super-admin/'
     | '/admin/colleges/$collegeId'
     | '/admin/companies/$companyId'
     | '/admin/users/$userId'
@@ -645,12 +841,19 @@ export interface FileRouteTypes {
     | '/demo/college/reports'
     | '/demo/college/shortlist'
     | '/demo/college/students'
+    | '/super-admin/colleges/$collegeId'
+    | '/super-admin/companies/$companyId'
+    | '/super-admin/users/$userId'
     | '/admin/admin-users/'
     | '/admin/colleges/'
     | '/admin/companies/'
     | '/admin/users/'
     | '/candidate-oa/$applicationId/'
     | '/demo/college/'
+    | '/super-admin/admin-users/'
+    | '/super-admin/colleges/'
+    | '/super-admin/companies/'
+    | '/super-admin/users/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -693,10 +896,22 @@ export interface FileRouteTypes {
     | '/company-jobs/$jobId'
     | '/company-roles/$roleId'
     | '/resume-tailor/$applicationId'
+    | '/super-admin/activity'
+    | '/super-admin/alerts'
+    | '/super-admin/audit-log'
+    | '/super-admin/candidates'
+    | '/super-admin/departments'
+    | '/super-admin/finance'
+    | '/super-admin/partnerships'
+    | '/super-admin/peer-safety'
+    | '/super-admin/placements'
+    | '/super-admin/reports'
+    | '/super-admin/system-health'
     | '/admin'
     | '/college'
     | '/company-jobs'
     | '/company-roles'
+    | '/super-admin'
     | '/admin/colleges/$collegeId'
     | '/admin/companies/$companyId'
     | '/admin/users/$userId'
@@ -707,12 +922,19 @@ export interface FileRouteTypes {
     | '/demo/college/reports'
     | '/demo/college/shortlist'
     | '/demo/college/students'
+    | '/super-admin/colleges/$collegeId'
+    | '/super-admin/companies/$companyId'
+    | '/super-admin/users/$userId'
     | '/admin/admin-users'
     | '/admin/colleges'
     | '/admin/companies'
     | '/admin/users'
     | '/candidate-oa/$applicationId'
     | '/demo/college'
+    | '/super-admin/admin-users'
+    | '/super-admin/colleges'
+    | '/super-admin/companies'
+    | '/super-admin/users'
   id:
     | '__root__'
     | '/'
@@ -723,6 +945,7 @@ export interface FileRouteTypes {
     | '/company'
     | '/portals'
     | '/sitemap.xml'
+    | '/super-admin'
     | '/admin/activity'
     | '/admin/alerts'
     | '/admin/audit-log'
@@ -758,10 +981,22 @@ export interface FileRouteTypes {
     | '/company-roles/$roleId'
     | '/demo/college'
     | '/resume-tailor/$applicationId'
+    | '/super-admin/activity'
+    | '/super-admin/alerts'
+    | '/super-admin/audit-log'
+    | '/super-admin/candidates'
+    | '/super-admin/departments'
+    | '/super-admin/finance'
+    | '/super-admin/partnerships'
+    | '/super-admin/peer-safety'
+    | '/super-admin/placements'
+    | '/super-admin/reports'
+    | '/super-admin/system-health'
     | '/admin/'
     | '/college/'
     | '/company-jobs/'
     | '/company-roles/'
+    | '/super-admin/'
     | '/admin/colleges/$collegeId'
     | '/admin/companies/$companyId'
     | '/admin/users/$userId'
@@ -772,12 +1007,19 @@ export interface FileRouteTypes {
     | '/demo/college/reports'
     | '/demo/college/shortlist'
     | '/demo/college/students'
+    | '/super-admin/colleges/$collegeId'
+    | '/super-admin/companies/$companyId'
+    | '/super-admin/users/$userId'
     | '/admin/admin-users/'
     | '/admin/colleges/'
     | '/admin/companies/'
     | '/admin/users/'
     | '/candidate-oa/$applicationId/'
     | '/demo/college/'
+    | '/super-admin/admin-users/'
+    | '/super-admin/colleges/'
+    | '/super-admin/companies/'
+    | '/super-admin/users/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -789,6 +1031,7 @@ export interface RootRouteChildren {
   CompanyRoute: typeof CompanyRoute
   PortalsRoute: typeof PortalsRoute
   SitemapDotxmlRoute: typeof SitemapDotxmlRoute
+  SuperAdminRoute: typeof SuperAdminRouteWithChildren
   CandidateJobsJobIdRoute: typeof CandidateJobsJobIdRoute
   CompanyJobsJobIdRoute: typeof CompanyJobsJobIdRoute
   CompanyRolesRoleIdRoute: typeof CompanyRolesRoleIdRoute
@@ -802,46 +1045,11 @@ export interface RootRouteChildren {
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
-    '/sitemap.xml': {
-      id: '/sitemap.xml'
-      path: '/sitemap.xml'
-      fullPath: '/sitemap.xml'
-      preLoaderRoute: typeof SitemapDotxmlRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/portals': {
-      id: '/portals'
-      path: '/portals'
-      fullPath: '/portals'
-      preLoaderRoute: typeof PortalsRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/company': {
-      id: '/company'
-      path: '/company'
-      fullPath: '/company'
-      preLoaderRoute: typeof CompanyRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/college': {
-      id: '/college'
-      path: '/college'
-      fullPath: '/college'
-      preLoaderRoute: typeof CollegeRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/candidate': {
-      id: '/candidate'
-      path: '/candidate'
-      fullPath: '/candidate'
-      preLoaderRoute: typeof CandidateRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/auth': {
-      id: '/auth'
-      path: '/auth'
-      fullPath: '/auth'
-      preLoaderRoute: typeof AuthRouteImport
+    '/': {
+      id: '/'
+      path: '/'
+      fullPath: '/'
+      preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/admin': {
@@ -851,277 +1059,60 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/': {
-      id: '/'
-      path: '/'
-      fullPath: '/'
-      preLoaderRoute: typeof IndexRouteImport
+    '/auth': {
+      id: '/auth'
+      path: '/auth'
+      fullPath: '/auth'
+      preLoaderRoute: typeof AuthRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/company-roles/': {
-      id: '/company-roles/'
-      path: '/company-roles'
-      fullPath: '/company-roles/'
-      preLoaderRoute: typeof CompanyRolesIndexRouteImport
+    '/candidate': {
+      id: '/candidate'
+      path: '/candidate'
+      fullPath: '/candidate'
+      preLoaderRoute: typeof CandidateRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/company-jobs/': {
-      id: '/company-jobs/'
-      path: '/company-jobs'
-      fullPath: '/company-jobs/'
-      preLoaderRoute: typeof CompanyJobsIndexRouteImport
+    '/college': {
+      id: '/college'
+      path: '/college'
+      fullPath: '/college'
+      preLoaderRoute: typeof CollegeRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/college/': {
-      id: '/college/'
-      path: '/'
-      fullPath: '/college/'
-      preLoaderRoute: typeof CollegeIndexRouteImport
-      parentRoute: typeof CollegeRoute
+    '/company': {
+      id: '/company'
+      path: '/company'
+      fullPath: '/company'
+      preLoaderRoute: typeof CompanyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/portals': {
+      id: '/portals'
+      path: '/portals'
+      fullPath: '/portals'
+      preLoaderRoute: typeof PortalsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/sitemap.xml': {
+      id: '/sitemap.xml'
+      path: '/sitemap.xml'
+      fullPath: '/sitemap.xml'
+      preLoaderRoute: typeof SitemapDotxmlRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/super-admin': {
+      id: '/super-admin'
+      path: '/super-admin'
+      fullPath: '/super-admin'
+      preLoaderRoute: typeof SuperAdminRouteImport
+      parentRoute: typeof rootRouteImport
     }
     '/admin/': {
       id: '/admin/'
       path: '/'
       fullPath: '/admin/'
       preLoaderRoute: typeof AdminIndexRouteImport
-      parentRoute: typeof AdminRoute
-    }
-    '/resume-tailor/$applicationId': {
-      id: '/resume-tailor/$applicationId'
-      path: '/resume-tailor/$applicationId'
-      fullPath: '/resume-tailor/$applicationId'
-      preLoaderRoute: typeof ResumeTailorApplicationIdRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/demo/college': {
-      id: '/demo/college'
-      path: '/demo/college'
-      fullPath: '/demo/college'
-      preLoaderRoute: typeof DemoCollegeRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/company-roles/$roleId': {
-      id: '/company-roles/$roleId'
-      path: '/company-roles/$roleId'
-      fullPath: '/company-roles/$roleId'
-      preLoaderRoute: typeof CompanyRolesRoleIdRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/company-jobs/$jobId': {
-      id: '/company-jobs/$jobId'
-      path: '/company-jobs/$jobId'
-      fullPath: '/company-jobs/$jobId'
-      preLoaderRoute: typeof CompanyJobsJobIdRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/college/students': {
-      id: '/college/students'
-      path: '/students'
-      fullPath: '/college/students'
-      preLoaderRoute: typeof CollegeStudentsRouteImport
-      parentRoute: typeof CollegeRoute
-    }
-    '/college/shortlist': {
-      id: '/college/shortlist'
-      path: '/shortlist'
-      fullPath: '/college/shortlist'
-      preLoaderRoute: typeof CollegeShortlistRouteImport
-      parentRoute: typeof CollegeRoute
-    }
-    '/college/reports': {
-      id: '/college/reports'
-      path: '/reports'
-      fullPath: '/college/reports'
-      preLoaderRoute: typeof CollegeReportsRouteImport
-      parentRoute: typeof CollegeRoute
-    }
-    '/college/placement-cycle': {
-      id: '/college/placement-cycle'
-      path: '/placement-cycle'
-      fullPath: '/college/placement-cycle'
-      preLoaderRoute: typeof CollegePlacementCycleRouteImport
-      parentRoute: typeof CollegeRoute
-    }
-    '/college/drives': {
-      id: '/college/drives'
-      path: '/drives'
-      fullPath: '/college/drives'
-      preLoaderRoute: typeof CollegeDrivesRouteImport
-      parentRoute: typeof CollegeRoute
-    }
-    '/college/departments': {
-      id: '/college/departments'
-      path: '/departments'
-      fullPath: '/college/departments'
-      preLoaderRoute: typeof CollegeDepartmentsRouteImport
-      parentRoute: typeof CollegeRoute
-    }
-    '/college/analytics': {
-      id: '/college/analytics'
-      path: '/analytics'
-      fullPath: '/college/analytics'
-      preLoaderRoute: typeof CollegeAnalyticsRouteImport
-      parentRoute: typeof CollegeRoute
-    }
-    '/candidate-jobs/$jobId': {
-      id: '/candidate-jobs/$jobId'
-      path: '/candidate-jobs/$jobId'
-      fullPath: '/candidate-jobs/$jobId'
-      preLoaderRoute: typeof CandidateJobsJobIdRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/auth/signup': {
-      id: '/auth/signup'
-      path: '/signup'
-      fullPath: '/auth/signup'
-      preLoaderRoute: typeof AuthSignupRouteImport
-      parentRoute: typeof AuthRoute
-    }
-    '/auth/set-password': {
-      id: '/auth/set-password'
-      path: '/set-password'
-      fullPath: '/auth/set-password'
-      preLoaderRoute: typeof AuthSetPasswordRouteImport
-      parentRoute: typeof AuthRoute
-    }
-    '/auth/reset-password': {
-      id: '/auth/reset-password'
-      path: '/reset-password'
-      fullPath: '/auth/reset-password'
-      preLoaderRoute: typeof AuthResetPasswordRouteImport
-      parentRoute: typeof AuthRoute
-    }
-    '/auth/profile-setup': {
-      id: '/auth/profile-setup'
-      path: '/profile-setup'
-      fullPath: '/auth/profile-setup'
-      preLoaderRoute: typeof AuthProfileSetupRouteImport
-      parentRoute: typeof AuthRoute
-    }
-    '/auth/otp': {
-      id: '/auth/otp'
-      path: '/otp'
-      fullPath: '/auth/otp'
-      preLoaderRoute: typeof AuthOtpRouteImport
-      parentRoute: typeof AuthRoute
-    }
-    '/auth/oauth-callback': {
-      id: '/auth/oauth-callback'
-      path: '/oauth-callback'
-      fullPath: '/auth/oauth-callback'
-      preLoaderRoute: typeof AuthOauthCallbackRouteImport
-      parentRoute: typeof AuthRoute
-    }
-    '/auth/login': {
-      id: '/auth/login'
-      path: '/login'
-      fullPath: '/auth/login'
-      preLoaderRoute: typeof AuthLoginRouteImport
-      parentRoute: typeof AuthRoute
-    }
-    '/auth/forgot-password': {
-      id: '/auth/forgot-password'
-      path: '/forgot-password'
-      fullPath: '/auth/forgot-password'
-      preLoaderRoute: typeof AuthForgotPasswordRouteImport
-      parentRoute: typeof AuthRoute
-    }
-    '/auth/confirm': {
-      id: '/auth/confirm'
-      path: '/confirm'
-      fullPath: '/auth/confirm'
-      preLoaderRoute: typeof AuthConfirmRouteImport
-      parentRoute: typeof AuthRoute
-    }
-    '/auth/company-signup': {
-      id: '/auth/company-signup'
-      path: '/company-signup'
-      fullPath: '/auth/company-signup'
-      preLoaderRoute: typeof AuthCompanySignupRouteImport
-      parentRoute: typeof AuthRoute
-    }
-    '/auth/company-onboarding': {
-      id: '/auth/company-onboarding'
-      path: '/company-onboarding'
-      fullPath: '/auth/company-onboarding'
-      preLoaderRoute: typeof AuthCompanyOnboardingRouteImport
-      parentRoute: typeof AuthRoute
-    }
-    '/auth/college-onboarding': {
-      id: '/auth/college-onboarding'
-      path: '/college-onboarding'
-      fullPath: '/auth/college-onboarding'
-      preLoaderRoute: typeof AuthCollegeOnboardingRouteImport
-      parentRoute: typeof AuthRoute
-    }
-    '/admin/system-health': {
-      id: '/admin/system-health'
-      path: '/system-health'
-      fullPath: '/admin/system-health'
-      preLoaderRoute: typeof AdminSystemHealthRouteImport
-      parentRoute: typeof AdminRoute
-    }
-    '/admin/reports': {
-      id: '/admin/reports'
-      path: '/reports'
-      fullPath: '/admin/reports'
-      preLoaderRoute: typeof AdminReportsRouteImport
-      parentRoute: typeof AdminRoute
-    }
-    '/admin/placements': {
-      id: '/admin/placements'
-      path: '/placements'
-      fullPath: '/admin/placements'
-      preLoaderRoute: typeof AdminPlacementsRouteImport
-      parentRoute: typeof AdminRoute
-    }
-    '/admin/peer-safety': {
-      id: '/admin/peer-safety'
-      path: '/peer-safety'
-      fullPath: '/admin/peer-safety'
-      preLoaderRoute: typeof AdminPeerSafetyRouteImport
-      parentRoute: typeof AdminRoute
-    }
-    '/admin/partnerships': {
-      id: '/admin/partnerships'
-      path: '/partnerships'
-      fullPath: '/admin/partnerships'
-      preLoaderRoute: typeof AdminPartnershipsRouteImport
-      parentRoute: typeof AdminRoute
-    }
-    '/admin/finance': {
-      id: '/admin/finance'
-      path: '/finance'
-      fullPath: '/admin/finance'
-      preLoaderRoute: typeof AdminFinanceRouteImport
-      parentRoute: typeof AdminRoute
-    }
-    '/admin/departments': {
-      id: '/admin/departments'
-      path: '/departments'
-      fullPath: '/admin/departments'
-      preLoaderRoute: typeof AdminDepartmentsRouteImport
-      parentRoute: typeof AdminRoute
-    }
-    '/admin/candidates': {
-      id: '/admin/candidates'
-      path: '/candidates'
-      fullPath: '/admin/candidates'
-      preLoaderRoute: typeof AdminCandidatesRouteImport
-      parentRoute: typeof AdminRoute
-    }
-    '/admin/audit-log': {
-      id: '/admin/audit-log'
-      path: '/audit-log'
-      fullPath: '/admin/audit-log'
-      preLoaderRoute: typeof AdminAuditLogRouteImport
-      parentRoute: typeof AdminRoute
-    }
-    '/admin/alerts': {
-      id: '/admin/alerts'
-      path: '/alerts'
-      fullPath: '/admin/alerts'
-      preLoaderRoute: typeof AdminAlertsRouteImport
       parentRoute: typeof AdminRoute
     }
     '/admin/activity': {
@@ -1131,32 +1122,354 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminActivityRouteImport
       parentRoute: typeof AdminRoute
     }
-    '/demo/college/': {
-      id: '/demo/college/'
-      path: '/'
-      fullPath: '/demo/college/'
-      preLoaderRoute: typeof DemoCollegeIndexRouteImport
-      parentRoute: typeof DemoCollegeRoute
-    }
-    '/candidate-oa/$applicationId/': {
-      id: '/candidate-oa/$applicationId/'
-      path: '/candidate-oa/$applicationId'
-      fullPath: '/candidate-oa/$applicationId/'
-      preLoaderRoute: typeof CandidateOaApplicationIdIndexRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/admin/users/': {
-      id: '/admin/users/'
-      path: '/users'
-      fullPath: '/admin/users/'
-      preLoaderRoute: typeof AdminUsersIndexRouteImport
+    '/admin/alerts': {
+      id: '/admin/alerts'
+      path: '/alerts'
+      fullPath: '/admin/alerts'
+      preLoaderRoute: typeof AdminAlertsRouteImport
       parentRoute: typeof AdminRoute
     }
-    '/admin/companies/': {
-      id: '/admin/companies/'
-      path: '/companies'
-      fullPath: '/admin/companies/'
-      preLoaderRoute: typeof AdminCompaniesIndexRouteImport
+    '/admin/audit-log': {
+      id: '/admin/audit-log'
+      path: '/audit-log'
+      fullPath: '/admin/audit-log'
+      preLoaderRoute: typeof AdminAuditLogRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/candidates': {
+      id: '/admin/candidates'
+      path: '/candidates'
+      fullPath: '/admin/candidates'
+      preLoaderRoute: typeof AdminCandidatesRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/departments': {
+      id: '/admin/departments'
+      path: '/departments'
+      fullPath: '/admin/departments'
+      preLoaderRoute: typeof AdminDepartmentsRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/finance': {
+      id: '/admin/finance'
+      path: '/finance'
+      fullPath: '/admin/finance'
+      preLoaderRoute: typeof AdminFinanceRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/partnerships': {
+      id: '/admin/partnerships'
+      path: '/partnerships'
+      fullPath: '/admin/partnerships'
+      preLoaderRoute: typeof AdminPartnershipsRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/peer-safety': {
+      id: '/admin/peer-safety'
+      path: '/peer-safety'
+      fullPath: '/admin/peer-safety'
+      preLoaderRoute: typeof AdminPeerSafetyRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/placements': {
+      id: '/admin/placements'
+      path: '/placements'
+      fullPath: '/admin/placements'
+      preLoaderRoute: typeof AdminPlacementsRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/reports': {
+      id: '/admin/reports'
+      path: '/reports'
+      fullPath: '/admin/reports'
+      preLoaderRoute: typeof AdminReportsRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/system-health': {
+      id: '/admin/system-health'
+      path: '/system-health'
+      fullPath: '/admin/system-health'
+      preLoaderRoute: typeof AdminSystemHealthRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/auth/college-onboarding': {
+      id: '/auth/college-onboarding'
+      path: '/college-onboarding'
+      fullPath: '/auth/college-onboarding'
+      preLoaderRoute: typeof AuthCollegeOnboardingRouteImport
+      parentRoute: typeof AuthRoute
+    }
+    '/auth/company-onboarding': {
+      id: '/auth/company-onboarding'
+      path: '/company-onboarding'
+      fullPath: '/auth/company-onboarding'
+      preLoaderRoute: typeof AuthCompanyOnboardingRouteImport
+      parentRoute: typeof AuthRoute
+    }
+    '/auth/company-signup': {
+      id: '/auth/company-signup'
+      path: '/company-signup'
+      fullPath: '/auth/company-signup'
+      preLoaderRoute: typeof AuthCompanySignupRouteImport
+      parentRoute: typeof AuthRoute
+    }
+    '/auth/confirm': {
+      id: '/auth/confirm'
+      path: '/confirm'
+      fullPath: '/auth/confirm'
+      preLoaderRoute: typeof AuthConfirmRouteImport
+      parentRoute: typeof AuthRoute
+    }
+    '/auth/forgot-password': {
+      id: '/auth/forgot-password'
+      path: '/forgot-password'
+      fullPath: '/auth/forgot-password'
+      preLoaderRoute: typeof AuthForgotPasswordRouteImport
+      parentRoute: typeof AuthRoute
+    }
+    '/auth/login': {
+      id: '/auth/login'
+      path: '/login'
+      fullPath: '/auth/login'
+      preLoaderRoute: typeof AuthLoginRouteImport
+      parentRoute: typeof AuthRoute
+    }
+    '/auth/oauth-callback': {
+      id: '/auth/oauth-callback'
+      path: '/oauth-callback'
+      fullPath: '/auth/oauth-callback'
+      preLoaderRoute: typeof AuthOauthCallbackRouteImport
+      parentRoute: typeof AuthRoute
+    }
+    '/auth/otp': {
+      id: '/auth/otp'
+      path: '/otp'
+      fullPath: '/auth/otp'
+      preLoaderRoute: typeof AuthOtpRouteImport
+      parentRoute: typeof AuthRoute
+    }
+    '/auth/profile-setup': {
+      id: '/auth/profile-setup'
+      path: '/profile-setup'
+      fullPath: '/auth/profile-setup'
+      preLoaderRoute: typeof AuthProfileSetupRouteImport
+      parentRoute: typeof AuthRoute
+    }
+    '/auth/reset-password': {
+      id: '/auth/reset-password'
+      path: '/reset-password'
+      fullPath: '/auth/reset-password'
+      preLoaderRoute: typeof AuthResetPasswordRouteImport
+      parentRoute: typeof AuthRoute
+    }
+    '/auth/set-password': {
+      id: '/auth/set-password'
+      path: '/set-password'
+      fullPath: '/auth/set-password'
+      preLoaderRoute: typeof AuthSetPasswordRouteImport
+      parentRoute: typeof AuthRoute
+    }
+    '/auth/signup': {
+      id: '/auth/signup'
+      path: '/signup'
+      fullPath: '/auth/signup'
+      preLoaderRoute: typeof AuthSignupRouteImport
+      parentRoute: typeof AuthRoute
+    }
+    '/candidate-jobs/$jobId': {
+      id: '/candidate-jobs/$jobId'
+      path: '/candidate-jobs/$jobId'
+      fullPath: '/candidate-jobs/$jobId'
+      preLoaderRoute: typeof CandidateJobsJobIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/college/': {
+      id: '/college/'
+      path: '/'
+      fullPath: '/college/'
+      preLoaderRoute: typeof CollegeIndexRouteImport
+      parentRoute: typeof CollegeRoute
+    }
+    '/college/analytics': {
+      id: '/college/analytics'
+      path: '/analytics'
+      fullPath: '/college/analytics'
+      preLoaderRoute: typeof CollegeAnalyticsRouteImport
+      parentRoute: typeof CollegeRoute
+    }
+    '/college/departments': {
+      id: '/college/departments'
+      path: '/departments'
+      fullPath: '/college/departments'
+      preLoaderRoute: typeof CollegeDepartmentsRouteImport
+      parentRoute: typeof CollegeRoute
+    }
+    '/college/drives': {
+      id: '/college/drives'
+      path: '/drives'
+      fullPath: '/college/drives'
+      preLoaderRoute: typeof CollegeDrivesRouteImport
+      parentRoute: typeof CollegeRoute
+    }
+    '/college/placement-cycle': {
+      id: '/college/placement-cycle'
+      path: '/placement-cycle'
+      fullPath: '/college/placement-cycle'
+      preLoaderRoute: typeof CollegePlacementCycleRouteImport
+      parentRoute: typeof CollegeRoute
+    }
+    '/college/reports': {
+      id: '/college/reports'
+      path: '/reports'
+      fullPath: '/college/reports'
+      preLoaderRoute: typeof CollegeReportsRouteImport
+      parentRoute: typeof CollegeRoute
+    }
+    '/college/shortlist': {
+      id: '/college/shortlist'
+      path: '/shortlist'
+      fullPath: '/college/shortlist'
+      preLoaderRoute: typeof CollegeShortlistRouteImport
+      parentRoute: typeof CollegeRoute
+    }
+    '/college/students': {
+      id: '/college/students'
+      path: '/students'
+      fullPath: '/college/students'
+      preLoaderRoute: typeof CollegeStudentsRouteImport
+      parentRoute: typeof CollegeRoute
+    }
+    '/company-jobs/': {
+      id: '/company-jobs/'
+      path: '/company-jobs'
+      fullPath: '/company-jobs/'
+      preLoaderRoute: typeof CompanyJobsIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/company-jobs/$jobId': {
+      id: '/company-jobs/$jobId'
+      path: '/company-jobs/$jobId'
+      fullPath: '/company-jobs/$jobId'
+      preLoaderRoute: typeof CompanyJobsJobIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/company-roles/': {
+      id: '/company-roles/'
+      path: '/company-roles'
+      fullPath: '/company-roles/'
+      preLoaderRoute: typeof CompanyRolesIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/company-roles/$roleId': {
+      id: '/company-roles/$roleId'
+      path: '/company-roles/$roleId'
+      fullPath: '/company-roles/$roleId'
+      preLoaderRoute: typeof CompanyRolesRoleIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/demo/college': {
+      id: '/demo/college'
+      path: '/demo/college'
+      fullPath: '/demo/college'
+      preLoaderRoute: typeof DemoCollegeRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/resume-tailor/$applicationId': {
+      id: '/resume-tailor/$applicationId'
+      path: '/resume-tailor/$applicationId'
+      fullPath: '/resume-tailor/$applicationId'
+      preLoaderRoute: typeof ResumeTailorApplicationIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/super-admin/': {
+      id: '/super-admin/'
+      path: '/'
+      fullPath: '/super-admin/'
+      preLoaderRoute: typeof SuperAdminIndexRouteImport
+      parentRoute: typeof SuperAdminRoute
+    }
+    '/super-admin/activity': {
+      id: '/super-admin/activity'
+      path: '/activity'
+      fullPath: '/super-admin/activity'
+      preLoaderRoute: typeof SuperAdminActivityRouteImport
+      parentRoute: typeof SuperAdminRoute
+    }
+    '/super-admin/alerts': {
+      id: '/super-admin/alerts'
+      path: '/alerts'
+      fullPath: '/super-admin/alerts'
+      preLoaderRoute: typeof SuperAdminAlertsRouteImport
+      parentRoute: typeof SuperAdminRoute
+    }
+    '/super-admin/audit-log': {
+      id: '/super-admin/audit-log'
+      path: '/audit-log'
+      fullPath: '/super-admin/audit-log'
+      preLoaderRoute: typeof SuperAdminAuditLogRouteImport
+      parentRoute: typeof SuperAdminRoute
+    }
+    '/super-admin/candidates': {
+      id: '/super-admin/candidates'
+      path: '/candidates'
+      fullPath: '/super-admin/candidates'
+      preLoaderRoute: typeof SuperAdminCandidatesRouteImport
+      parentRoute: typeof SuperAdminRoute
+    }
+    '/super-admin/departments': {
+      id: '/super-admin/departments'
+      path: '/departments'
+      fullPath: '/super-admin/departments'
+      preLoaderRoute: typeof SuperAdminDepartmentsRouteImport
+      parentRoute: typeof SuperAdminRoute
+    }
+    '/super-admin/finance': {
+      id: '/super-admin/finance'
+      path: '/finance'
+      fullPath: '/super-admin/finance'
+      preLoaderRoute: typeof SuperAdminFinanceRouteImport
+      parentRoute: typeof SuperAdminRoute
+    }
+    '/super-admin/partnerships': {
+      id: '/super-admin/partnerships'
+      path: '/partnerships'
+      fullPath: '/super-admin/partnerships'
+      preLoaderRoute: typeof SuperAdminPartnershipsRouteImport
+      parentRoute: typeof SuperAdminRoute
+    }
+    '/super-admin/peer-safety': {
+      id: '/super-admin/peer-safety'
+      path: '/peer-safety'
+      fullPath: '/super-admin/peer-safety'
+      preLoaderRoute: typeof SuperAdminPeerSafetyRouteImport
+      parentRoute: typeof SuperAdminRoute
+    }
+    '/super-admin/placements': {
+      id: '/super-admin/placements'
+      path: '/placements'
+      fullPath: '/super-admin/placements'
+      preLoaderRoute: typeof SuperAdminPlacementsRouteImport
+      parentRoute: typeof SuperAdminRoute
+    }
+    '/super-admin/reports': {
+      id: '/super-admin/reports'
+      path: '/reports'
+      fullPath: '/super-admin/reports'
+      preLoaderRoute: typeof SuperAdminReportsRouteImport
+      parentRoute: typeof SuperAdminRoute
+    }
+    '/super-admin/system-health': {
+      id: '/super-admin/system-health'
+      path: '/system-health'
+      fullPath: '/super-admin/system-health'
+      preLoaderRoute: typeof SuperAdminSystemHealthRouteImport
+      parentRoute: typeof SuperAdminRoute
+    }
+    '/admin/admin-users/': {
+      id: '/admin/admin-users/'
+      path: '/admin-users'
+      fullPath: '/admin/admin-users/'
+      preLoaderRoute: typeof AdminAdminUsersIndexRouteImport
       parentRoute: typeof AdminRoute
     }
     '/admin/colleges/': {
@@ -1166,67 +1479,18 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminCollegesIndexRouteImport
       parentRoute: typeof AdminRoute
     }
-    '/admin/admin-users/': {
-      id: '/admin/admin-users/'
-      path: '/admin-users'
-      fullPath: '/admin/admin-users/'
-      preLoaderRoute: typeof AdminAdminUsersIndexRouteImport
+    '/admin/colleges/$collegeId': {
+      id: '/admin/colleges/$collegeId'
+      path: '/colleges/$collegeId'
+      fullPath: '/admin/colleges/$collegeId'
+      preLoaderRoute: typeof AdminCollegesCollegeIdRouteImport
       parentRoute: typeof AdminRoute
     }
-    '/demo/college/students': {
-      id: '/demo/college/students'
-      path: '/students'
-      fullPath: '/demo/college/students'
-      preLoaderRoute: typeof DemoCollegeStudentsRouteImport
-      parentRoute: typeof DemoCollegeRoute
-    }
-    '/demo/college/shortlist': {
-      id: '/demo/college/shortlist'
-      path: '/shortlist'
-      fullPath: '/demo/college/shortlist'
-      preLoaderRoute: typeof DemoCollegeShortlistRouteImport
-      parentRoute: typeof DemoCollegeRoute
-    }
-    '/demo/college/reports': {
-      id: '/demo/college/reports'
-      path: '/reports'
-      fullPath: '/demo/college/reports'
-      preLoaderRoute: typeof DemoCollegeReportsRouteImport
-      parentRoute: typeof DemoCollegeRoute
-    }
-    '/demo/college/drives': {
-      id: '/demo/college/drives'
-      path: '/drives'
-      fullPath: '/demo/college/drives'
-      preLoaderRoute: typeof DemoCollegeDrivesRouteImport
-      parentRoute: typeof DemoCollegeRoute
-    }
-    '/demo/college/departments': {
-      id: '/demo/college/departments'
-      path: '/departments'
-      fullPath: '/demo/college/departments'
-      preLoaderRoute: typeof DemoCollegeDepartmentsRouteImport
-      parentRoute: typeof DemoCollegeRoute
-    }
-    '/demo/college/analytics': {
-      id: '/demo/college/analytics'
-      path: '/analytics'
-      fullPath: '/demo/college/analytics'
-      preLoaderRoute: typeof DemoCollegeAnalyticsRouteImport
-      parentRoute: typeof DemoCollegeRoute
-    }
-    '/candidate-oa/$applicationId/test': {
-      id: '/candidate-oa/$applicationId/test'
-      path: '/candidate-oa/$applicationId/test'
-      fullPath: '/candidate-oa/$applicationId/test'
-      preLoaderRoute: typeof CandidateOaApplicationIdTestRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/admin/users/$userId': {
-      id: '/admin/users/$userId'
-      path: '/users/$userId'
-      fullPath: '/admin/users/$userId'
-      preLoaderRoute: typeof AdminUsersUserIdRouteImport
+    '/admin/companies/': {
+      id: '/admin/companies/'
+      path: '/companies'
+      fullPath: '/admin/companies/'
+      preLoaderRoute: typeof AdminCompaniesIndexRouteImport
       parentRoute: typeof AdminRoute
     }
     '/admin/companies/$companyId': {
@@ -1236,12 +1500,131 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminCompaniesCompanyIdRouteImport
       parentRoute: typeof AdminRoute
     }
-    '/admin/colleges/$collegeId': {
-      id: '/admin/colleges/$collegeId'
-      path: '/colleges/$collegeId'
-      fullPath: '/admin/colleges/$collegeId'
-      preLoaderRoute: typeof AdminCollegesCollegeIdRouteImport
+    '/admin/users/': {
+      id: '/admin/users/'
+      path: '/users'
+      fullPath: '/admin/users/'
+      preLoaderRoute: typeof AdminUsersIndexRouteImport
       parentRoute: typeof AdminRoute
+    }
+    '/admin/users/$userId': {
+      id: '/admin/users/$userId'
+      path: '/users/$userId'
+      fullPath: '/admin/users/$userId'
+      preLoaderRoute: typeof AdminUsersUserIdRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/candidate-oa/$applicationId/': {
+      id: '/candidate-oa/$applicationId/'
+      path: '/candidate-oa/$applicationId'
+      fullPath: '/candidate-oa/$applicationId/'
+      preLoaderRoute: typeof CandidateOaApplicationIdIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/candidate-oa/$applicationId/test': {
+      id: '/candidate-oa/$applicationId/test'
+      path: '/candidate-oa/$applicationId/test'
+      fullPath: '/candidate-oa/$applicationId/test'
+      preLoaderRoute: typeof CandidateOaApplicationIdTestRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/demo/college/': {
+      id: '/demo/college/'
+      path: '/'
+      fullPath: '/demo/college/'
+      preLoaderRoute: typeof DemoCollegeIndexRouteImport
+      parentRoute: typeof DemoCollegeRoute
+    }
+    '/demo/college/analytics': {
+      id: '/demo/college/analytics'
+      path: '/analytics'
+      fullPath: '/demo/college/analytics'
+      preLoaderRoute: typeof DemoCollegeAnalyticsRouteImport
+      parentRoute: typeof DemoCollegeRoute
+    }
+    '/demo/college/departments': {
+      id: '/demo/college/departments'
+      path: '/departments'
+      fullPath: '/demo/college/departments'
+      preLoaderRoute: typeof DemoCollegeDepartmentsRouteImport
+      parentRoute: typeof DemoCollegeRoute
+    }
+    '/demo/college/drives': {
+      id: '/demo/college/drives'
+      path: '/drives'
+      fullPath: '/demo/college/drives'
+      preLoaderRoute: typeof DemoCollegeDrivesRouteImport
+      parentRoute: typeof DemoCollegeRoute
+    }
+    '/demo/college/reports': {
+      id: '/demo/college/reports'
+      path: '/reports'
+      fullPath: '/demo/college/reports'
+      preLoaderRoute: typeof DemoCollegeReportsRouteImport
+      parentRoute: typeof DemoCollegeRoute
+    }
+    '/demo/college/shortlist': {
+      id: '/demo/college/shortlist'
+      path: '/shortlist'
+      fullPath: '/demo/college/shortlist'
+      preLoaderRoute: typeof DemoCollegeShortlistRouteImport
+      parentRoute: typeof DemoCollegeRoute
+    }
+    '/demo/college/students': {
+      id: '/demo/college/students'
+      path: '/students'
+      fullPath: '/demo/college/students'
+      preLoaderRoute: typeof DemoCollegeStudentsRouteImport
+      parentRoute: typeof DemoCollegeRoute
+    }
+    '/super-admin/admin-users/': {
+      id: '/super-admin/admin-users/'
+      path: '/admin-users'
+      fullPath: '/super-admin/admin-users/'
+      preLoaderRoute: typeof SuperAdminAdminUsersIndexRouteImport
+      parentRoute: typeof SuperAdminRoute
+    }
+    '/super-admin/colleges/': {
+      id: '/super-admin/colleges/'
+      path: '/colleges'
+      fullPath: '/super-admin/colleges/'
+      preLoaderRoute: typeof SuperAdminCollegesIndexRouteImport
+      parentRoute: typeof SuperAdminRoute
+    }
+    '/super-admin/colleges/$collegeId': {
+      id: '/super-admin/colleges/$collegeId'
+      path: '/colleges/$collegeId'
+      fullPath: '/super-admin/colleges/$collegeId'
+      preLoaderRoute: typeof SuperAdminCollegesCollegeIdRouteImport
+      parentRoute: typeof SuperAdminRoute
+    }
+    '/super-admin/companies/': {
+      id: '/super-admin/companies/'
+      path: '/companies'
+      fullPath: '/super-admin/companies/'
+      preLoaderRoute: typeof SuperAdminCompaniesIndexRouteImport
+      parentRoute: typeof SuperAdminRoute
+    }
+    '/super-admin/companies/$companyId': {
+      id: '/super-admin/companies/$companyId'
+      path: '/companies/$companyId'
+      fullPath: '/super-admin/companies/$companyId'
+      preLoaderRoute: typeof SuperAdminCompaniesCompanyIdRouteImport
+      parentRoute: typeof SuperAdminRoute
+    }
+    '/super-admin/users/': {
+      id: '/super-admin/users/'
+      path: '/users'
+      fullPath: '/super-admin/users/'
+      preLoaderRoute: typeof SuperAdminUsersIndexRouteImport
+      parentRoute: typeof SuperAdminRoute
+    }
+    '/super-admin/users/$userId': {
+      id: '/super-admin/users/$userId'
+      path: '/users/$userId'
+      fullPath: '/super-admin/users/$userId'
+      preLoaderRoute: typeof SuperAdminUsersUserIdRouteImport
+      parentRoute: typeof SuperAdminRoute
     }
   }
 }
@@ -1349,6 +1732,54 @@ const CollegeRouteChildren: CollegeRouteChildren = {
 const CollegeRouteWithChildren =
   CollegeRoute._addFileChildren(CollegeRouteChildren)
 
+interface SuperAdminRouteChildren {
+  SuperAdminActivityRoute: typeof SuperAdminActivityRoute
+  SuperAdminAlertsRoute: typeof SuperAdminAlertsRoute
+  SuperAdminAuditLogRoute: typeof SuperAdminAuditLogRoute
+  SuperAdminCandidatesRoute: typeof SuperAdminCandidatesRoute
+  SuperAdminDepartmentsRoute: typeof SuperAdminDepartmentsRoute
+  SuperAdminFinanceRoute: typeof SuperAdminFinanceRoute
+  SuperAdminPartnershipsRoute: typeof SuperAdminPartnershipsRoute
+  SuperAdminPeerSafetyRoute: typeof SuperAdminPeerSafetyRoute
+  SuperAdminPlacementsRoute: typeof SuperAdminPlacementsRoute
+  SuperAdminReportsRoute: typeof SuperAdminReportsRoute
+  SuperAdminSystemHealthRoute: typeof SuperAdminSystemHealthRoute
+  SuperAdminIndexRoute: typeof SuperAdminIndexRoute
+  SuperAdminCollegesCollegeIdRoute: typeof SuperAdminCollegesCollegeIdRoute
+  SuperAdminCompaniesCompanyIdRoute: typeof SuperAdminCompaniesCompanyIdRoute
+  SuperAdminUsersUserIdRoute: typeof SuperAdminUsersUserIdRoute
+  SuperAdminAdminUsersIndexRoute: typeof SuperAdminAdminUsersIndexRoute
+  SuperAdminCollegesIndexRoute: typeof SuperAdminCollegesIndexRoute
+  SuperAdminCompaniesIndexRoute: typeof SuperAdminCompaniesIndexRoute
+  SuperAdminUsersIndexRoute: typeof SuperAdminUsersIndexRoute
+}
+
+const SuperAdminRouteChildren: SuperAdminRouteChildren = {
+  SuperAdminActivityRoute: SuperAdminActivityRoute,
+  SuperAdminAlertsRoute: SuperAdminAlertsRoute,
+  SuperAdminAuditLogRoute: SuperAdminAuditLogRoute,
+  SuperAdminCandidatesRoute: SuperAdminCandidatesRoute,
+  SuperAdminDepartmentsRoute: SuperAdminDepartmentsRoute,
+  SuperAdminFinanceRoute: SuperAdminFinanceRoute,
+  SuperAdminPartnershipsRoute: SuperAdminPartnershipsRoute,
+  SuperAdminPeerSafetyRoute: SuperAdminPeerSafetyRoute,
+  SuperAdminPlacementsRoute: SuperAdminPlacementsRoute,
+  SuperAdminReportsRoute: SuperAdminReportsRoute,
+  SuperAdminSystemHealthRoute: SuperAdminSystemHealthRoute,
+  SuperAdminIndexRoute: SuperAdminIndexRoute,
+  SuperAdminCollegesCollegeIdRoute: SuperAdminCollegesCollegeIdRoute,
+  SuperAdminCompaniesCompanyIdRoute: SuperAdminCompaniesCompanyIdRoute,
+  SuperAdminUsersUserIdRoute: SuperAdminUsersUserIdRoute,
+  SuperAdminAdminUsersIndexRoute: SuperAdminAdminUsersIndexRoute,
+  SuperAdminCollegesIndexRoute: SuperAdminCollegesIndexRoute,
+  SuperAdminCompaniesIndexRoute: SuperAdminCompaniesIndexRoute,
+  SuperAdminUsersIndexRoute: SuperAdminUsersIndexRoute,
+}
+
+const SuperAdminRouteWithChildren = SuperAdminRoute._addFileChildren(
+  SuperAdminRouteChildren,
+)
+
 interface DemoCollegeRouteChildren {
   DemoCollegeAnalyticsRoute: typeof DemoCollegeAnalyticsRoute
   DemoCollegeDepartmentsRoute: typeof DemoCollegeDepartmentsRoute
@@ -1382,6 +1813,7 @@ const rootRouteChildren: RootRouteChildren = {
   CompanyRoute: CompanyRoute,
   PortalsRoute: PortalsRoute,
   SitemapDotxmlRoute: SitemapDotxmlRoute,
+  SuperAdminRoute: SuperAdminRouteWithChildren,
   CandidateJobsJobIdRoute: CandidateJobsJobIdRoute,
   CompanyJobsJobIdRoute: CompanyJobsJobIdRoute,
   CompanyRolesRoleIdRoute: CompanyRolesRoleIdRoute,

@@ -71,7 +71,10 @@ Admin Portal
 - **Accounts.** Public signup (`/auth/signup`, Google sign-in, profile self-heal) only ever
   creates `candidate` or `company` accounts. `college` and `admin` accounts are provisioned:
   - Admin: `python provision_admin.py --email you@x.com --first-name Ada --last-name Lovelace`
-    (the only way to get the first admin). A set-password email is sent.
+    (the only way to get the first admin in a real deployment). A set-password email is sent.
+  - Local testing: `python seed_admin_accounts.py --project <ref> --admin-email a@x.com --super-admin-email s@x.com`
+    creates one Admin and one Super Admin with generated passwords, written to the git-ignored
+    `.admin-seed-credentials`. Safe to rerun. See `../ADMIN_PORTALS.md`.
   - College: an Admin uses **Add college** in the Admin portal (`POST /admin/colleges`), which
     creates the account, links it to the college and emails a set-password link. The account
     is created first and the college's blank directory fields are filled afterwards, so a
@@ -79,6 +82,11 @@ Admin Portal
     college link is **replaced** (deleted and recreated), never adopted: whoever registered it
     still holds its password and sessions, so only the mailbox owner may control the new one.
     Accounts that are already linked to a college are never touched.
+- **Admin and Super Admin portals.** Both are `role='admin'`; `profiles.is_super_admin` is the only
+  difference. Everyone signs in at `/auth/login?role=admin`, `/auth/login` answers with `portal`, and
+  the frontend then confirms it with `GET /admin/me` before rendering `/admin` or `/super-admin`. Apply
+  `db/admin_portal_migration.sql`, then `db/admin_permissions_migration.sql`; both are safe to re-run.
+  Full setup and the audit results are in `../ADMIN_PORTALS.md`.
 - **TPO login-only hardening.** Apply `db/tpo_access_hardening_migration.sql` after the migrations
   above (idempotent, no data touched). It makes the RLS helpers `current_college_id()` / `is_admin()`
   ignore blocked accounts, so a disabled TPO cannot keep reading tenant tables straight from

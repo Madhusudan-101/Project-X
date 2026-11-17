@@ -334,6 +334,21 @@ class FakeAuth:
             raise AuthApiError("invalid JWT: unable to parse or verify signature", 401, "bad_jwt")
         return SimpleNamespace(user=self._user_obj(self.users[uid]))
 
+    def create_user(self, payload):
+        """auth.admin.create_user (no session is issued)."""
+        email = payload["email"]
+        if any(u["email"].lower() == email.lower() for u in self.users.values()):
+            raise AuthApiError("A user with this email address has already been registered", 422, "email_exists")
+        uid = f"u-{len(self.users) + 1}"
+        self.users[uid] = {"id": uid, "email": email, "password": payload["password"],
+                           "user_metadata": payload.get("user_metadata", {}), "confirmed": bool(payload.get("email_confirm"))}
+        return SimpleNamespace(user=self._user_obj(self.users[uid]))
+
+    def sign_out(self, jwt, scope="global"):
+        """auth.admin.sign_out: revokes the session this access token belongs to."""
+        if self.tokens.pop(jwt, None):
+            self.refresh.pop("rt-" + jwt[len("at-"):], None)
+
     def sign_up(self, payload):
         email = payload["email"]
         if any(u["email"].lower() == email.lower() for u in self.users.values()):

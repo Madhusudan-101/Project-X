@@ -5,7 +5,7 @@ import { Loader2 } from "lucide-react";
 import { getSupabase } from "@/lib/supabaseClient";
 import { authService } from "@/services/api/auth";
 import { useAuthStore } from "@/store/auth";
-import { dashboardPathForRole } from "@/lib/roles";
+import { dashboardPathForUser } from "@/lib/roles";
 import { OAUTH_INTENT_ROLE_KEY } from "@/components/auth/GoogleSignInButton";
 import type { UserRole } from "@/types";
 
@@ -47,7 +47,7 @@ function OAuthCallbackPage() {
           // (Google never shares it with us), so set one before onboarding.
           navigate({ to: "/auth/set-password" });
         } else {
-          navigate({ to: dashboardPathForRole(session.user.role) });
+          navigate({ to: dashboardPathForUser(session.user) });
         }
       } catch (err) {
         // Rejected (e.g. a Google account with no provisioned College/Admin

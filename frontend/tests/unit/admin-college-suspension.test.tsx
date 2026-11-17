@@ -5,6 +5,7 @@ import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { CollegeSuspensionControls } from "@/components/admin/CollegeSuspensionControls";
 import { ApiClientError } from "@/services/api/client";
+import { useAuthStore } from "@/store/auth";
 import type { AdminMe, CollegeSuspension } from "@/types/admin/admin";
 
 const mocks = vi.hoisted(() => ({
@@ -69,6 +70,9 @@ function renderControls(
 const button = (name: RegExp | string) => screen.queryByRole("button", { name });
 
 beforeEach(() => {
+  useAuthStore.setState({
+    session: { user: { id: "a", email: "a@x", name: "A", role: "admin" }, token: "t", refreshToken: "r", expiresAt: "" },
+  });
   Object.values(mocks).forEach((m) => typeof m === "function" && m.mockReset());
   mocks.toast.success.mockReset();
   mocks.toast.error.mockReset();
@@ -185,7 +189,7 @@ describe("suspending", () => {
     );
     expect(mocks.suspend).toHaveBeenCalledTimes(1);
     expect(mocks.suspend).toHaveBeenCalledWith(COLLEGE, "Contract dispute");
-    expect(invalidate).toHaveBeenCalledWith({ queryKey: ["admin", "college", COLLEGE] });
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: ["admin"] });
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
   });
 
@@ -202,7 +206,7 @@ describe("suspending", () => {
     );
     expect(mocks.toast.success).not.toHaveBeenCalled();
     expect(screen.getByRole("dialog")).toBeInTheDocument();
-    expect(invalidate).toHaveBeenCalledWith({ queryKey: ["admin", "college", COLLEGE] });
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: ["admin"] });
   });
 
   it("says nothing was changed when the request fails for an unknown reason", async () => {

@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { z } from "zod";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Card } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
@@ -22,6 +23,13 @@ const STATUS_OPTIONS = Object.entries(PLACEMENT_STATUS).map(([value, s]) => ({ v
 /** Candidate analytics. Every count and status on a row is computed from the
  * same set of applications — those submitted in the date range, narrowed by
  * the company / drive filters — so a row never contradicts itself. */
+/** The deep-link filters both portals' /candidates routes accept. */
+export const candidatesSearchSchema = z.object({
+  college: z.string().optional(),
+  company: z.string().optional(),
+  drive: z.string().optional(),
+});
+
 export function CandidatesPage({ initial }: { initial?: { college?: string; company?: string; drive?: string } }) {
   const { range, label } = useAdminRange();
   const [college, setCollege] = useState(initial?.college);

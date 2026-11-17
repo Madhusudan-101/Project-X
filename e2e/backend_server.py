@@ -18,6 +18,7 @@ import uvicorn  # noqa: E402
 from fakes import FakeAuth, FakeDB  # noqa: E402
 
 from app import deps  # noqa: E402
+from app.services.admin.permissions import ALL_PERMISSIONS, GLOBAL_SCOPE_ID  # noqa: E402
 
 db, auth = FakeDB(), FakeAuth()
 deps.db_client.table = db.table
@@ -25,6 +26,8 @@ deps.db_client.rpc = db.rpc
 for name in ("get_user", "sign_up", "sign_in_with_password", "refresh_session", "verify_otp", "resend", "reset_password_for_email"):
     setattr(deps.auth_client.auth, name, getattr(auth, name))
 deps.admin_client.auth.admin.update_user_by_id = auth.update_user_by_id
+deps.admin_client.auth.admin.sign_out = auth.sign_out
+deps.admin_client.auth.admin.create_user = auth.create_user
 deps.create_client = lambda *a, **k: SimpleNamespace(table=db.table, rpc=db.rpc, postgrest=SimpleNamespace(auth=lambda t: None))
 
 # stub the one external AI call in the apply -> score pipeline
@@ -83,7 +86,16 @@ def seed():
 
 
     db.add("colleges", id="col-1", name="Alpha College")
-    user("u-admin", "admin", "admin@e2e.dev", name="Ada Admin", first_name="Ada", last_name="Admin", is_super_admin=True)
+    user("u-admin", "admin", "admin@e2e.dev", name="Ada Admin", first_name="Ada", last_name="Admin", is_super_admin=False)
+    for permission in ALL_PERMISSIONS:
+        db.add("admin_user_permissions", user_id="u-admin", permission=permission, scope_type="global",
+               scope_id=GLOBAL_SCOPE_ID, expires_at=None)
+    user("u-super", "admin", "super@e2e.dev", name="Sam Super", first_name="Sam", last_name="Super", is_super_admin=True)
+    user("u-bare", "admin", "bare@e2e.dev", name="Bo Bare", first_name="Bo", last_name="Bare", is_super_admin=False)
+    # /admin/colleges/{id} takes a real uuid, unlike the "col-1" the rest of this world uses.
+    db.add("colleges", id="5a5a5a5a-1111-4111-8111-111111111111", name="Delta College")
+    user("u-tpo2", "college", "tpo2@e2e.dev", name="Tom TPO", first_name="Tom", last_name="TPO",
+         college_id="5a5a5a5a-1111-4111-8111-111111111111")
     user("u-tpo", "college", "tpo@e2e.dev", name="Tara TPO", first_name="Tara", last_name="TPO", college_id="col-1")
     user("u-hr", "company", "hr@e2e.dev", name="Hana HR", first_name="Hana", last_name="HR")
     company = db.add("companies", owner_id="u-hr", name="Acme Corp", industry="Software", size="11-50", hiring_domains=["tech"])
@@ -130,6 +142,56 @@ def seed():
                                                     "posted": _empty_ctc(), "filled": _empty_ctc()}
     db.add("students", college_id="col-1", name="Sam Student", email="sam@e2e.dev", branch="CSE", graduation_year=2026,
            employability_score=71, verification_status="verified", placement_status="not_placed")
+
+    # Python ports of the list functions the management pages are built on, so their
+    # write flows have real rows to act on. Each reads the live fake tables.
+    def paged(rows, p):
+        total, start = len(rows), p.get("p_offset") or 0
+        return [{**r, "total_count": total} for r in rows[start:start + (p.get("p_limit") or 25)]]
+
+    def matches(p, *values):
+        term = (p.get("p_search") or "").lower()
+        return not term or any(term in str(v or "").lower() for v in values)
+
+    def list_users(p):
+        emails = {r["id"]: r["email"] for r in db.tables["profiles"]}
+        rows = []
+        for r in db.tables["profiles"]:
+            blocked = deps.is_currently_blocked(r)
+            if p.get("p_user_id") and r["id"] != p["p_user_id"]: continue
+            if p.get("p_role") and r["role"] != p["p_role"]: continue
+            if p.get("p_status") and (p["p_status"] == "blocked") != blocked: continue
+            if not matches(p, r.get("name"), r["email"]): continue
+            rows.append({"user_id": r["id"], "email": r["email"], "name": r.get("name") or r["email"], "role": r["role"],
+                         "college_id": r.get("college_id"), "college_name": r.get("college_name"), "company_id": None,
+                         "company_name": None, "created_at": iso(-30), "onboarded": bool(r.get("onboarded")), "is_blocked": blocked,
+                         "blocked_permanent": bool(r.get("blocked_permanent")), "blocked_until": r.get("blocked_until"),
+                         "blocked_at": r.get("blocked_at"), "blocked_reason": r.get("blocked_reason"),
+                         "blocked_by_email": emails.get(r.get("blocked_by")), "last_activity": None})
+        return paged(rows, p)
+
+    def list_colleges(p):
+        rows = []
+        for c in db.tables["colleges"]:
+            has_account = any(r["role"] == "college" and r.get("college_id") == c["id"] for r in db.tables["profiles"])
+            if p.get("p_college_id") and c["id"] != p["p_college_id"]: continue
+            if not p.get("p_college_id") and p.get("p_registration", "registered") == "registered" and not has_account: continue
+            if not matches(p, c.get("name"), c.get("city")): continue
+            rows.append({"college_id": c["id"], "name": c["name"], "city": c.get("city"), "state": c.get("state"),
+                         "college_type": c.get("type"), "has_account": has_account, "registered_at": iso(-30), "candidates": 2,
+                         "roster_students": 1, "roster_placed": 0, "portal_drives": 0, "companies": 1, "drives": 1,
+                         "applications": 0, "applicants": 0, "shortlisted": 0, "selected": 0, "selected_applicants": 0,
+                         "last_activity": None, "is_active": has_account})
+        return paged(rows, p)
+
+    def list_candidates(p):
+        rows = [{"candidate_id": r["id"], "name": r.get("name"), "email": r["email"], "college_id": r.get("college_id"),
+                 "college_name": r.get("college_name"), "branch": r.get("branch"), "graduation_year": r.get("graduation_year"),
+                 "registered_at": iso(-30), "applications": 0, "shortlisted": 0, "selected": 0, "placement_status": "not_applied"}
+                for r in db.tables["profiles"] if r["role"] == "candidate" and matches(p, r.get("name"), r["email"])]
+        return paged(rows, p)
+
+    db.rpc_handlers.update(admin_list_users=list_users, admin_list_colleges=list_colleges, admin_list_candidates=list_candidates)
 
     # a couple of admin RPCs so the admin dashboard has data
     db.rpc_handlers["admin_overview"] = lambda p: {

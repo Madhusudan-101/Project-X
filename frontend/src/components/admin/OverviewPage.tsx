@@ -24,6 +24,7 @@ import { adminService } from "@/services/api/admin/admin";
 import type { ActivityKind, TrendPoint, TrendResponse } from "@/types/admin/admin";
 import { AlertsPanel } from "./AlertsPanel";
 import { SERIES, TrendChart } from "./charts";
+import { useAdminPortal, usePortalTo } from "@/hooks/admin/use-admin-portal";
 import { PageHeader } from "./controls";
 import { fmtDecimal, fmtInt, fmtPct } from "./format";
 import { KpiCard, KpiGroup } from "./KpiCard";
@@ -45,6 +46,8 @@ const ACTIVITY: Record<ActivityKind, { icon: LucideIcon; text: (subject: string,
 };
 
 export function OverviewPage() {
+  const to = usePortalTo();
+  const portal = useAdminPortal();
   const { range, label } = useAdminRange();
   const [regTab, setRegTab] = useState<(typeof REGISTRATION_TABS)[number]["value"]>("new_candidates");
 
@@ -61,7 +64,7 @@ export function OverviewPage() {
 
   const header = (
     <PageHeader
-      title="Platform overview"
+      title={portal === "super-admin" ? "Super Admin dashboard" : "Platform overview"}
       description={
         <>
           Showing <span className="font-medium text-foreground">{label}</span>. Totals are all-time; period figures follow the date filter.
@@ -193,7 +196,7 @@ export function OverviewPage() {
             <Card className="flex items-center p-4 text-xs text-muted-foreground">
               <span>
                 Financial data isn&apos;t connected yet.{" "}
-                <Link to="/admin/finance" className="font-medium text-primary hover:underline">
+                <Link to={to("/admin/finance")} className="font-medium text-primary hover:underline">
                   See what&apos;s needed
                 </Link>
               </span>
@@ -254,7 +257,7 @@ export function OverviewPage() {
             <h2 className="font-display text-lg font-semibold">Recent platform activity</h2>
             <p className="text-xs text-muted-foreground">Latest events across the platform, newest first. Independent of the date filter.</p>
           </div>
-          <Link to="/admin/activity" className="shrink-0 text-xs font-medium text-primary hover:underline">
+          <Link to={to("/admin/activity")} className="shrink-0 text-xs font-medium text-primary hover:underline">
             View live activity
           </Link>
         </div>

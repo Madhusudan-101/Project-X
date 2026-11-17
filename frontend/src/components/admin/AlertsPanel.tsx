@@ -7,6 +7,7 @@ import { Card } from "@/components/ui/card";
 import { adminQueryOptions } from "@/hooks/admin/query";
 import { adminService } from "@/services/api/admin/admin";
 import type { AlertItem } from "@/types/admin/admin";
+import { usePortalTo } from "@/hooks/admin/use-admin-portal";
 import { StatusBadge } from "./controls";
 import { fmtRelative } from "./format";
 import { ALERT_SEVERITY } from "./status";
@@ -18,6 +19,7 @@ import { ChartSkeleton, EmptyBlock, ErrorBlock } from "./StateViews";
  * the page reloads or the underlying condition changes the alert's id —
  * it is a viewing convenience, not a record of who dismissed what. */
 export function AlertsPanel({ limit, linkToAll = true }: { limit?: number; linkToAll?: boolean }) {
+  const to = usePortalTo();
   const q = useQuery({ queryKey: ["admin", "alerts"], queryFn: adminService.alerts, ...adminQueryOptions, refetchInterval: 60_000 });
   const [hidden, setHidden] = useState<Set<string>>(new Set());
 
@@ -32,7 +34,7 @@ export function AlertsPanel({ limit, linkToAll = true }: { limit?: number; linkT
           <p className="text-xs text-muted-foreground">Computed from current data — always current, not a saved list.</p>
         </div>
         {linkToAll && items.length > 0 && (
-          <Link to="/admin/alerts" className="text-xs font-medium text-primary hover:underline">
+          <Link to={to("/admin/alerts")} className="text-xs font-medium text-primary hover:underline">
             View all ({items.length})
           </Link>
         )}

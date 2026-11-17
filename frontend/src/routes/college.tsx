@@ -1,6 +1,6 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useMemo } from "react";
-import { useAuthStore } from "@/store/auth";
+import { authService } from "@/services/api/auth";
 import { useCollegeGuard } from "@/hooks/college/use-college-guard";
 import { CollegeShell } from "@/components/college/CollegeShell";
 
@@ -11,7 +11,6 @@ export const Route = createFileRoute("/college")({
 function CollegeLayout() {
   const navigate = useNavigate();
   const session = useCollegeGuard();
-  const logout = useAuthStore((s) => s.logout);
 
   const displayName = useMemo(() => {
     const u = session?.user;
@@ -35,7 +34,7 @@ function CollegeLayout() {
   }, [session]);
 
   const signOut = () => {
-    logout();
+    void authService.logout();
     navigate({ to: "/" });
   };
 

@@ -1,13 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { AdminShell } from "@/components/admin/AdminShell";
-import { useAdminGuard } from "@/hooks/admin/use-admin-guard";
+import { AdminPortalLayout } from "@/components/admin/AdminPortalLayout";
+import { redirectIfSignedOut } from "@/hooks/admin/use-admin-guard";
 
 export const Route = createFileRoute("/admin")({
-  component: AdminLayout,
+  beforeLoad: redirectIfSignedOut,
+  component: () => <AdminPortalLayout portal="admin" />,
 });
-
-function AdminLayout() {
-  const session = useAdminGuard();
-  if (!session) return null;
-  return <AdminShell session={session} />;
-}

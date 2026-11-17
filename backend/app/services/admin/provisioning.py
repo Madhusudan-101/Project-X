@@ -76,6 +76,7 @@ def provision_account(
     college_id: Optional[str] = None,
     actor: Optional[Dict[str, Any]] = None,
     is_super_admin: bool = False,
+    password: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Create an account for a provisioned-only role.
 
@@ -93,6 +94,10 @@ def provision_account(
     for why an already-existing admin keeps full access without this flag
     (they are grandfathered in by the migration itself, once, not by this
     function).
+
+    `password` is for seed_admin_accounts.py only, which already knows the
+    password it generated: the account gets it instead of the unguessable one,
+    and no set-password email is sent. No API route passes it.
 
     Returns {"user_id", "created", "invite_sent", "replaced_legacy_account"}.
     Raises HTTPException: 422 bad input, 409 the email already belongs to
@@ -123,7 +128,7 @@ def provision_account(
     try:
         res = admin_client.auth.admin.create_user({
             "email": email,
-            "password": secrets.token_urlsafe(32),
+            "password": password or secrets.token_urlsafe(32),
             "email_confirm": True,
             "user_metadata": {"role": role, "name": name, "firstName": first_name, "lastName": last_name},
         })
@@ -165,6 +170,6 @@ def provision_account(
     return {
         "user_id": user.id,
         "created": True,
-        "invite_sent": _send_set_password_email(email),
+        "invite_sent": False if password else _send_set_password_email(email),
         "replaced_legacy_account": replaced_legacy,
     }

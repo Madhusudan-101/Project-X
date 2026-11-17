@@ -1,6 +1,8 @@
 // Types shared across the app. Extend as new modules are built.
 
 export type UserRole = "candidate" | "company" | "college" | "admin";
+/** Where an account belongs, decided by the backend at sign-in (UserOut.portal). */
+export type Portal = UserRole | "super_admin";
 
 export interface User {
   id: string;
@@ -9,6 +11,7 @@ export interface User {
   firstName?: string;
   lastName?: string;
   role: UserRole;
+  portal?: Portal;
   avatarUrl?: string;
   onboarded?: boolean;
   /** Set for company users — the id of their public.companies row */

@@ -38,6 +38,8 @@ export const test = base.extend<{ problems: string[] }>({
 });
 export { expect };
 
+export const SUPER_EMAIL = "super@e2e.dev";
+
 export async function apiLogin(request: APIRequestContext, role: Role, email = EMAIL[role], password = PASSWORD) {
   const res = await request.post(`${API}/auth/login`, { data: { email, password, role } });
   expect(res.ok(), await res.text()).toBeTruthy();
@@ -45,8 +47,8 @@ export async function apiLogin(request: APIRequestContext, role: Role, email = E
 }
 
 /** Fast path: put a real session (obtained from the real login endpoint) into the app's persisted store. */
-export async function signedIn(page: Page, request: APIRequestContext, role: Role, path = HOME[role]) {
-  const session = await apiLogin(request, role);
+export async function signedIn(page: Page, request: APIRequestContext, role: Role, path = HOME[role], email = EMAIL[role]) {
+  const session = await apiLogin(request, role, email);
   await page.addInitScript((s) => {
     // only seed once, so a test (or the app) can later change / clear the stored session
     if (localStorage.getItem("mirracle.auth") === null) {

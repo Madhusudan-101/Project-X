@@ -868,6 +868,29 @@ def main() -> int:
     check("...and the original Super Admin is untouched by the re-run",
           q(cur2, f"select is_super_admin from public.profiles where id = '{pre_id}'")[0]["is_super_admin"] is True)
 
+    print("\n== Re-running admin_portal_migration.sql on a database that already has it ==")
+    # A function left by an older release of the file. With CREATE OR REPLACE alone
+    # it would stay as a second overload, and PostgREST refuses to pick between them.
+    cur2.execute("create function public.admin_list_colleges(p_older_signature boolean) returns int language sql as 'select 1'")
+    with open(os.path.join(BACKEND, "db/admin_portal_migration.sql"), encoding="utf-8") as f:
+        cur2.execute(f.read())
+    check("no admin_* function is left with a second overload", q(cur2, """
+        select p.proname from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+        where n.nspname = 'public' and p.proname like 'admin\\_%' group by 1 having count(*) > 1""") == [])
+    check("the functions are still locked away from API roles", q(cur2, """
+        select p.proname from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+        where n.nspname = 'public' and p.proname like 'admin\\_%'
+          and (has_function_privilege('anon', p.oid, 'execute') or has_function_privilege('authenticated', p.oid, 'execute'))""") == [])
+    # This file runs before admin_permissions_migration.sql, so run last it must not
+    # drop the is_super_admin guard: public.profiles has no other defence.
+    cur2.execute("set role authenticated")
+    try:
+        cur2.execute(f"update public.profiles set is_super_admin = true where id = '{post_id}'")
+        check("a user still cannot promote themselves after the portal file is re-run last", False)
+    except psycopg2.Error as e:
+        check("a user still cannot promote themselves after the portal file is re-run last", e.pgcode == "42501", e)
+    cur2.execute("reset role")
+
     conn2.close()
     with admin.cursor() as cur2:
         cur2.execute(f"drop database if exists {DB2}")
