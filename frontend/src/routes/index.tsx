@@ -63,7 +63,7 @@ const PLANS = [
     price: "$49",
     period: "per user / mo",
     desc: "For growing teams and colleges.",
-    features: ["Unlimited AI Interviews", "Peer + Expert interviews", "OA Platform", "Analytics dashboards", "Priority support"],
+    features: ["Unlimited AI Interviews", "Peer interviews", "OA Platform", "Analytics dashboards", "Priority support"],
     cta: "Start free trial",
     highlighted: true,
   },

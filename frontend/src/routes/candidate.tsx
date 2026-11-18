@@ -26,7 +26,6 @@ import {
   Target,
   TerminalSquare,
   Users,
-  Video,
   X as CloseIcon,
   Zap,
 } from "lucide-react";
@@ -578,12 +577,6 @@ function OverviewTab({ onOpenAiInterview }: { onOpenAiInterview: () => void }) {
                 onClick={() => setPeerModalOpen(true)}
               />
             )}
-            <ModuleCard
-              icon={Video}
-              title="Expert Interview"
-              body="Book seniors from real hiring loops."
-              status="Beta"
-            />
             <ModuleCard
               icon={FileText}
               title="Resume Analyzer"
