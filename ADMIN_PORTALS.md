@@ -15,7 +15,20 @@ Until this is done every `/admin` request fails, and the portal says which migra
 
 > The second file makes every account that is already an Admin a Super Admin, once. The project has 2 such accounts today, so both become Super Admins. Check they are people you trust with that.
 
-**2. Create the two logins** from `backend/`:
+**2. Create the two logins.** Either way works; both use the same code.
+
+*Predefined accounts, created when the API starts.* Add to `backend/.env` (git-ignored):
+
+```
+BOOTSTRAP_ADMIN_EMAIL=...
+BOOTSTRAP_ADMIN_PASSWORD=...
+BOOTSTRAP_SUPER_ADMIN_EMAIL=...
+BOOTSTRAP_SUPER_ADMIN_PASSWORD=...
+```
+
+On start-up (`app/services/admin/bootstrap.py`) each account is created if its email has no account yet: a Supabase Auth user plus a `profiles` row, the Admin with the full grantable catalog. The password is hashed with bcrypt in the backend and only the hash is sent to Supabase Auth. Restarts are safe: an existing account is never duplicated and keeps its current password, grants and block state. An email that belongs to a candidate, company or college account is refused. Missing migrations, or Supabase being unreachable, are logged and the API starts anyway. Passwords are never logged. One shorter than 8 characters is accepted, with a warning in the log.
+
+*Or generated passwords, from `backend/`:*
 
 ```bash
 .venv/Scripts/python seed_admin_accounts.py --project iddgszqqlncvbmzacbsg --admin-email YOUR_ADMIN_EMAIL --super-admin-email YOUR_SUPER_ADMIN_EMAIL

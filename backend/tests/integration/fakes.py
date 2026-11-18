@@ -340,7 +340,12 @@ class FakeAuth:
         if any(u["email"].lower() == email.lower() for u in self.users.values()):
             raise AuthApiError("A user with this email address has already been registered", 422, "email_exists")
         uid = f"u-{len(self.users) + 1}"
-        self.users[uid] = {"id": uid, "email": email, "password": payload["password"],
+        # Like GoTrue: a plaintext password must meet the minimum length (6, not configurable
+        # lower); a supplied bcrypt `password_hash` is stored as is, with no strength check.
+        if payload.get("password") is not None and len(payload["password"]) < 6:
+            raise AuthApiError("Password should be at least 6 characters.", 422, "weak_password")
+        self.users[uid] = {"id": uid, "email": email, "password": payload.get("password"),
+                           "password_hash": payload.get("password_hash"),
                            "user_metadata": payload.get("user_metadata", {}), "confirmed": bool(payload.get("email_confirm"))}
         return SimpleNamespace(user=self._user_obj(self.users[uid]))
 
@@ -364,11 +369,18 @@ class FakeAuth:
 
     def sign_in_with_password(self, creds):
         u = next((u for u in self.users.values() if u["email"].lower() == creds["email"].lower()), None)
-        if not u or u["password"] != creds["password"]:
+        if not u or not self._password_matches(u, creds["password"]):
             raise AuthApiError("Invalid login credentials", 400, "invalid_credentials")
         if not u["confirmed"]:
             raise AuthApiError("Email not confirmed", 400, "email_not_confirmed")
         return SimpleNamespace(session=self._session(u["id"]), user=self._user_obj(u))
+
+    @staticmethod
+    def _password_matches(u, password):
+        if u.get("password_hash"):
+            import bcrypt
+            return bcrypt.checkpw(password.encode("utf-8"), u["password_hash"].encode("ascii"))
+        return u["password"] == password
 
     def refresh_session(self, refresh_token):
         uid = self.refresh.pop(refresh_token, None)      # single-use, like Supabase
@@ -395,4 +407,5 @@ class FakeAuth:
             if len(attrs["password"]) < 6:
                 raise AuthApiError("Password should be at least 6 characters.", 422, "weak_password")
             self.users[uid]["password"] = attrs["password"]
+            self.users[uid]["password_hash"] = None
             self.password_updates.append((uid, attrs["password"]))

@@ -77,6 +77,7 @@ def provision_account(
     actor: Optional[Dict[str, Any]] = None,
     is_super_admin: bool = False,
     password: Optional[str] = None,
+    password_hash: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Create an account for a provisioned-only role.
 
@@ -98,6 +99,10 @@ def provision_account(
     `password` is for seed_admin_accounts.py only, which already knows the
     password it generated: the account gets it instead of the unguessable one,
     and no set-password email is sent. No API route passes it.
+
+    `password_hash` is for the start-up account bootstrap (bootstrap.py): a bcrypt
+    hash Supabase Auth stores as is, so the plaintext never leaves the server. Same
+    rules as `password` otherwise.
 
     Returns {"user_id", "created", "invite_sent", "replaced_legacy_account"}.
     Raises HTTPException: 422 bad input, 409 the email already belongs to
@@ -128,7 +133,8 @@ def provision_account(
     try:
         res = admin_client.auth.admin.create_user({
             "email": email,
-            "password": password or secrets.token_urlsafe(32),
+            **({"password_hash": password_hash} if password_hash
+               else {"password": password or secrets.token_urlsafe(32)}),
             "email_confirm": True,
             "user_metadata": {"role": role, "name": name, "firstName": first_name, "lastName": last_name},
         })
@@ -170,6 +176,6 @@ def provision_account(
     return {
         "user_id": user.id,
         "created": True,
-        "invite_sent": False if password else _send_set_password_email(email),
+        "invite_sent": False if (password or password_hash) else _send_set_password_email(email),
         "replaced_legacy_account": replaced_legacy,
     }

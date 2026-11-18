@@ -36,6 +36,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { authService } from "@/services/api/auth";
 import { useAuthStore } from "@/store/auth";
 import { useCompanyStore } from "@/store/company/company";
 import { companyService } from "@/services/api/company/company";
@@ -58,7 +59,6 @@ export const Route = createFileRoute("/company")({
 function CompanyPortal() {
   const navigate = useNavigate();
   const session = useAuthStore((s) => s.session);
-  const logout = useAuthStore((s) => s.logout);
   const storedCompany = useCompanyStore((s) => s.company);
   const setCompany = useCompanyStore((s) => s.setCompany);
   const clearCompany = useCompanyStore((s) => s.clearCompany);
@@ -113,7 +113,7 @@ function CompanyPortal() {
 
   // ── Sign out ────────────────────────────────────────────────────────
   const signOut = () => {
-    logout();
+    void authService.logout();
     clearCompany();
     navigate({ to: "/" });
   };

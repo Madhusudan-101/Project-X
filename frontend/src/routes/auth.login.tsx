@@ -17,7 +17,9 @@ import type { UserRole } from "@/types";
 
 const schema = z.object({
   email: z.string().trim().email("Enter a valid email").max(255),
-  password: z.string().min(6, "Password must be at least 6 characters").max(128),
+  // Signing in only needs a password; length rules belong where one is chosen
+  // (signup, set/reset password). A provisioned Admin login may be shorter than 6.
+  password: z.string().min(1, "Enter your password").max(128),
 });
 type FormValues = z.infer<typeof schema>;
 

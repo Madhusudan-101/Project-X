@@ -49,6 +49,7 @@ import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { authService } from "@/services/api/auth";
 import { useAuthStore } from "@/store/auth";
 import { useCandidateGuard } from "@/hooks/candidate/use-candidate-guard";
 import { useResumeAnalysisStore } from "@/store/candidate/resumeAnalysis";
@@ -201,7 +202,6 @@ function CandidatePortal() {
   const navigate = useNavigate();
   useCandidateGuard();
   const session = useAuthStore((s) => s.session);
-  const logout = useAuthStore((s) => s.logout);
   const clearResumeAnalysis = useResumeAnalysisStore((s) => s.clear);
   const setResumeAnalysisResult = useResumeAnalysisStore((s) => s.setResult);
 
@@ -251,7 +251,7 @@ function CandidatePortal() {
   }, [session]);
 
   const signOut = () => {
-    logout();
+    void authService.logout();
     clearResumeAnalysis();
     navigate({ to: "/" });
   };

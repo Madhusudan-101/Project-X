@@ -16,3 +16,4 @@ weasyprint
 
 # AI voice interview (LiveKit agent). See /ai-interviewer.
 livekit-api>=1.0,<2
+bcrypt

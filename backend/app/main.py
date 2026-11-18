@@ -1,9 +1,11 @@
 import logging
 import os
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from starlette.concurrency import run_in_threadpool
 from postgrest.exceptions import APIError
 from .routers.shared import auth, peer_reports, ai_interview_reports, peer_precall as shared_peer_precall
 
@@ -42,8 +44,19 @@ from .routers.admin import system as admin_system
 from .routers.admin import reports as admin_reports
 from .routers.admin import departments as admin_departments
 from .routers.admin import admin_users as admin_admin_users
+from .services.admin.bootstrap import bootstrap_admin_accounts_from_env
 
-app = FastAPI(title="Mirracle API")
+
+@asynccontextmanager
+async def _lifespan(_app: FastAPI):
+    # Predefined Admin / Super Admin accounts from BOOTSTRAP_* environment variables
+    # (see services/admin/bootstrap.py). A no-op when none are set; creates nothing
+    # twice and never stops the API from starting.
+    await run_in_threadpool(bootstrap_admin_accounts_from_env)
+    yield
+
+
+app = FastAPI(title="Mirracle API", lifespan=_lifespan)
 
 # CORS: default allow-list covers the dev origins the dashboard, admin, and
 # PeerMeet client run on. Production origins are added via `FRONTEND_ORIGINS`

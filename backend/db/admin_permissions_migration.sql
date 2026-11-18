@@ -15,12 +15,15 @@
 --     unconditional, full access to every /admin route and is the only kind
 --     of admin allowed to manage other admins' permissions (see
 --     require_admin_role / require_permission / require_super_admin in
---     app/deps.py and app/services/admin/permissions.py). Every role='admin'
---     profile that existed BEFORE this migration is backfilled to
---     is_super_admin = true (see 2. below) — they already had full,
---     unrestricted admin access; this migration only ADDS a way to grant
---     narrower access to NEW delegated admins, it never takes anything away
---     from an admin that already had the keys to everything.
+--     app/deps.py and app/services/admin/permissions.py). The column defaults
+--     to false and is NEVER backfilled by this migration — every existing
+--     role='admin' profile keeps is_super_admin = false, so a pre-existing
+--     admin does not silently inherit Super Admin powers. The first Super
+--     Admin is designated explicitly, out-of-band, by provision_admin.py
+--     (--is-super-admin), seed_admin_accounts.py (fixed per-email) or the
+--     BOOTSTRAP_SUPER_ADMIN_* env vars (bootstrap.py); further delegated
+--     admins created afterwards stay is_super_admin = false and receive
+--     scoped grants via admin_user_permissions below.
 --   * admin_user_permissions — one row per (delegated admin, permission,
 --     scope) grant. A permission's CURRENT state is "the row exists and is
 --     not expired" — there is no separate active/revoked flag: revoking a
@@ -55,22 +58,14 @@
 alter table public.profiles add column if not exists is_super_admin boolean not null default false;
 
 -- ─────────────────────────────────────────────────────────────────────
--- 2. One-time backfill: every admin that already existed keeps full access.
---    Guarded so it only ever runs the FIRST time this file is applied (before
---    admin_user_permissions exists) — re-running the migration later never
---    re-promotes a delegated admin created afterwards with is_super_admin
---    deliberately left false.
+-- 2. No backfill. The is_super_admin column stays false for every existing
+--    row (that is the column default added in 1.). An operator designates the
+--    first Super Admin explicitly via provision_admin.py (--is-super-admin),
+--    seed_admin_accounts.py (fixed to the --super-admin-email it receives)
+--    or the BOOTSTRAP_SUPER_ADMIN_* environment variables. Any other admin
+--    account — pre-existing or newly provisioned — remains a delegated admin
+--    governed by admin_user_permissions below.
 -- ─────────────────────────────────────────────────────────────────────
-do $$
-begin
-  if not exists (
-    select 1 from information_schema.tables
-     where table_schema = 'public' and table_name = 'admin_user_permissions'
-  ) then
-    update public.profiles set is_super_admin = true where role = 'admin';
-  end if;
-end
-$$;
 
 -- ─────────────────────────────────────────────────────────────────────
 -- 3. Permission grants for delegated admins.

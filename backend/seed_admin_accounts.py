@@ -28,35 +28,20 @@ from urllib.parse import urlparse
 
 sys.path.append(os.path.dirname(__file__))
 
-from fastapi import HTTPException  # noqa: E402
-from postgrest.exceptions import APIError  # noqa: E402
 from supabase_auth.errors import AuthApiError  # noqa: E402
 
-from app.crud import get_profile_by_email, update_profile  # noqa: E402
-from app.deps import SUPABASE_URL, admin_client, auth_client, db_client  # noqa: E402
+from app.crud import get_profile_by_email  # noqa: E402
+from app.deps import SUPABASE_URL, admin_client, auth_client, db_client  # noqa: E402,F401
 from app.routers.shared.auth import PASSWORD_MAX_LENGTH, PASSWORD_MIN_LENGTH  # noqa: E402
-from app.schemas import GrantPermissionIn  # noqa: E402
-from app.services.admin.permissions import ALL_PERMISSIONS, grant_permission, has_permission  # noqa: E402
-from app.services.admin.provisioning import provision_account  # noqa: E402
+from app.services.admin.bootstrap import (  # noqa: E402
+    AdminBootstrapError, check_schema, ensure_admin_account, grant_full_catalog,
+)
 
 CREDENTIALS_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".admin-seed-credentials")
 
-
-class SeedError(Exception):
-    """A problem to report in one line, with nothing half-done worth a traceback."""
-
-
-def check_schema() -> None:
-    """Fail before touching anything if the migrations these accounts need are missing."""
-    try:
-        db_client.table("profiles").select("is_super_admin").limit(1).execute()
-        db_client.table("admin_user_permissions").select("id").limit(1).execute()
-    except APIError as e:
-        raise SeedError(
-            f"The database is missing the Admin permission schema ({e.message}). Run "
-            "db/admin_portal_migration.sql, then db/admin_permissions_migration.sql, in the "
-            "Supabase SQL Editor, followed by: notify pgrst, 'reload schema';"
-        )
+# One error type for this script and the shared account logic it calls: a problem
+# to report in one line, with nothing half-done worth a traceback.
+SeedError = AdminBootstrapError
 
 
 def choose_password(env_var: str) -> str:
@@ -70,34 +55,17 @@ def ensure_account(email: str, *, first_name: str, last_name: str, is_super_admi
                    password: str, reset_password: bool) -> tuple[dict, bool]:
     """Returns (profile, password_was_set). An email that belongs to a non-admin
     account is refused: seeding must never promote someone's existing account."""
-    profile = get_profile_by_email(email.strip().lower())
-    if profile is None:
-        try:
-            provision_account(
-                email=email, role="admin", first_name=first_name, last_name=last_name,
-                is_super_admin=is_super_admin, password=password,
-            )
-        except HTTPException as e:
-            raise SeedError(f"{email}: {e.detail}")
-        return get_profile_by_email(email.strip().lower()), True
-
-    if profile.get("role") != "admin":
-        raise SeedError(f"{email} already belongs to a {profile.get('role')} account; use a different address.")
-    if bool(profile.get("is_super_admin")) != is_super_admin:
-        profile = update_profile(profile["id"], {"is_super_admin": is_super_admin})
-    if reset_password:
-        admin_client.auth.admin.update_user_by_id(profile["id"], {"password": password})
-    return profile, reset_password
+    profile, created = ensure_admin_account(
+        email, first_name=first_name, last_name=last_name, is_super_admin=is_super_admin,
+        password=password, reset_password=reset_password,
+    )
+    return profile, created or reset_password
 
 
 def grant_admin_permissions(admin_profile: dict, super_profile: dict) -> int:
-    """The Admin gets the whole grantable catalog: everything in the Admin Portal.
-    What stays Super-Admin-only (managing other admins) is not in the catalog."""
+    """The Admin gets the whole grantable catalog: everything in the Admin Portal."""
     actor = {"id": super_profile["id"], "email": super_profile["email"], "profile_role": "admin"}
-    missing = sorted(p for p in ALL_PERMISSIONS if not has_permission(admin_profile["id"], p))
-    for permission in missing:
-        grant_permission(admin_profile["id"], GrantPermissionIn(permission=permission), actor)
-    return len(missing)
+    return grant_full_catalog(admin_profile, actor)
 
 
 def verify_login(email: str, password: str, is_super_admin: bool) -> None:
